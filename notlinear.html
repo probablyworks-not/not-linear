@@ -134,6 +134,10 @@
   .msg.ai .typing span:nth-child(2){animation-delay:.15s}
   .msg.ai .typing span:nth-child(3){animation-delay:.3s}
   @keyframes bb{0%,80%,100%{opacity:.3}40%{opacity:1}}
+  .msg-actions{display:flex;align-items:center;gap:6px;margin-top:8px}
+  .msg-action{display:inline-flex;align-items:center;gap:5px;padding:4px 8px;border:1px solid var(--rule-2);border-radius:6px;background:var(--surface);color:var(--text-2);font-size:12px;line-height:1.3}
+  .msg-action:hover{border-color:#444;color:var(--text);background:var(--bg-2)}
+  .msg-action .ti{font-size:13px}
   /* Markdown rendering inside chat messages */
   .msg.ai h1,.msg.ai h2{font-size:14.5px;font-weight:600;margin:12px 0 4px;color:var(--text);letter-spacing:-0.01em}
   .msg.ai h3,.msg.ai h4{font-size:13.5px;font-weight:600;margin:10px 0 3px;color:var(--text)}
@@ -158,6 +162,29 @@
   .search-pill{display:inline-flex;align-items:center;gap:6px;font-style:italic}
   .search-spinner{width:9px;height:9px;border-radius:50%;border:1.5px solid var(--accent);border-top-color:transparent;animation:spin 0.75s linear infinite;flex-shrink:0}
   @keyframes spin{to{transform:rotate(360deg)}}
+
+  /* Extended thinking block */
+  .ai-thinking{margin-bottom:8px;border-radius:8px;border:1px solid var(--rule);overflow:hidden;display:none}
+  .ai-thinking.active{display:block}
+  .thinking-toggle{width:100%;display:flex;align-items:center;gap:7px;padding:6px 10px;background:transparent;border:none;cursor:pointer;color:var(--text-3);font-size:11.5px;text-align:left;transition:background 120ms}
+  .thinking-toggle:hover{background:var(--bg-3)}
+  .thinking-toggle .thinking-label{flex:1;font-style:italic}
+  .thinking-toggle .ti-chevron-down{font-size:11px;transition:transform 180ms;margin-left:auto}
+  .ai-thinking.open .ti-chevron-down{transform:rotate(180deg)}
+  .thinking-body{display:none;padding:8px 10px 10px;font-size:11.5px;line-height:1.6;color:var(--text-3);font-family:var(--mono);white-space:pre-wrap;word-break:break-word;border-top:1px solid var(--rule);max-height:260px;overflow-y:auto}
+  .ai-thinking.open .thinking-body{display:block}
+  .thinking-live-spinner{width:8px;height:8px;border-radius:50%;border:1.5px solid var(--text-3);border-top-color:transparent;animation:spin 0.75s linear infinite;flex-shrink:0}
+
+  /* Model menu thinking toggle row */
+  .menu-thinking-row{display:flex;align-items:center;justify-content:space-between;padding:7px 12px 6px;gap:10px}
+  .menu-thinking-row span{font-size:12.5px;color:var(--text-2)}
+  .thinking-switch{position:relative;width:32px;height:18px;flex-shrink:0;cursor:pointer}
+  .thinking-switch input{opacity:0;width:0;height:0;position:absolute}
+  .thinking-switch .sw-track{position:absolute;inset:0;border-radius:9px;background:var(--bg-3);border:1px solid var(--rule);transition:background 150ms,border-color 150ms}
+  .thinking-switch input:checked + .sw-track{background:var(--accent);border-color:var(--accent)}
+  .thinking-switch .sw-thumb{position:absolute;top:2px;left:2px;width:12px;height:12px;border-radius:50%;background:#fff;transition:transform 150ms;box-shadow:0 1px 3px rgba(0,0,0,.3)}
+  .thinking-switch input:checked + .sw-track + .sw-thumb{transform:translateX(14px)}
+  .menu-thinking-note{padding:0 12px 8px;font-size:11px;color:var(--text-3);font-style:italic}
 
   /* Sticky composer */
   .composer-wrap{position:fixed;bottom:0;left:0;right:0;padding:10px 32px 14px;background:linear-gradient(to top,var(--bg) 60%,transparent);display:flex;justify-content:center;z-index:30;pointer-events:none;transition:left 220ms cubic-bezier(.2,.7,.2,1),right 240ms cubic-bezier(.2,.7,.2,1)}
@@ -463,7 +490,7 @@
 </div>
 
 <!-- model picker -->
-<div class="menu" id="model-menu" role="menu" aria-label="Select model" style="min-width:190px">
+<div class="menu" id="model-menu" role="menu" aria-label="Select model" style="min-width:210px">
   <button data-model="sonnet" role="menuitem">
     <i class="ti ti-sparkles"></i>
     <span>Sonnet 4.6<span class="desc">Best quality</span></span>
@@ -474,6 +501,16 @@
     <span>Haiku 4.5<span class="desc">Cheap and fast</span></span>
     <i class="ti ti-check model-check"></i>
   </button>
+  <div class="menu-sep"></div>
+  <div class="menu-thinking-row">
+    <span>Extended thinking</span>
+    <label class="thinking-switch" title="Deeper reasoning before answering. Sonnet only.">
+      <input type="checkbox" id="thinking-toggle">
+      <span class="sw-track"></span>
+      <span class="sw-thumb"></span>
+    </label>
+  </div>
+  <p class="menu-thinking-note">Deeper reasoning. Adds 3–8s. Sonnet only.</p>
 </div>
 
 <!-- Selection popover -->
@@ -602,7 +639,7 @@
   const esc = (s) => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
   const truncate = (s, n=70) => s.length > n ? s.slice(0,n-1).trim() + '…' : s;
 
-  let prefs = { name:'Alex', tone:'concise', context:'', model:'sonnet', folderName:'Workspace', searxngUrl:'' };
+  let prefs = { name:'Alex', tone:'concise', context:'', model:'sonnet', folderName:'Workspace', searxngUrl:'', thinking:true };
 
   // ---------- real Claude API ----------
   let mainMessages = []; // {role, content}[] for the main thread
@@ -796,22 +833,31 @@
 
   let _activeController = null;
 
-  async function callClaude({ messages, onDelta, onDone, onError, onStatus }){
+  async function callClaude({ messages, onDelta, onThinking, onDone, onError, onStatus, onAbort }){
     // Abort any in-flight call (including background tool searches)
     if (_activeController) _activeController.abort();
     const controller = new AbortController();
     _activeController = controller;
     const signal = controller.signal;
+    let abortReported = false;
+    const reportAbort = () => {
+      if (abortReported) return;
+      abortReported = true;
+      if (onStatus) onStatus(null);
+      if (onAbort) onAbort();
+    };
 
     const key = apiKeys.anthropic;
     if (!key){ onError('No API key — add your Anthropic key in Personalization (⚙).'); return; }
     const model = prefs.model === 'haiku' ? 'claude-haiku-4-5-20251001' : 'claude-sonnet-4-6';
+    const useThinking = prefs.thinking && prefs.model !== 'haiku';
+    const thinkingBudget = 8000;
 
     let currentMessages = [...messages];
     let totalIn = 0, totalOut = 0, fullText = '';
 
     while (true){
-      if (signal.aborted) return;
+      if (signal.aborted){ reportAbort(); return; }
       let res;
       try {
         res = await fetch('https://api.anthropic.com/v1/messages', {
@@ -823,10 +869,13 @@
             'anthropic-version': '2023-06-01',
             'anthropic-dangerous-direct-browser-access': 'true',
           },
-          body: JSON.stringify({ model, max_tokens: 8192, stream: true, system: buildSystemPrompt(), messages: currentMessages, tools: buildTools() }),
+          body: JSON.stringify(Object.assign(
+            { model, max_tokens: useThinking ? 16000 : 8192, stream: true, system: buildSystemPrompt(), messages: currentMessages, tools: buildTools() },
+            useThinking ? { thinking: { type:'enabled', budget_tokens: thinkingBudget } } : {}
+          )),
         });
       } catch(e){
-        if (e.name === 'AbortError') return;
+        if (e.name === 'AbortError'){ reportAbort(); return; }
         onError(e.message || 'Network error — check your connection.'); return;
       }
 
@@ -846,36 +895,43 @@
       const blocks = {}; // index → {type, id?, name?, text?, inputJson?}
       let stopReason = null;
 
-      while (true){
-        if (signal.aborted){ reader.cancel(); return; }
-        const { done, value } = await reader.read();
-        if (done) break;
-        buf += decoder.decode(value, { stream: true });
-        const lines = buf.split('\n'); buf = lines.pop();
-        for (const line of lines){
-          if (!line.startsWith('data: ')) continue;
-          const raw = line.slice(6); if (raw === '[DONE]') continue;
-          try {
-            const evt = JSON.parse(raw);
-            if (evt.type === 'message_start') totalIn += evt.message?.usage?.input_tokens || 0;
-            if (evt.type === 'message_delta' && evt.usage){ totalOut += evt.usage.output_tokens || 0; stopReason = evt.delta?.stop_reason; }
-            if (evt.type === 'content_block_start'){
-              const cb = evt.content_block;
-              blocks[evt.index] = { type: cb.type };
-              if (cb.type === 'tool_use'){ blocks[evt.index].id = cb.id; blocks[evt.index].name = cb.name; blocks[evt.index].inputJson = ''; }
-              else { blocks[evt.index].text = ''; }
-            }
-            if (evt.type === 'content_block_delta'){
-              const b = blocks[evt.index]; if (!b) continue;
-              if (evt.delta.type === 'text_delta'){ b.text = (b.text||'') + evt.delta.text; fullText += evt.delta.text; onDelta(evt.delta.text); }
-              else if (evt.delta.type === 'input_json_delta'){ b.inputJson = (b.inputJson||'') + evt.delta.partial_json; }
-            }
-          } catch(_){}
+      try {
+        while (true){
+          if (signal.aborted){ reader.cancel().catch(()=>{}); reportAbort(); return; }
+          const { done, value } = await reader.read();
+          if (done) break;
+          buf += decoder.decode(value, { stream: true });
+          const lines = buf.split('\n'); buf = lines.pop();
+          for (const line of lines){
+            if (!line.startsWith('data: ')) continue;
+            const raw = line.slice(6); if (raw === '[DONE]') continue;
+            try {
+              const evt = JSON.parse(raw);
+              if (evt.type === 'message_start') totalIn += evt.message?.usage?.input_tokens || 0;
+              if (evt.type === 'message_delta' && evt.usage){ totalOut += evt.usage.output_tokens || 0; stopReason = evt.delta?.stop_reason; }
+              if (evt.type === 'content_block_start'){
+                const cb = evt.content_block;
+                blocks[evt.index] = { type: cb.type };
+                if (cb.type === 'tool_use'){ blocks[evt.index].id = cb.id; blocks[evt.index].name = cb.name; blocks[evt.index].inputJson = ''; }
+                else { blocks[evt.index].text = ''; }
+              }
+              if (evt.type === 'content_block_delta'){
+                const b = blocks[evt.index]; if (!b) continue;
+                if (evt.delta.type === 'text_delta'){ b.text = (b.text||'') + evt.delta.text; fullText += evt.delta.text; onDelta(evt.delta.text); }
+                else if (evt.delta.type === 'input_json_delta'){ b.inputJson = (b.inputJson||'') + evt.delta.partial_json; }
+                else if (evt.delta.type === 'thinking_delta'){ b.text = (b.text||'') + evt.delta.thinking; if (onThinking) onThinking(evt.delta.thinking); }
+              }
+            } catch(_){}
+          }
         }
+      } catch(e){
+        if (e.name === 'AbortError' || signal.aborted){ reportAbort(); return; }
+        onError(e.message || 'Stream interrupted — partial response preserved.'); return;
       }
 
-      // Build assistant content from collected blocks
+      // Build assistant content — thinking blocks must be preserved for multi-turn correctness
       const assistantContent = Object.values(blocks).map(b => {
+        if (b.type === 'thinking') return { type:'thinking', thinking: b.text || '' };
         if (b.type === 'text') return { type:'text', text: b.text || '' };
         if (b.type === 'tool_use'){
           let input = {};
@@ -887,17 +943,17 @@
 
       if (stopReason !== 'tool_use'){
         if (onStatus) onStatus(null);
-        onDone(fullText, { inputTokens: totalIn, outputTokens: totalOut });
+        onDone(fullText, { inputTokens: totalIn, outputTokens: totalOut, stopReason });
         return;
       }
 
       // Execute tools and loop
-      if (signal.aborted) return;
+      if (signal.aborted){ reportAbort(); return; }
       currentMessages = [...currentMessages, { role:'assistant', content: assistantContent }];
       const toolResults = [];
       for (const b of assistantContent){
         if (b.type !== 'tool_use') continue;
-        if (signal.aborted) return;
+        if (signal.aborted){ reportAbort(); return; }
         const label = b.name === 'wikipedia_search' ? `Searching Wikipedia for "${b.input.query}"…`
           : b.name === 'serper_search' ? `Searching Google for "${b.input.query}"…`
           : b.name === 'web_search' ? `Searching for "${b.input.query}"…`
@@ -906,7 +962,7 @@
         if (onStatus) onStatus(label);
         let result;
         try { result = await executeTool(b.name, b.input, signal); }
-        catch(e){ if (e.name === 'AbortError') return; result = `Tool error (${b.name}): ${e.message}`; }
+        catch(e){ if (e.name === 'AbortError'){ reportAbort(); return; } result = `Tool error (${b.name}): ${e.message}`; }
         toolResults.push({ type:'tool_result', tool_use_id: b.id, content: result });
       }
       currentMessages = [...currentMessages, { role:'user', content: toolResults }];
@@ -946,11 +1002,18 @@
     return tools;
   }
 
-  async function callDeepSeek({ messages, onDelta, onDone, onError, onStatus }){
+  async function callDeepSeek({ messages, onDelta, onDone, onError, onStatus, onAbort }){
     if (_activeController) _activeController.abort();
     const controller = new AbortController();
     _activeController = controller;
     const signal = controller.signal;
+    let abortReported = false;
+    const reportAbort = () => {
+      if (abortReported) return;
+      abortReported = true;
+      if (onStatus) onStatus(null);
+      if (onAbort) onAbort();
+    };
 
     const key = apiKeys.deepseek;
     if (!key){ onError('No DeepSeek API key — add it in Personalization (⚙).'); return; }
@@ -969,7 +1032,7 @@
           body: JSON.stringify(tools.length ? { model:'deepseek-chat', max_tokens:8192, stream:true, messages: currentMessages, tools, tool_choice:'auto' } : { model:'deepseek-chat', max_tokens:8192, stream:true, messages: currentMessages }),
           signal,
         });
-      } catch(e){ if (e.name === 'AbortError') return; onError(e.message || 'Network error — check your connection.'); return; }
+      } catch(e){ if (e.name === 'AbortError'){ reportAbort(); return; } onError(e.message || 'Network error — check your connection.'); return; }
 
       if (!res.ok){
         const err = await res.json().catch(() => ({}));
@@ -988,32 +1051,37 @@
       let finishReason = null;
       let usageFinal = null;
 
-      while (true){
-        if (signal?.aborted) return;
-        const { done, value } = await reader.read();
-        if (done) break;
-        buf += decoder.decode(value, { stream:true });
-        const lines = buf.split('\n'); buf = lines.pop();
-        for (const line of lines){
-          if (!line.startsWith('data: ')) continue;
-          const raw = line.slice(6); if (raw === '[DONE]') continue;
-          try {
-            const evt = JSON.parse(raw);
-            if (evt.usage){ usageFinal = evt.usage; }
-            const choice = evt.choices?.[0]; if (!choice) continue;
-            finishReason = choice.finish_reason || finishReason;
-            const delta = choice.delta;
-            if (delta.content){ fullText += delta.content; onDelta(delta.content); }
-            if (delta.tool_calls){
-              for (const tc of delta.tool_calls){
-                if (!tcBuf[tc.index]) tcBuf[tc.index] = { id:'', name:'', argsJson:'' };
-                if (tc.id) tcBuf[tc.index].id += tc.id;
-                if (tc.function?.name) tcBuf[tc.index].name += tc.function.name;
-                if (tc.function?.arguments) tcBuf[tc.index].argsJson += tc.function.arguments;
+      try {
+        while (true){
+          if (signal?.aborted){ reader.cancel().catch(()=>{}); reportAbort(); return; }
+          const { done, value } = await reader.read();
+          if (done) break;
+          buf += decoder.decode(value, { stream:true });
+          const lines = buf.split('\n'); buf = lines.pop();
+          for (const line of lines){
+            if (!line.startsWith('data: ')) continue;
+            const raw = line.slice(6); if (raw === '[DONE]') continue;
+            try {
+              const evt = JSON.parse(raw);
+              if (evt.usage){ usageFinal = evt.usage; }
+              const choice = evt.choices?.[0]; if (!choice) continue;
+              finishReason = choice.finish_reason || finishReason;
+              const delta = choice.delta;
+              if (delta.content){ fullText += delta.content; onDelta(delta.content); }
+              if (delta.tool_calls){
+                for (const tc of delta.tool_calls){
+                  if (!tcBuf[tc.index]) tcBuf[tc.index] = { id:'', name:'', argsJson:'' };
+                  if (tc.id) tcBuf[tc.index].id += tc.id;
+                  if (tc.function?.name) tcBuf[tc.index].name += tc.function.name;
+                  if (tc.function?.arguments) tcBuf[tc.index].argsJson += tc.function.arguments;
+                }
               }
-            }
-          } catch(_){}
+            } catch(_){}
+          }
         }
+      } catch(e){
+        if (e.name === 'AbortError' || signal.aborted){ reportAbort(); return; }
+        onError(e.message || 'Stream interrupted — partial response preserved.'); return;
       }
 
       if (usageFinal){
@@ -1024,7 +1092,7 @@
 
       if (finishReason !== 'tool_calls'){
         if (onStatus) onStatus(null);
-        onDone(fullText, { inputTokens: totalIn, cacheHitTokens: totalCacheHit, outputTokens: totalOut, provider:'deepseek' });
+        onDone(fullText, { inputTokens: totalIn, cacheHitTokens: totalCacheHit, outputTokens: totalOut, provider:'deepseek', finishReason });
         return;
       }
 
@@ -1036,7 +1104,7 @@
 
       // Execute tools
       for (const tc of toolCalls){
-        if (signal?.aborted) return;
+        if (signal?.aborted){ reportAbort(); return; }
         let input = {};
         try { input = JSON.parse(tc.function.arguments || '{}'); } catch(_){}
         const name = tc.function.name;
@@ -1048,7 +1116,7 @@
         if (onStatus) onStatus(label);
         let result;
         try { result = await executeTool(name, input, signal); }
-        catch(e){ if (e.name === 'AbortError') return; result = `Tool error (${name}): ${e.message}`; }
+        catch(e){ if (e.name === 'AbortError'){ reportAbort(); return; } result = `Tool error (${name}): ${e.message}`; }
         currentMessages = [...currentMessages, { role:'tool', tool_call_id: tc.id, content: result }];
       }
       if (onStatus) onStatus('Thinking…');
@@ -1089,7 +1157,7 @@
 
   function isTableDivider(line){
     const cells = splitTableRow(line);
-    return cells.length >= 2 && cells.every(cell => /^:?-{3,}:?$/.test(cell.trim()));
+    return cells.length >= 2 && cells.every(cell => /^:?-+:?$/.test(cell.trim()));
   }
 
   function tableAlignClasses(dividerLine){
@@ -1180,7 +1248,8 @@
   }
 
   function hasMarkdownTable(text){
-    return /\n?\s*\|?.+\|.+\n\s*\|?\s*:?-{3,}:?/.test(text || '');
+    const lines = String(text || '').split('\n');
+    return lines.some((line, i) => line.includes('|') && lines[i + 1] && isTableDivider(lines[i + 1]));
   }
 
   function markdownTextFromRendered(el){
@@ -1220,6 +1289,66 @@
     el.innerHTML = `<span class="err-msg"><i class="ti ti-alert-circle"></i>${esc(msg)}</span>`;
   }
 
+  const CONTINUE_PROMPT = 'Continue from exactly where you stopped. Do not recap or restart; continue the previous answer from the next word or sentence.';
+  let saveTimer = 0;
+  function scheduleSaveCurrentThread(){
+    if (saveTimer) return;
+    saveTimer = setTimeout(() => {
+      saveTimer = 0;
+      saveCurrentThread();
+    }, 350);
+  }
+
+  function removeMessageRef(messages, ref){
+    const i = messages.indexOf(ref);
+    if (i >= 0) messages.splice(i, 1);
+  }
+
+  function streamBuffer(el){
+    return el?._streamBuf || '';
+  }
+
+  function shouldOfferContinue(usage){
+    return usage?.stopReason === 'max_tokens' || usage?.finishReason === 'length';
+  }
+
+  function ensureMsgActions(t){
+    let row = t.querySelector('.msg-actions');
+    if (!row){
+      row = document.createElement('div');
+      row.className = 'msg-actions';
+      t.appendChild(row);
+    }
+    return row;
+  }
+
+  function clearMsgActions(t){
+    t.querySelector('.msg-actions')?.remove();
+  }
+
+  function showContinueAction(t, handler, action=''){
+    const row = ensureMsgActions(t);
+    row.innerHTML = '';
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'msg-action';
+    if (action) btn.dataset.continueAction = action;
+    btn.innerHTML = '<i class="ti ti-player-play"></i><span>Continue</span>';
+    btn.title = 'Continue from where the response stopped';
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      clearMsgActions(t);
+      handler();
+    });
+    row.appendChild(btn);
+  }
+
+  function showPartialStop(t, msg, handler, action=''){
+    setAiStatus(t, null);
+    if (t._statusEl) t._statusEl.innerHTML = `<span class="err-msg"><i class="ti ti-alert-circle"></i>${esc(msg)}</span>`;
+    showContinueAction(t, handler, action);
+  }
+
   // ---------- main thread ----------
   const stream = $('#chat-stream');
   const mainInput = $('#main-input');
@@ -1252,6 +1381,13 @@
     if (mainLabel) mainLabel.textContent = modelLabel();
     if (modelMenu){
       $$('[data-model]', modelMenu).forEach(btn => btn.classList.toggle('on', btn.dataset.model === prefs.model));
+      const thinkingToggleEl = $('#thinking-toggle');
+      if (thinkingToggleEl){
+        thinkingToggleEl.checked = !!(prefs.thinking && prefs.model !== 'haiku');
+        thinkingToggleEl.disabled = prefs.model === 'haiku';
+        const row = thinkingToggleEl.closest('.menu-thinking-row');
+        if (row) row.style.opacity = prefs.model === 'haiku' ? '0.4' : '1';
+      }
     }
     $$('.branch-model-chip').forEach(btn => {
       btn.innerHTML = branchModelChipContents();
@@ -1492,6 +1628,13 @@
   mainInput.addEventListener('input', () => { autosize(mainInput); updateMainSendState(); });
   mainInput.addEventListener('keydown', e => { if (e.key==='Enter' && !e.shiftKey){ e.preventDefault(); sendMain(); } });
   mainSend.addEventListener('click', sendMain);
+  stream.addEventListener('click', e => {
+    const btn = e.target.closest('[data-continue-action="main"]');
+    if (!btn || !stream.contains(btn)) return;
+    e.preventDefault();
+    btn.closest('.msg-actions')?.remove();
+    continueMain();
+  });
   docEl.addEventListener('input', () => {
     syncCurrentTitleFromH1();
     saveCurrentThread();
@@ -1543,9 +1686,14 @@
   function makeAiMessageEl(){
     const t = document.createElement('div');
     t.className = 'msg ai';
-    t.innerHTML = `<div class="ai-status"></div><div class="ai-content"><div class="typing"><span></span><span></span><span></span></div></div>`;
+    t.innerHTML = `<div class="ai-status"></div><div class="ai-thinking"><button class="thinking-toggle"><span class="thinking-live-spinner"></span><span class="thinking-label">Reasoning…</span><i class="ti ti-chevron-down"></i></button><div class="thinking-body"></div></div><div class="ai-content"><div class="typing"><span></span><span></span><span></span></div></div>`;
     t._statusEl = t.querySelector('.ai-status');
+    t._thinkingEl = t.querySelector('.ai-thinking');
+    t._thinkingBody = t.querySelector('.thinking-body');
+    t._thinkingToggle = t.querySelector('.thinking-toggle');
     t._contentEl = t.querySelector('.ai-content');
+    t._thinkingDone = false;
+    t._thinkingToggle.addEventListener('click', () => t._thinkingEl.classList.toggle('open'));
     return t;
   }
   function setAiStatus(t, msg){
@@ -1553,42 +1701,99 @@
     if (msg){ t._statusEl.innerHTML = `<span class="search-pill"><span class="search-spinner"></span>${esc(msg)}</span>`; }
     else { t._statusEl.innerHTML = ''; }
   }
+  function appendThinking(t, chunk){
+    if (!t._thinkingEl) return;
+    t._thinkingEl.classList.add('active');
+    t._thinkingBody.textContent += chunk;
+  }
+  function collapseThinking(t){
+    if (!t._thinkingEl || t._thinkingDone) return;
+    t._thinkingDone = true;
+    const spinner = t._thinkingToggle.querySelector('.thinking-live-spinner');
+    if (spinner) spinner.style.display = 'none';
+    const label = t._thinkingToggle.querySelector('.thinking-label');
+    if (label) label.textContent = 'View reasoning';
+    t._thinkingEl.classList.remove('open');
+  }
 
   function sendMain(){
     const files = getThreadFiles();
     const rawText = mainInput.value.trim();
     if (!rawText && !files.length) return;
     const text = rawText || 'Please summarize the attached file(s).';
-    if (threadState[currentThreadId]?.kind === 'chat' && isUntitledTitle(currentCrumbTitle)){
-      const titleSeed = rawText || files.map(f => f.name.split('/').pop()).join(', ');
+    const titleSeed = rawText || files.map(f => f.name.split('/').pop()).join(', ');
+    mainInput.value=''; autosize(mainInput); updateMainSendState();
+    runMainTurn(text, { displayText:text, files, titleSeed });
+  }
+
+  function continueMain(){
+    runMainTurn(CONTINUE_PROMPT, { displayText:'Continue', files:[], titleSeed:null });
+  }
+
+  function runMainTurn(text, { displayText=text, files=[], titleSeed=null } = {}){
+    if (threadState[currentThreadId]?.kind === 'chat' && titleSeed && isUntitledTitle(currentCrumbTitle)){
       const title = setThreadTitle(currentThreadId, titleFromPrompt(titleSeed));
       $('#doc h1').textContent = title;
     }
     const u = document.createElement('div');
     u.className = 'msg user';
-    u.innerHTML = `<div class="bub">${esc(text)}</div>`;
+    u.innerHTML = `<div class="bub">${esc(displayText)}</div>`;
     stream.appendChild(u);
-    mainInput.value=''; autosize(mainInput); updateMainSendState();
 
     const t = makeAiMessageEl();
     stream.appendChild(t);
     t.scrollIntoView({block:'end', behavior:'smooth'});
+
+    const previousMessages = [...mainMessages];
+    const persistentUser = { role:'user', content: text };
+    const persistentAssistant = { role:'assistant', content:'' };
+    mainMessages.push(persistentUser, persistentAssistant);
     saveCurrentThread();
 
-    const msgs = [...mainMessages, { role:'user', content: buildClaudeUserContent(text, files) }];
+    const msgs = [...previousMessages, { role:'user', content: buildClaudeUserContent(text, files) }];
     callClaude({
       messages: msgs,
-      onDelta: (delta) => { streamInto(t._contentEl, delta, null); t.scrollIntoView({block:'end', behavior:'smooth'}); },
+      onThinking: (chunk) => { appendThinking(t, chunk); t.scrollIntoView({block:'end', behavior:'smooth'}); },
+      onDelta: (delta) => {
+        collapseThinking(t);
+        streamInto(t._contentEl, delta, null);
+        persistentAssistant.content = streamBuffer(t._contentEl);
+        t.scrollIntoView({block:'end', behavior:'smooth'});
+        scheduleSaveCurrentThread();
+      },
       onStatus: (msg) => setAiStatus(t, msg),
       onDone: (full, usage) => {
-        mainMessages.push({ role:'user', content: text });
-        mainMessages.push({ role:'assistant', content: full });
+        persistentAssistant.content = full;
         const st = threadState[currentThreadId];
         if (st){ st.tokenIn = (st.tokenIn || 0) + (usage?.inputTokens || 0); st.tokenOut = (st.tokenOut || 0) + (usage?.outputTokens || 0); }
         updateMainUsage();
+        if (shouldOfferContinue(usage)) showContinueAction(t, continueMain, 'main');
         saveCurrentThread();
       },
-      onError: (msg) => { showError(t, msg); saveCurrentThread(); },
+      onError: (msg) => {
+        const partial = streamBuffer(t._contentEl).trim();
+        if (partial){
+          persistentAssistant.content = streamBuffer(t._contentEl);
+          showPartialStop(t, msg, continueMain, 'main');
+        } else {
+          removeMessageRef(mainMessages, persistentUser);
+          removeMessageRef(mainMessages, persistentAssistant);
+          showError(t._contentEl, msg);
+        }
+        saveCurrentThread();
+      },
+      onAbort: () => {
+        const partial = streamBuffer(t._contentEl).trim();
+        if (partial){
+          persistentAssistant.content = streamBuffer(t._contentEl);
+          showPartialStop(t, 'Response stopped before completion.', continueMain, 'main');
+        } else {
+          removeMessageRef(mainMessages, persistentUser);
+          removeMessageRef(mainMessages, persistentAssistant);
+          t.remove();
+        }
+        saveCurrentThread();
+      },
     });
   }
 
@@ -1675,20 +1880,55 @@
     const t = makeAiMessageEl();
     stream.appendChild(t);
     t.scrollIntoView({block:'end', behavior:'smooth'});
-    const msgs = [...mainMessages, { role:'user', content: buildClaudeUserContent(prompt, files) }];
+    const previousMessages = [...mainMessages];
+    const persistentUser = { role:'user', content:prompt };
+    const persistentAssistant = { role:'assistant', content:'' };
+    mainMessages.push(persistentUser, persistentAssistant);
+    saveCurrentThread();
+    const msgs = [...previousMessages, { role:'user', content: buildClaudeUserContent(prompt, files) }];
     callClaude({
       messages: msgs,
-      onDelta: (delta) => { streamInto(t._contentEl, delta, null); t.scrollIntoView({block:'end', behavior:'smooth'}); },
+      onThinking: (chunk) => { appendThinking(t, chunk); t.scrollIntoView({block:'end', behavior:'smooth'}); },
+      onDelta: (delta) => {
+        collapseThinking(t);
+        streamInto(t._contentEl, delta, null);
+        persistentAssistant.content = streamBuffer(t._contentEl);
+        t.scrollIntoView({block:'end', behavior:'smooth'});
+        scheduleSaveCurrentThread();
+      },
       onStatus: (msg) => setAiStatus(t, msg),
       onDone: (full, usage) => {
-        mainMessages.push({ role:'user', content: prompt });
-        mainMessages.push({ role:'assistant', content: full });
+        persistentAssistant.content = full;
         const st = threadState[currentThreadId];
         if (st){ st.tokenIn = (st.tokenIn || 0) + (usage?.inputTokens || 0); st.tokenOut = (st.tokenOut || 0) + (usage?.outputTokens || 0); }
         updateMainUsage();
+        if (shouldOfferContinue(usage)) showContinueAction(t, continueMain, 'main');
         saveCurrentThread();
       },
-      onError: (msg) => showError(t, msg),
+      onError: (msg) => {
+        const partial = streamBuffer(t._contentEl).trim();
+        if (partial){
+          persistentAssistant.content = streamBuffer(t._contentEl);
+          showPartialStop(t, msg, continueMain, 'main');
+        } else {
+          removeMessageRef(mainMessages, persistentUser);
+          removeMessageRef(mainMessages, persistentAssistant);
+          showError(t._contentEl, msg);
+        }
+        saveCurrentThread();
+      },
+      onAbort: () => {
+        const partial = streamBuffer(t._contentEl).trim();
+        if (partial){
+          persistentAssistant.content = streamBuffer(t._contentEl);
+          showPartialStop(t, 'Response stopped before completion.', continueMain, 'main');
+        } else {
+          removeMessageRef(mainMessages, persistentUser);
+          removeMessageRef(mainMessages, persistentAssistant);
+          t.remove();
+        }
+        saveCurrentThread();
+      },
     });
   }
 
@@ -1827,18 +2067,26 @@
   function sendBranchMsg(id){
     const b = branches[id]; if (!b) return;
     const ta = b.el.querySelector('textarea');
-    const sb = b.el.querySelector('.send-btn');
     const files = getBranchContextFiles(id);
     const rawText = ta.value.trim();
     if (!rawText && !(branchAttachments[id] || []).length) return;
     const text = rawText || 'Please summarize the attached file(s).';
+    ta.value = ''; autosize(ta); updateBranchSendState(id);
+    runBranchTurn(id, text, { displayText:text, files });
+  }
+
+  function continueBranch(id){
+    runBranchTurn(id, CONTINUE_PROMPT, { displayText:'Continue', files:getBranchContextFiles(id) });
+  }
+
+  function runBranchTurn(id, text, { displayText=text, files=getBranchContextFiles(id) } = {}){
+    const b = branches[id]; if (!b) return;
     const body = b.el.querySelector('.branch-body');
 
     const u = document.createElement('div');
     u.className = 'msg user';
-    u.innerHTML = `<div class="bub">${esc(text)}</div>`;
+    u.innerHTML = `<div class="bub">${esc(displayText)}</div>`;
     body.appendChild(u);
-    ta.value = ''; autosize(ta); updateBranchSendState(id);
 
     const t = makeAiMessageEl();
     body.appendChild(t);
@@ -1850,20 +2098,49 @@
       ? (msg) => buildClaudeUserContent(msg, files)
       : (msg) => buildPlainUserContent(msg, files);
     const msgs = buildBranchContext(id, text, buildContent);
+    const persistentUser = { role:'user', content:text };
+    const persistentAssistant = { role:'assistant', content:'' };
+    b.messages.push(persistentUser, persistentAssistant);
     callFn({
       messages: msgs,
-      onDelta: (delta) => { streamInto(t._contentEl, delta, body); },
+      onThinking: (chunk) => { appendThinking(t, chunk); body.scrollTop = body.scrollHeight; },
+      onDelta: (delta) => {
+        collapseThinking(t);
+        streamInto(t._contentEl, delta, body);
+        persistentAssistant.content = streamBuffer(t._contentEl);
+      },
       onStatus: (msg) => setAiStatus(t, msg),
       onDone: (full, usage) => {
-        b.messages.push({ role:'user', content: text });
-        b.messages.push({ role:'assistant', content: full });
+        persistentAssistant.content = full;
         b.tokenIn = (b.tokenIn || 0) + (usage?.inputTokens || 0);
         b.tokenCacheHit = (b.tokenCacheHit || 0) + (usage?.cacheHitTokens || 0);
         b.tokenOut = (b.tokenOut || 0) + (usage?.outputTokens || 0);
         b.provider = usage?.provider || b.provider;
         updateBranchUsage(id);
+        if (shouldOfferContinue(usage)) showContinueAction(t, () => continueBranch(id));
       },
-      onError: (msg) => showError(t, msg),
+      onError: (msg) => {
+        const partial = streamBuffer(t._contentEl).trim();
+        if (partial){
+          persistentAssistant.content = streamBuffer(t._contentEl);
+          showPartialStop(t, msg, () => continueBranch(id));
+        } else {
+          removeMessageRef(b.messages, persistentUser);
+          removeMessageRef(b.messages, persistentAssistant);
+          showError(t._contentEl, msg);
+        }
+      },
+      onAbort: () => {
+        const partial = streamBuffer(t._contentEl).trim();
+        if (partial){
+          persistentAssistant.content = streamBuffer(t._contentEl);
+          showPartialStop(t, 'Response stopped before completion.', () => continueBranch(id));
+        } else {
+          removeMessageRef(b.messages, persistentUser);
+          removeMessageRef(b.messages, persistentAssistant);
+          t.remove();
+        }
+      },
     });
   }
 
