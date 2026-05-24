@@ -2,6 +2,13 @@
 
 All notable repository changes made by AI agents should be recorded here.
 
+## 2026-05-24
+
+- Agent: Claude (Sonnet 4.6)
+- Summary: TASK-M00 — Migration baseline commit and project-memory scaffolding. Created `docs/project-notes/` with `TASKS.md` (M00–M06 seeded), `RUNS.md`, `CHANGES.md`, `DECISIONS.md`. Recorded two ADRs. Committed working monolith as revertible baseline (commit d47bd96).
+- Files changed: `docs/project-notes/TASKS.md` (new), `docs/project-notes/RUNS.md` (new), `docs/project-notes/CHANGES.md` (new), `docs/project-notes/DECISIONS.md` (new), `CHANGELOG.md`
+- Behavior changes: None — no app files touched.
+
 ## 2026-05-22
 
 - Agent: Claude (Opus 4.7)
