@@ -15,7 +15,7 @@ Each entry: **ID · Status · Goal · Context · Files likely involved · Accept
 ---
 
 ## TASK-M01 — Folder split, zero code change
-- **Status:** Todo
+- **Status:** Done
 - **Goal:** Introduce `backend/` and `frontend/` without changing any logic.
 - **Context:** Structural prerequisite for all later phases. The server moves to `backend/server.py` and the monolith HTML moves to `frontend/index.html`. The server's served directory is repointed to `../frontend`. Changelog/logs/file-watch path gotchas must be addressed here.
 - **Files likely involved:** `notlinear_server.py` → `backend/server.py`, `notlinear.html` → `frontend/index.html`

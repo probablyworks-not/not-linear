@@ -29,7 +29,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
 
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/python3")
-        process.arguments = ["notlinear_server.py", "--port", port, "--host", host]
+        process.arguments = ["backend/server.py", "--port", port, "--host", host]
         process.currentDirectoryURL = URL(fileURLWithPath: appDirectory)
         process.standardOutput = FileHandle.nullDevice
         process.standardError = FileHandle.nullDevice
@@ -82,7 +82,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
     }
 
     private func loadApp() {
-        let url = URL(string: "http://\(host):\(port)/notlinear.html")!
+        let url = URL(string: "http://\(host):\(port)/frontend/index.html")!
         webView.load(URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData))
     }
 
