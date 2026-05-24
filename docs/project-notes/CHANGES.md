@@ -4,6 +4,32 @@ Each entry: **date · summary · files touched · why changed · risks · tests 
 
 ---
 
+## 2026-05-24 — TASK-M06: View registry (core/registry.js)
+
+- **Summary:** Created `frontend/core/registry.js` with `registerView`, `mountView`, `getRegisteredViews`, `getActiveViewId`. Chat view registered in app.js with `{ id:'chat', label:'Chat', icon:'ti-message', mount:no-op, unmount:no-op }` — chat mounts inline so mount is a no-op for now. `mountView('chat')` called at end of init. No behavior change.
+- **Files touched:** `frontend/core/registry.js` (new), `frontend/app.js`
+- **Why changed:** TASK-M06 per MIGRATION.md — establishes the extensibility seam for adding future views without touching the shell or chat.
+- **Behavior changes:** None. Registry is bookkeeping only at this stage.
+- **Risks:** None — additive only.
+- **Tests run:** Syntax check (node --check), curl 200 on registry.js.
+- **Next steps:** Human runs full smoke test. Future views: drop a module in `frontend/views/`, call `registerView()`.
+
+## 2026-05-24 — TASK-M05: Peel modules off, leaf-first
+
+- **Summary:** Extracted 6 modules across 6 commits:
+  1. `core/markdown.js` — pure rendering (`esc`, `renderMarkdown`, `hasMarkdownTable`, `markdownTextFromRendered`, `renderMermaidIn`, `friendlyError`, `isConfigError`)
+  2. `core/ui.js` — toast + confirm dialog
+  3. `core/api-client.js` — fetch/logging infra, timeout constants, `requestLog`
+  4. `providers/tools.js` — `ToolFatalError`, all `run*` tool runners, `executeTool`, `toolResultTitle`, `toolResultFallbackMarkdown`, `modelLabelFromId`
+  5. `providers/claude.js`, `providers/deepseek.js`, `providers/openai.js` — LLM call functions; `buildSystemPrompt`/`buildTools`/`buildDeepSeekTools`/`buildBranchContext` stay in app.js (app-local state deps); provider signatures extended with `systemPrompt`/`tools` params; `getLLMAdapter` and `askInline` updated to pass them
+  6. `core/store.js` — Dexie persistence; `loadPersistedState` takes DOM-mutating callbacks from app.js; `persistAll` uses `document.querySelectorAll` directly
+- **Files touched:** all new modules above, `frontend/app.js`
+- **Why changed:** TASK-M05 per MIGRATION.md — leaf-first module extraction.
+- **Bug fixed en route:** M04 Python word-replacement incorrectly replaced `projectCount:` object key → `appState.projectCount:` (SyntaxError, broke entire app.js). Fixed in commit ae2b058.
+- **Risks:** Provider signature change (added `systemPrompt`/`tools` params) — verified all 3 call sites updated.
+- **Tests run:** Full smoke test passed after each extraction (user confirmed). Syntax check on all files.
+- **Next steps:** M06 view registry.
+
 ## 2026-05-24 — TASK-M04: Lift shared state into core/state.js
 
 - **Summary:** Created `frontend/core/state.js` exporting a single `appState` object. Updated `frontend/app.js` to import it and use `appState.X` for all shared primitives; object/collection variables use local `const X = appState.X` aliases (same reference, zero other changes needed). Fixed 2 `mainMessages` full-array reassignments to use splice-in-place pattern.

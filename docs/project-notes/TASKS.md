@@ -55,7 +55,7 @@ Each entry: **ID · Status · Goal · Context · Files likely involved · Accept
 ---
 
 ## TASK-M05 — Peel modules off, leaf-first (one per commit)
-- **Status:** Todo
+- **Status:** Done
 - **Goal:** Extract sections into ES modules in order: `core/markdown.js` → `providers/{claude,deepseek,openai}.js` → `core/api-client.js` → `core/ui.js` → `core/store.js` → view pieces (thread map, highlights, branches, breadcrumbs, composer, prefs).
 - **Context:** Each extraction is move-only. Commit and smoke-test after each one so any regression is immediately bisectable.
 - **Files likely involved:** `frontend/core/markdown.js`, `frontend/core/api-client.js`, `frontend/core/ui.js`, `frontend/core/store.js`, `frontend/providers/claude.js`, `frontend/providers/deepseek.js`, `frontend/providers/openai.js`, view modules under `frontend/views/`
@@ -65,7 +65,7 @@ Each entry: **ID · Status · Goal · Context · Files likely involved · Accept
 ---
 
 ## TASK-M06 — View registry + chat as the first view
-- **Status:** Todo
+- **Status:** Done
 - **Goal:** Add `core/registry.js`; make the existing chat experience register itself (`{ id, label, icon, mount, unmount }`) with no behavior change. `app.js` becomes: init core → register views → mount default.
 - **Context:** Final migration phase. Establishes the extensibility seam so future features (e.g. Coding Projects) can be added as a new module under `frontend/views/` without touching the shell or chat.
 - **Files likely involved:** `frontend/core/registry.js` (new), `frontend/app.js`, `frontend/views/chat.js` (or equivalent)
