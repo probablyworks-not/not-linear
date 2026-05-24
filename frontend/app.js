@@ -1,186 +1,26 @@
 import { appState } from './core/state.js';
   import { esc, renderMarkdown, hasMarkdownTable, markdownTextFromRendered, renderMermaidIn, friendlyError, isConfigError } from './core/markdown.js';
   import { toast, confirmDeleteItem, confirmDeleteChat, confirmDeleteBranch } from './core/ui.js';
+  import { requestLog, RequestTimeoutError, signalWithTimeout, readStreamChunk, readResponseBody, safeJsonForLog, summarizeMessagesForLog, beginBackendTrace, endBackendTrace, loggedFetch, readLoggedErrorPayload, REQUEST_LOG_LIMIT, RUNTIME_LOG_SYNC_ENDPOINT, RUNTIME_LOG_SYNC_DEBOUNCE_MS, TOOL_TIMEOUT_MS, SEARCH_TIMEOUT_MS, PAGE_READ_TIMEOUT_MS, SCRAPE_TIMEOUT_MS, MODEL_CONNECT_TIMEOUT_MS, MODEL_STREAM_IDLE_TIMEOUT_MS, TOOL_SYNTHESIS_IDLE_TIMEOUT_MS, DEEPSEEK_MAX_TOOL_ROUNDS } from './core/api-client.js';
   const $ = (s,r=document) => r.querySelector(s);
   const $$ = (s,r=document) => [...r.querySelectorAll(s)];
   const truncate = (s, n=70) => s.length > n ? s.slice(0,n-1).trim() + '…' : s;
-  const redactHeaders = (headers = {}) => Object.fromEntries(Object.entries(headers).map(([k,v]) =>
-    /authorization|api[-_]?key|x-api-key/i.test(k) ? [k, '[redacted]'] : [k, v]
-  ));
-  const summarizeBody = (body) => {
-    if (!body || typeof body !== 'string') return null;
-    try {
-      const parsed = JSON.parse(body);
-      if (parsed.messages) parsed.messages = `[${parsed.messages.length} messages]`;
-      if (parsed.system) parsed.system = `[${String(parsed.system).length} chars]`;
-      if (parsed.tools) parsed.tools = `[${parsed.tools.length} tools]`;
-      return parsed;
-    } catch(_) {
-      return body.length > 500 ? body.slice(0, 500) + '…' : body;
-    }
-  };
-  const requestLog = window.notlinearRequestLog = window.notlinearRequestLog || [];
-  let requestSeq = requestLog.length;
-  let traceSeq = requestLog.length;
   let logRenderQueued = false;
   let logFileSyncTimer = 0;
   let logFileSyncInFlight = false;
   let logFileSyncQueued = false;
   let logFileSyncDisabled = false;
-  const REQUEST_LOG_LIMIT = 300;
-  const RUNTIME_LOG_SYNC_ENDPOINT = '/__notlinear_runtime_logs';
-  const RUNTIME_LOG_SYNC_DEBOUNCE_MS = 1200;
-  const TOOL_TIMEOUT_MS = 20000;
-  const SEARCH_TIMEOUT_MS = 12000;
-  const PAGE_READ_TIMEOUT_MS = 16000;
-  const SCRAPE_TIMEOUT_MS = 24000;
-  const MODEL_CONNECT_TIMEOUT_MS = 70000;
-  const MODEL_STREAM_IDLE_TIMEOUT_MS = 120000;
-  const TOOL_SYNTHESIS_IDLE_TIMEOUT_MS = 30000;
-  const DEEPSEEK_MAX_TOOL_ROUNDS = 2;
 
-  class RequestTimeoutError extends Error {
-    constructor(message){
-      super(message);
-      this.name = 'RequestTimeoutError';
-      this.isTimeout = true;
-    }
-  }
+  // (RequestTimeoutError, signalWithTimeout, readStreamChunk, readResponseBody,
+  //  safeJsonForLog, summarizeMessagesForLog, beginBackendTrace, endBackendTrace,
+  //  loggedFetch, readLoggedErrorPayload, all timeout constants — live in core/api-client.js)
 
-  function signalWithTimeout(parentSignal, timeoutMs, label){
-    const controller = new AbortController();
-    let timedOut = false;
-    let timer = 0;
-    const cleanup = () => {
-      if (timer) clearTimeout(timer);
-      parentSignal?.removeEventListener?.('abort', onParentAbort);
-    };
-    const onParentAbort = () => {
-      cleanup();
-      controller.abort(parentSignal.reason);
-    };
-    if (parentSignal?.aborted){
-      controller.abort(parentSignal.reason);
-    } else {
-      parentSignal?.addEventListener?.('abort', onParentAbort, { once:true });
-      if (timeoutMs > 0){
-        timer = setTimeout(() => {
-          timedOut = true;
-          cleanup();
-          controller.abort(new RequestTimeoutError(`${label || 'Request'} timed out.`));
-        }, timeoutMs);
-      }
-    }
-    return { signal: controller.signal, cleanup, timedOut: () => timedOut };
-  }
+  // Bridge: when api-client logs an event, schedule the UI + file-sync updates.
+  window.addEventListener('notlinear:log', () => {
+    scheduleRenderRequestLogs();
+    scheduleRuntimeLogFileSync();
+  });
 
-  async function readStreamChunk(reader, signal, timeoutMs, label){
-    if (!timeoutMs) return reader.read();
-    let timer = 0;
-    try {
-      return await Promise.race([
-        reader.read(),
-        new Promise((_, reject) => {
-          timer = setTimeout(() => {
-            reader.cancel().catch(()=>{});
-            reject(new RequestTimeoutError(`${label || 'Stream'} stopped sending data. Try again with a narrower query.`));
-          }, timeoutMs);
-        })
-      ]);
-    } finally {
-      if (timer) clearTimeout(timer);
-      if (signal?.aborted) reader.cancel().catch(()=>{});
-    }
-  }
-
-  async function readResponseBody(res, { kind = 'text', signal = null, timeoutMs = TOOL_TIMEOUT_MS, provider = null, label = null } = {}){
-    const timeout = signalWithTimeout(signal, timeoutMs, `${label || 'Response body'} body`);
-    const startedAt = performance.now();
-    let abortHandler = null;
-    const requestId = res?._notlinearRequestId || null;
-    const readLabel = `${label || 'response'}:${kind}`;
-    logBackendEvent({
-      id: requestId,
-      kind:'http',
-      phase:'body_start',
-      provider,
-      label: readLabel,
-      timeoutMs,
-      status: res?.status,
-      ok: res?.ok,
-    });
-    const abortPromise = new Promise((_, reject) => {
-      abortHandler = () => {
-        try { res?.body?.cancel?.().catch?.(()=>{}); } catch(_){}
-        reject(timeout.signal.reason || new RequestTimeoutError(`${readLabel} timed out.`));
-      };
-      if (timeout.signal.aborted) abortHandler();
-      else timeout.signal.addEventListener('abort', abortHandler, { once:true });
-    });
-    try {
-      const body = await Promise.race([
-        kind === 'json' ? res.json() : res.text(),
-        abortPromise,
-      ]);
-      logBackendEvent({
-        id: requestId,
-        kind:'http',
-        phase:'body_end',
-        provider,
-        label: readLabel,
-        durationMs: Math.round(performance.now() - startedAt),
-        status: res?.status,
-        ok: res?.ok,
-      });
-      return body;
-    } catch(e){
-      const error = timeout.timedOut()
-        ? new RequestTimeoutError(`${readLabel} timed out after ${Math.round(timeoutMs / 1000)}s.`)
-        : e;
-      logBackendEvent({
-        id: requestId,
-        kind:'http',
-        phase:'body_error',
-        provider,
-        label: readLabel,
-        durationMs: Math.round(performance.now() - startedAt),
-        status: res?.status,
-        ok: res?.ok,
-        error: error.message || String(error),
-      });
-      throw error;
-    } finally {
-      if (abortHandler) timeout.signal.removeEventListener('abort', abortHandler);
-      timeout.cleanup();
-    }
-  }
-
-  function safeJsonForLog(value, maxChars = 700){
-    if (value == null) return value;
-    let out = value;
-    try {
-      out = typeof value === 'string' ? value : JSON.stringify(value);
-    } catch(_) {
-      out = String(value);
-    }
-    if (out.length > maxChars) out = out.slice(0, maxChars - 1).trim() + '…';
-    try {
-      return JSON.parse(out);
-    } catch(_) {
-      return out;
-    }
-  }
-  function summarizeMessagesForLog(messages = []){
-    return (messages || []).map((msg, i) => ({
-      index: i,
-      role: msg.role || null,
-      content: typeof msg.content === 'string'
-        ? `[${msg.content.length} chars]`
-        : Array.isArray(msg.content)
-          ? `[${msg.content.length} blocks]`
-          : msg.content == null ? null : `[${typeof msg.content}]`,
-    }));
-  }
   function scheduleRenderRequestLogs(){
     const view = document.getElementById('logs-view');
     if (!view || view.hidden || logRenderQueued) return;
@@ -236,119 +76,6 @@ import { appState } from './core/state.js';
       }
     }
   }
-  function logBackendEvent(entry){
-    requestLog.push({ timestamp: new Date().toISOString(), ...entry });
-    if (requestLog.length > REQUEST_LOG_LIMIT) requestLog.splice(0, requestLog.length - REQUEST_LOG_LIMIT);
-    scheduleRenderRequestLogs();
-    scheduleRuntimeLogFileSync();
-    const level = entry.error || entry.status >= 400 ? 'warn' : 'log';
-    console[level]('[notlinear backend]', entry);
-  }
-  function beginBackendTrace(kind, meta = {}){
-    const id = `${kind}-${++traceSeq}`;
-    const trace = { id, kind, startedAtMs: performance.now(), startedAt: new Date().toISOString(), done:false };
-    logBackendEvent({ id, kind, phase:'start', startedAt:trace.startedAt, ...meta });
-    return trace;
-  }
-  function endBackendTrace(trace, phase = 'end', meta = {}){
-    if (!trace || trace.done) return;
-    trace.done = true;
-    logBackendEvent({
-      id: trace.id,
-      kind: trace.kind,
-      phase,
-      startedAt: trace.startedAt,
-      endedAt: new Date().toISOString(),
-      durationMs: Math.round(performance.now() - trace.startedAtMs),
-      ...meta,
-    });
-  }
-  async function loggedFetch(url, options = {}, meta = {}){
-    const id = ++requestSeq;
-    const startedAt = performance.now();
-    const startedAtIso = new Date().toISOString();
-    const method = options.method || 'GET';
-    const timeout = signalWithTimeout(options.signal, meta.timeoutMs || 0, meta.label || url);
-    logBackendEvent({
-      id,
-      kind:'http',
-      phase:'start',
-      startedAt: startedAtIso,
-      method,
-      url,
-      provider: meta.provider || null,
-      label: meta.label || null,
-      timeoutMs: meta.timeoutMs || 0,
-      headers: redactHeaders(options.headers || {}),
-      body: summarizeBody(options.body),
-    });
-    try {
-      const res = await fetch(url, { ...options, signal: timeout.signal });
-      logBackendEvent({
-        id,
-        kind:'http',
-        phase:'end',
-        startedAt: startedAtIso,
-        endedAt: new Date().toISOString(),
-        durationMs: Math.round(performance.now() - startedAt),
-        method,
-        url,
-        provider: meta.provider || null,
-        label: meta.label || null,
-        timeoutMs: meta.timeoutMs || 0,
-        status: res.status,
-        ok: res.ok,
-        statusText: res.statusText,
-      });
-      res._notlinearRequestId = id;
-      return res;
-    } catch(e){
-      const error = timeout.timedOut()
-        ? new RequestTimeoutError(`${meta.label || 'Request'} timed out after ${Math.round((meta.timeoutMs || 0) / 1000)}s.`)
-        : e;
-      logBackendEvent({
-        id,
-        kind:'http',
-        phase:'error',
-        startedAt: startedAtIso,
-        endedAt: new Date().toISOString(),
-        durationMs: Math.round(performance.now() - startedAt),
-        method,
-        url,
-        provider: meta.provider || null,
-        label: meta.label || null,
-        timeoutMs: meta.timeoutMs || 0,
-        error: error.message || String(error),
-      });
-      throw error;
-    } finally {
-      timeout.cleanup();
-    }
-  }
-  async function readLoggedErrorPayload(res, meta = {}){
-    const text = await readResponseBody(res, {
-      kind:'text',
-      signal:null,
-      timeoutMs:meta.timeoutMs || TOOL_TIMEOUT_MS,
-      provider:meta.provider || null,
-      label:meta.label || 'error_body',
-    }).catch(() => '');
-    let body = text;
-    try { body = text ? JSON.parse(text) : {}; } catch(_){}
-    logBackendEvent({
-      id: res._notlinearRequestId || null,
-      kind:'http',
-      phase:'response_body',
-      endedAt: new Date().toISOString(),
-      provider: meta.provider || null,
-      label: meta.label || null,
-      status: res.status,
-      ok: res.ok,
-      body,
-    });
-    return body;
-  }
-
   const prefs = appState.prefs;
   const FALLBACK_CHANGELOG_MD = [
     '# Changelog',
