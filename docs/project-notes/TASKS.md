@@ -25,7 +25,7 @@ Each entry: **ID · Status · Goal · Context · Files likely involved · Accept
 ---
 
 ## TASK-M02 — Extract CSS
-- **Status:** Todo
+- **Status:** Done
 - **Goal:** Move the `<style>` block into `frontend/styles/` split along existing CSS banners: `tokens.css`, `base.css`, `chat.css`; link them from `index.html`.
 - **Context:** Pure move — no CSS rules change. Separates styling from markup to enable independent editing and future hot-reload.
 - **Files likely involved:** `frontend/index.html`, `frontend/styles/tokens.css`, `frontend/styles/base.css`, `frontend/styles/chat.css`

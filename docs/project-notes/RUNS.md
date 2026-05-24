@@ -4,6 +4,13 @@ Each entry: **date/time · task or bug ID · command category · result · impor
 
 ---
 
+## 2026-05-24 — TASK-M02 — curl verification — pass
+
+- **Category:** test
+- **Result:** pass
+- **Output:** All four paths return HTTP 200: `/frontend/index.html`, `/frontend/styles/tokens.css`, `/frontend/styles/base.css`, `/frontend/styles/chat.css`. No `<style>` block remains in index.html.
+- **Follow-up:** Human runs full smoke test with **emphasis on all three themes** (dark-mono / grey / light) and **highlights panel text in light mode** (bug #022). If green, proceed to TASK-M03.
+
 ## 2026-05-24 — TASK-M01 — server + curl verification — pass
 
 - **Category:** test

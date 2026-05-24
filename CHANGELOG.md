@@ -5,6 +5,11 @@ All notable repository changes made by AI agents should be recorded here.
 ## 2026-05-24
 
 - Agent: Claude (Sonnet 4.6)
+- Summary: TASK-M02 — Extract CSS. Moved 650-line `<style>` block into `frontend/styles/tokens.css` (design tokens), `frontend/styles/base.css` (layout/chrome), `frontend/styles/chat.css` (chat/branches/composer). No CSS rules changed.
+- Files changed: `frontend/index.html`, `frontend/styles/tokens.css` (new), `frontend/styles/base.css` (new), `frontend/styles/chat.css` (new), `CHANGELOG.md`, `docs/project-notes/`
+- Behavior changes: None — pure file split, zero rule changes. Bug #022 (highlights light-mode) preserved: all highlight classes use CSS variables only.
+
+- Agent: Claude (Sonnet 4.6)
 - Summary: TASK-M01 — Folder split. Introduced `backend/server.py` and `frontend/index.html`. Server now serves from repo root so `CHANGELOG.md` and `logs.md` are accessible at their root paths. `notlinear_server.py` and `notlinear.html` kept at root as compatibility shims for the compiled `.app` binary.
 - Files changed: `backend/server.py` (new), `frontend/index.html` (new), `notlinear_server.py` (shim), `notlinear.html` (redirect), `launchers/Notlinear.applescript`, `launchers/Notlinear.command`, `launchers/NotlinearNative.swift`, `CHANGELOG.md`, `docs/project-notes/`
 - Behavior changes: App URL changes from `http://127.0.0.1:8765/notlinear.html` to `http://127.0.0.1:8765/frontend/index.html` for direct/script launchers. The compiled `.app` binary still opens `/notlinear.html` which now meta-refreshes to `frontend/index.html` — behavior identical, one redirect hop added. Changelog fetch changed from relative `CHANGELOG.md` to absolute `/CHANGELOG.md` (same file, no functional difference). `logs.md` still written to repo root. Swift source updated; binary needs a rebuild in Xcode to skip the redirect hop.

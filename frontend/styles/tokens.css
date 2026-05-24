@@ -1,0 +1,82 @@
+/* ---- Design tokens: CSS custom properties + theme overrides ---- */
+
+:root{
+  --bg:#0A0A0A;
+  --bg-2:#111111;
+  --bg-3:#191919;
+  --surface:#0E0E0E;
+  --surface-2:#141414;
+  --rule:#222222;
+  --rule-2:#2E2E2E;
+  --text:#D8D8D8;
+  --text-2:#787878;
+  --text-3:#444444;
+  --accent:#A0A0A0;
+  --accent-2:#C8C8C8;
+  --accent-soft:rgba(160,160,160,0.12);
+  --branch:#58A6FF;
+  --branch-soft:rgba(88,166,255,0.16);
+  --branch-strong:rgba(88,166,255,0.28);
+  --highlight:#F4B83B;
+  --highlight-soft:rgba(244,184,59,0.28);
+  --highlight-strong:rgba(244,184,59,0.42);
+  --user-bub:#1A1A1A;
+  --shadow-md:0 4px 20px rgba(0,0,0,0.60);
+  --shadow-lg:0 12px 48px rgba(0,0,0,0.80);
+  --scrollbar-thumb:rgba(255,255,255,0.08);
+  --kbd-bg:rgba(255,255,255,0.10);
+  --kbd-color:rgba(255,255,255,0.60);
+  --surface-tint:rgba(255,255,255,0.015);
+  --th-tint:rgba(255,255,255,0.025);
+  --font:'Space Grotesk',-apple-system,system-ui,sans-serif;
+  --mono:'Space Mono',ui-monospace,Menlo,monospace;
+  --sidebar-w:264px;
+  --drawer-w:420px;
+  --drawer-gap:16px;
+}
+html[data-theme="grey"]{
+  --bg:#1C1C1C;
+  --bg-2:#232323;
+  --bg-3:#2B2B2B;
+  --surface:#202020;
+  --surface-2:#272727;
+  --rule:#363636;
+  --rule-2:#424242;
+  --text:#CACACA;
+  --text-2:#888888;
+  --text-3:#525252;
+  --accent:#989898;
+  --accent-2:#BABABA;
+  --accent-soft:rgba(152,152,152,0.12);
+  --user-bub:#282828;
+  --shadow-md:0 4px 20px rgba(0,0,0,0.45);
+  --shadow-lg:0 12px 48px rgba(0,0,0,0.65);
+  --scrollbar-thumb:rgba(255,255,255,0.09);
+  --kbd-bg:rgba(255,255,255,0.10);
+  --kbd-color:rgba(255,255,255,0.60);
+  --surface-tint:rgba(255,255,255,0.018);
+  --th-tint:rgba(255,255,255,0.028);
+}
+html[data-theme="light"]{
+  --bg:#F8F8F8;
+  --bg-2:#F0F0F0;
+  --bg-3:#E6E6E6;
+  --surface:#FFFFFF;
+  --surface-2:#F4F4F4;
+  --rule:#E0E0E0;
+  --rule-2:#CCCCCC;
+  --text:#1A1A1A;
+  --text-2:#666666;
+  --text-3:#AAAAAA;
+  --accent:#555555;
+  --accent-2:#333333;
+  --accent-soft:rgba(80,80,80,0.08);
+  --user-bub:#EFEFEF;
+  --shadow-md:0 4px 20px rgba(0,0,0,0.08);
+  --shadow-lg:0 12px 48px rgba(0,0,0,0.14);
+  --scrollbar-thumb:rgba(0,0,0,0.12);
+  --kbd-bg:rgba(0,0,0,0.08);
+  --kbd-color:rgba(0,0,0,0.55);
+  --surface-tint:rgba(0,0,0,0.025);
+  --th-tint:rgba(0,0,0,0.035);
+}

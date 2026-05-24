@@ -4,6 +4,20 @@ Each entry: **date · summary · files touched · why changed · risks · tests 
 
 ---
 
+## 2026-05-24 — TASK-M02: Extract CSS into frontend/styles/
+
+- **Summary:** Extracted the 650-line `<style>` block from `frontend/index.html` into three files: `tokens.css` (CSS custom properties + theme overrides), `base.css` (layout, shell, panels, overlays, chrome), `chat.css` (messages, markdown, composer, branches, thinking, inline spans). Replaced `<style>` with three `<link>` tags. No CSS rules changed.
+- **Files touched:** `frontend/index.html`, `frontend/styles/tokens.css` (new), `frontend/styles/base.css` (new), `frontend/styles/chat.css` (new), `CHANGELOG.md`, `docs/project-notes/CHANGES.md`, `docs/project-notes/RUNS.md`, `docs/project-notes/TASKS.md`
+- **Why changed:** TASK-M02 per MIGRATION.md — CSS extraction prerequisite for the JS module split.
+- **Split logic:**
+  - `tokens.css`: `:root` + `[data-theme]` overrides only.
+  - `base.css`: Global resets, Shell/sidebar, Main layout, Doc, Selection popover, Search palette, Personalization drawer, Context panel, Highlights panel, Thread Map, Branch context menu, Toast, Confirm dialog, Responsive media queries.
+  - `chat.css`: In-doc `.branched`/`.highlighted` spans, Chat messages, Markdown rendering, Code blocks, Mermaid, Search status, Extended thinking, Model menu thinking toggle, Sticky composer, Branch drawer, Edge connector, File chips, Inline error.
+- **Fragile areas check:** Bug #022 (highlights light-mode): `.highlight-row`, `.highlight-text`, `.highlight-meta` — all use CSS variables only, no hardcoded colors. Preserved in chat.css. ✓
+- **Risks:** None — pure file-split, zero rule changes.
+- **Tests run:** `curl` verified 200 on all 4 paths (index.html + 3 CSS files).
+- **Next steps:** Human runs smoke test (emphasis: all 3 themes + light-mode highlights). If green, proceed to TASK-M03.
+
 ## 2026-05-24 — TASK-M01: Folder split
 
 - **Summary:** Introduced `backend/` and `frontend/` directories. Created `backend/server.py` (canonical server, serves from repo root) and `frontend/index.html` (canonical HTML). Left `notlinear_server.py` as a 5-line exec shim and `notlinear.html` as an HTML meta-refresh redirect so the compiled `.app` binary keeps working without a rebuild. Updated `.applescript`, `.command`, and `NotlinearNative.swift` to use new paths.
