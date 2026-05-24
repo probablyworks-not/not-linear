@@ -3,6 +3,7 @@ import { appState } from './core/state.js';
   import { toast, confirmDeleteItem, confirmDeleteChat, confirmDeleteBranch } from './core/ui.js';
   import { requestLog, RequestTimeoutError, signalWithTimeout, readStreamChunk, readResponseBody, safeJsonForLog, summarizeMessagesForLog, beginBackendTrace, endBackendTrace, loggedFetch, readLoggedErrorPayload, REQUEST_LOG_LIMIT, RUNTIME_LOG_SYNC_ENDPOINT, RUNTIME_LOG_SYNC_DEBOUNCE_MS, TOOL_TIMEOUT_MS, SEARCH_TIMEOUT_MS, PAGE_READ_TIMEOUT_MS, SCRAPE_TIMEOUT_MS, MODEL_CONNECT_TIMEOUT_MS, MODEL_STREAM_IDLE_TIMEOUT_MS, TOOL_SYNTHESIS_IDLE_TIMEOUT_MS, DEEPSEEK_MAX_TOOL_ROUNDS } from './core/api-client.js';
   import { persistAll, loadPersistedState, deletedThreadIds, STATIC_THREAD_IDS } from './core/store.js';
+  import { registerView, mountView } from './core/registry.js';
   import { modelLabelFromId } from './providers/tools.js';
   import { callClaude } from './providers/claude.js';
   import { callDeepSeek } from './providers/deepseek.js';
@@ -4733,6 +4734,14 @@ import { appState } from './core/state.js';
   });
 
   // ---------- init ----------
+  registerView({
+    id: 'chat',
+    label: 'Chat',
+    icon: 'ti-message',
+    mount: () => {},   // chat mounts inline below; future views implement mount/unmount
+    unmount: () => {},
+  });
+
   (async () => {
     await loadPersistedState({ renderPrefsUI, resolveThreadTitle, addThreadButton, updateThreadButtonTitle, refreshThreadUnreadIndicators, renderProjects }); // merge saved state into threadState (async IndexedDB read)
     renderModelUI();
@@ -4746,5 +4755,6 @@ import { appState } from './core/state.js';
         openBranch({ quote: 'Spatial memory does the heavy lifting', fresh: true, bid:'b1', anchorBid:'b1' });
       }
     }, 400);
+    mountView('chat');
   })();
 
