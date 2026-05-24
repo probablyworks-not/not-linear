@@ -4,6 +4,13 @@ Each entry: **date/time · task or bug ID · command category · result · impor
 
 ---
 
+## 2026-05-24 — TASK-M04 — curl verification — pass
+
+- **Category:** test
+- **Result:** pass
+- **Output:** HTTP 200 on app.js, core/state.js, index.html. No double substitution detected (assertion passed). 143 primitive refs replaced across 7 variables.
+- **Follow-up:** Human runs **hard** smoke test: chat, branch create, branch nest, branch reopen, branch persist-across-switch, search-tool branch. All Fragile areas (#002–#018) must pass.
+
 ## 2026-05-24 — TASK-M03 — curl verification — pass
 
 - **Category:** test

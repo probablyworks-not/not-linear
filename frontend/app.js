@@ -1,3 +1,4 @@
+import { appState } from './core/state.js';
   const $ = (s,r=document) => r.querySelector(s);
   const $$ = (s,r=document) => [...r.querySelectorAll(s)];
   const esc = (s) => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
@@ -347,7 +348,7 @@
     return body;
   }
 
-  let prefs = { name:'Alex', tone:'concise', context:'', model:'sonnet', mode:'general', folderName:'Workspace', searxngUrl:'', thinking:false, theme:'dark' };
+  const prefs = appState.prefs;
   const FALLBACK_CHANGELOG_MD = [
     '# Changelog',
     '',
@@ -436,7 +437,7 @@
   ].join('\n');
 
   // ---------- real Claude API ----------
-  let mainMessages = []; // {role, content}[] for the main thread
+  const mainMessages = appState.mainMessages;
 
   function buildSystemPrompt(){
     const tones = {
@@ -810,11 +811,10 @@
     }];
   }
 
-  let _activeController = null;
 
   async function callClaude({ messages, onDelta, onThinking, onDone, onError, onStatus, onAbort, onController }){
     const controller = new AbortController();
-    _activeController = controller;
+    appState._activeController = controller;
     if (onController) onController(controller);
     const signal = controller.signal;
     let abortReported = false;
@@ -1049,7 +1049,7 @@
 
   async function callDeepSeek({ messages, onDelta, onThinking, onDone, onError, onStatus, onAbort, onController, model = 'deepseek-chat' }){
     const controller = new AbortController();
-    _activeController = controller;
+    appState._activeController = controller;
     if (onController) onController(controller);
     const signal = controller.signal;
     let abortReported = false;
@@ -1335,7 +1335,7 @@
   // ---------- OpenAI-compatible provider (OpenAI, Gemini, and future providers) ----------
   async function callOpenAICompatible({ messages, onDelta, onThinking, onDone, onError, onStatus, onAbort, onController, model, baseUrl, apiKey, providerLabel }){
     const controller = new AbortController();
-    _activeController = controller;
+    appState._activeController = controller;
     if (onController) onController(controller);
     const signal = controller.signal;
     let abortReported = false;
@@ -1891,7 +1891,7 @@
   }
 
   function ensureTurnElementLive(threadId, aiEl){
-    if (currentThreadId !== threadId || stream.contains(aiEl)) return stream.contains(aiEl);
+    if (appState.currentThreadId !== threadId || stream.contains(aiEl)) return stream.contains(aiEl);
     const turnId = aiEl.dataset.turnId;
     const selector = turnId ? `.msg.ai[data-turn-id="${cssEscape(turnId)}"]` : '.msg.ai:last-child';
     const liveEl = stream.querySelector(selector) || $$('.msg.ai', stream).at(-1);
@@ -1915,26 +1915,26 @@
   function saveMainTurnProgress(threadId, messageList, aiEl, { fallbackHTML='', markUnread=false } = {}){
     const state = threadState[threadId];
     if (!state) return;
-    const isLive = currentThreadId === threadId && stream.contains(aiEl);
+    const isLive = appState.currentThreadId === threadId && stream.contains(aiEl);
     if (isLive){
       syncCurrentTitleFromH1();
       state.h1 = $('#doc h1').innerHTML;
       state.eyebrow = $('#doc .eyebrow').textContent;
       state.meta = $('#meta-dynamic').innerHTML;
       state.docContent = $('#doc-content').innerHTML;
-      state.title = currentCrumbTitle;
+      state.title = appState.currentCrumbTitle;
       state.stream = streamHTMLForSave();
     } else {
       state.stream = mergeTurnIntoSavedStream(state, aiEl, fallbackHTML);
     }
     state.mainMessages = [...messageList];
-    if (markUnread && threadId !== currentThreadId) state.unread = true;
+    if (markUnread && threadId !== appState.currentThreadId) state.unread = true;
     syncThreadUnreadIndicator(threadId);
     persistAll();
   }
 
   function scheduleSaveMainTurnProgress(threadId, messageList, aiEl, options = {}){
-    const shouldMarkUnread = !!(options.markUnread && threadId !== currentThreadId);
+    const shouldMarkUnread = !!(options.markUnread && threadId !== appState.currentThreadId);
     if (shouldMarkUnread && threadState[threadId]){
       threadState[threadId].unread = true;
       syncThreadUnreadIndicator(threadId);
@@ -1987,7 +1987,7 @@
     btn.innerHTML = `<i class="ti ti-download"></i><span>Download .md</span>`;
     btn.addEventListener('click', async (e) => {
       e.stopPropagation();
-      const filename = detectMdFilename(md) || slugifyTitle(currentCrumbTitle || 'response') + '.md';
+      const filename = detectMdFilename(md) || slugifyTitle(appState.currentCrumbTitle || 'response') + '.md';
       // 1. Native WKWebView bridge (desktop app)
       if (window.webkit?.messageHandlers?.notlinear) {
         window.webkit.messageHandlers.notlinear.postMessage({ action: 'saveFile', filename, content: md });
@@ -2322,17 +2322,13 @@
     branchSnapshots: {},
     branchRecents: {}
   };
-  const threadState = {
-    'doc-main': { kind:'doc', ...defaultThreadState }
-  };
-  let currentThreadId = 'doc-main';
-  let newChatCount = 1;
+  appState.threadState['doc-main'] = { kind:'doc', ...defaultThreadState };
+  const threadState = appState.threadState;
   // projectId -> { id, name, rules, files: [{name,size,type,kind,content,base64}] }
   // Chat membership lives on threadState[id].projectId (single source of truth).
-  const projects = {};
-  let projectCount = 1;
+  const projects = appState.projects;
   function getActiveProject(){
-    const pid = threadState[currentThreadId]?.projectId;
+    const pid = threadState[appState.currentThreadId]?.projectId;
     return pid ? projects[pid] : null;
   }
 
@@ -2410,8 +2406,8 @@
     const state = threadState[id];
     if (state) state.title = cleanTitle;
     updateThreadButtonTitle(id, cleanTitle);
-    if (id === currentThreadId){
-      currentCrumbTitle = cleanTitle;
+    if (id === appState.currentThreadId){
+      appState.currentCrumbTitle = cleanTitle;
       renderCrumbs();
     }
     return cleanTitle;
@@ -2420,7 +2416,7 @@
   function syncThreadUnreadIndicator(id){
     const btn = $$('.sidebar [data-thread]').find(item => item.dataset.thread === id);
     if (!btn) return;
-    const hasUnread = !!threadState[id]?.unread && id !== currentThreadId;
+    const hasUnread = !!threadState[id]?.unread && id !== appState.currentThreadId;
     btn.classList.toggle('has-unread', hasUnread);
     const title = btn.dataset.title || btn.querySelector('.thread-title')?.textContent.trim() || btn.textContent.trim();
     btn.setAttribute('aria-label', hasUnread ? `${title} has a new response` : title);
@@ -2439,13 +2435,13 @@
   }
 
   function syncCurrentTitleFromH1(){
-    const state = threadState[currentThreadId];
+    const state = threadState[appState.currentThreadId];
     if (!state || state.kind === 'doc') return;
     // Don't rename the thread when a branch has been promoted into the main view —
     // the h1 belongs to the promoted branch, not the parent thread.
     if (mainHistory.length > 0) return;
     const title = normalizeTitleText($('#doc h1').textContent);
-    if (title) setThreadTitle(currentThreadId, title);
+    if (title) setThreadTitle(appState.currentThreadId, title);
   }
 
   function streamHTMLForSave(){
@@ -2460,9 +2456,9 @@
   }
 
   function saveCurrentThread(){
-    const state = threadState[currentThreadId];
+    const state = threadState[appState.currentThreadId];
     if (!state) return;
-    syncOpenBranchSnapshots(currentThreadId);
+    syncOpenBranchSnapshots(appState.currentThreadId);
     syncCurrentTitleFromH1();
     state.h1 = $('#doc h1').innerHTML;
     state.eyebrow = $('#doc .eyebrow').textContent;
@@ -2470,13 +2466,13 @@
     state.stream = streamHTMLForSave();
     state.docContent = $('#doc-content').innerHTML;
     // When a branch is promoted into the main view (mainHistory.length > 0), the
-    // h1/currentCrumbTitle belong to the branch, not the thread — preserve the
+    // h1/appState.currentCrumbTitle belong to the branch, not the thread — preserve the
     // thread's original title so the sidebar button isn't renamed.
     if (mainHistory.length === 0) {
-      state.title = currentCrumbTitle;
+      state.title = appState.currentCrumbTitle;
       state.promotedCrumbTitle = undefined;
     } else {
-      state.promotedCrumbTitle = currentCrumbTitle;
+      state.promotedCrumbTitle = appState.currentCrumbTitle;
     }
     state.mainMessages = [...mainMessages];
     state.mainHistory = mainHistory.map(s => ({ ...s }));
@@ -2490,7 +2486,7 @@
     const fallbackTitle = btn?.dataset.title || 'Untitled chat';
     const state = threadState[id] || (threadState[id] = { kind:'chat', title:fallbackTitle, stream:'' });
     ensureThreadHighlightState(id);
-    currentThreadId = id;
+    appState.currentThreadId = id;
     window.scrollTo(0, 0);
     const hadUnread = !!state.unread;
     state.unread = false;
@@ -2503,12 +2499,12 @@
       mainHistory.push(...state.mainHistory);
       // In promoted mode the sidebar title is the original thread title, but the
       // displayed crumb is the promoted branch title (saved separately).
-      currentCrumbTitle = state.promotedCrumbTitle || threadTitle;
+      appState.currentCrumbTitle = state.promotedCrumbTitle || threadTitle;
     } else {
-      currentCrumbTitle = threadTitle;
+      appState.currentCrumbTitle = threadTitle;
     }
     renderCrumbs();
-    $('#doc h1').innerHTML = state.kind === 'doc' ? state.h1 : (state.h1 || `${esc(currentCrumbTitle)}`);
+    $('#doc h1').innerHTML = state.kind === 'doc' ? state.h1 : (state.h1 || `${esc(appState.currentCrumbTitle)}`);
     $('#doc .eyebrow').textContent = state.kind === 'doc' ? state.eyebrow : '';
     const _usageLabel = fmtUsage(state.tokenIn || 0, state.tokenOut || 0, { cost:state.cost, cacheHitTokens:state.tokenCacheHit || 0, provider:state.provider, model:state.model }) || '—';
     const _branchCount = Object.keys(state.branchSnapshots || {}).length;
@@ -2520,7 +2516,8 @@
     `;
     stream.innerHTML = state.stream || '';
     stream.querySelectorAll('.empty-chat-state').forEach(el => el.remove());
-    mainMessages = state.mainMessages ? [...state.mainMessages] : [];
+    appState.mainMessages.length = 0;
+    if (state.mainMessages?.length) appState.mainMessages.push(...state.mainMessages);
     syncMessagesFromRenderedStream();
     if (rehydrateTableMarkdown(stream, mainMessages)){
       state.stream = stream.innerHTML;
@@ -2593,8 +2590,8 @@
     delete threadAttachments[id];
     deletedThreadIds.add(id);
     btn.remove();
-    if (currentThreadId === id){
-      currentThreadId = 'doc-main';
+    if (appState.currentThreadId === id){
+      appState.currentThreadId = 'doc-main';
       renderThread('doc-main', true);
     } else {
       refreshThreadUnreadIndicators();
@@ -2607,8 +2604,8 @@
 
   function startNewChat(){
     const id = 'chat-' + Date.now();
-    const title = newChatCount === 1 ? 'Untitled chat' : `Untitled chat ${newChatCount}`;
-    newChatCount += 1;
+    const title = appState.newChatCount === 1 ? 'Untitled chat' : `Untitled chat ${appState.newChatCount}`;
+    appState.newChatCount += 1;
     threadState[id] = { kind:'chat', title, stream:'', docContent:blankDocContent(), tokenIn:0, tokenCacheHit:0, tokenOut:0, cost:0, highlights:[], branchSnapshots:{}, branchRecents:{} };
     addThreadButton(id, title);
     renderThread(id);
@@ -2698,11 +2695,10 @@
     streamScrollLocked = !atBottom;
   }, { passive: true });
 
-  let mainStreaming = false;
-  const streamingThreadIds = new Set();
-  const mainControllers = {};
+  const streamingThreadIds = appState.streamingThreadIds;
+  const mainControllers = appState.mainControllers;
   function setMainStreaming(v){
-    mainStreaming = v;
+    appState.mainStreaming = v;
     mainSend.innerHTML = v ? '<i class="ti ti-player-stop"></i>' : '<i class="ti ti-arrow-up"></i>';
     mainSend.disabled = v ? false : (!mainInput.value.trim() && !getThreadFiles().length);
     mainSend.title = v ? 'Stop generation' : '';
@@ -2713,18 +2709,18 @@
       streamingThreadIds.delete(id);
       delete mainControllers[id];
     }
-    if (id === currentThreadId) setMainStreaming(v);
+    if (id === appState.currentThreadId) setMainStreaming(v);
   }
   function syncMainStreamingForCurrentThread(){
-    setMainStreaming(streamingThreadIds.has(currentThreadId));
+    setMainStreaming(streamingThreadIds.has(appState.currentThreadId));
   }
   function updateMainSendState(){
-    if (mainStreaming) return;
+    if (appState.mainStreaming) return;
     mainSend.disabled = !mainInput.value.trim() && !getThreadFiles().length;
   }
 
   mainInput.addEventListener('input', () => { autosize(mainInput); updateMainSendState(); });
-  mainInput.addEventListener('keydown', e => { if (e.key==='Enter' && !e.shiftKey){ e.preventDefault(); if (!mainStreaming) sendMain(); } });
+  mainInput.addEventListener('keydown', e => { if (e.key==='Enter' && !e.shiftKey){ e.preventDefault(); if (!appState.mainStreaming) sendMain(); } });
   mainInput.addEventListener('paste', async e => {
     const items = e.clipboardData?.items;
     if (!items) return;
@@ -2734,7 +2730,7 @@
     const files = imageItems.map(item => item.getAsFile()).filter(Boolean);
     if (files.length) await handleFileInput(files, null);
   });
-  mainSend.addEventListener('click', () => { if (mainStreaming){ mainControllers[currentThreadId]?.abort('main_stop_button'); } else { sendMain(); } });
+  mainSend.addEventListener('click', () => { if (appState.mainStreaming){ mainControllers[appState.currentThreadId]?.abort('main_stop_button'); } else { sendMain(); } });
   stream.addEventListener('click', e => {
     const btn = e.target.closest('[data-continue-action="main"]');
     if (!btn || !stream.contains(btn)) return;
@@ -2962,7 +2958,7 @@
   }
 
   function updateMainUsage(){
-    const state = threadState[currentThreadId];
+    const state = threadState[appState.currentThreadId];
     if (!state || state.kind === 'doc') return;
     const label = fmtUsage(state.tokenIn || 0, state.tokenOut || 0, { cost:state.cost, cacheHitTokens:state.tokenCacheHit || 0, provider:state.provider, model:state.model });
     const el = document.querySelector('#usage-meta span');
@@ -2975,7 +2971,7 @@
     if (el) el.textContent = label || '';
   }
   function updateMainBranchCount(){
-    const state = threadState[currentThreadId];
+    const state = threadState[appState.currentThreadId];
     if (!state || state.kind === 'doc') return;
     const count = Object.keys(state.branchSnapshots || {}).length;
     const el = document.querySelector('#branch-count-meta span');
@@ -3091,8 +3087,8 @@
   }
 
   function runMainTurn(text, { displayText=text, files=[], titleSeed=null, continueCount=0 } = {}){
-    const threadId = currentThreadId;
-    if (threadState[threadId]?.kind === 'chat' && titleSeed && isUntitledTitle(currentCrumbTitle)){
+    const threadId = appState.currentThreadId;
+    if (threadState[threadId]?.kind === 'chat' && titleSeed && isUntitledTitle(appState.currentCrumbTitle)){
       const title = setThreadTitle(threadId, titleFromPrompt(titleSeed));
       $('#doc h1').textContent = title;
     }
@@ -3129,7 +3125,7 @@
       ensureTurnElementLive(threadId, t);
       resetAiMessageEl(t);
       setThreadStreaming(threadId, true);
-      messageList = currentThreadId === threadId ? mainMessages : (threadState[threadId]?.mainMessages || messageList);
+      messageList = appState.currentThreadId === threadId ? mainMessages : (threadState[threadId]?.mainMessages || messageList);
       messageList.push(persistentUser, persistentAssistant);
       saveTurn();
       fallbackHTML = threadState[threadId]?.stream || fallbackHTML;
@@ -3163,7 +3159,7 @@
           const st = threadState[threadId];
           addUsageToBucket(st, usage);
           setResponseMeta(t, usage);
-          if (currentThreadId === threadId) updateMainUsage();
+          if (appState.currentThreadId === threadId) updateMainUsage();
           if (shouldOfferContinue(usage)) showContinueAction(t, () => continueMain(continueCount), 'main', continueCount);
           addDownloadMdAction(t);
           addCopyAction(t);
@@ -3194,7 +3190,7 @@
               onSettings: configErr ? openPrefs : null,
             });
           }
-          saveTurn({ markUnread: threadId !== currentThreadId });
+          saveTurn({ markUnread: threadId !== appState.currentThreadId });
         },
         onAbort: () => {
           stopWorkingStatus(t);
@@ -3209,7 +3205,7 @@
             removeMessageRef(messageList, persistentAssistant);
             t.remove();
           }
-          saveTurn({ markUnread: threadId !== currentThreadId });
+          saveTurn({ markUnread: threadId !== appState.currentThreadId });
         },
       };
       adapter.callFn({ messages: msgs, ...adapter.callArgs, ...handlers });
@@ -3224,7 +3220,7 @@
   const highlightCount = $('#highlight-count');
   const highlightToggle = $('#highlight-toggle');
 
-  function ensureThreadHighlightState(threadId = currentThreadId){
+  function ensureThreadHighlightState(threadId = appState.currentThreadId){
     const state = threadState[threadId];
     if (!state) return null;
     if (!Array.isArray(state.highlights)) state.highlights = [];
@@ -3232,14 +3228,14 @@
     return state;
   }
 
-  function ensureThreadBranchState(threadId = currentThreadId){
+  function ensureThreadBranchState(threadId = appState.currentThreadId){
     const state = ensureThreadHighlightState(threadId);
     if (!state) return null;
     if (!state.branchRecents || typeof state.branchRecents !== 'object' || Array.isArray(state.branchRecents)) state.branchRecents = {};
     return state;
   }
 
-  function getThreadHighlights(threadId = currentThreadId){
+  function getThreadHighlights(threadId = appState.currentThreadId){
     return ensureThreadHighlightState(threadId)?.highlights || [];
   }
 
@@ -3262,7 +3258,7 @@
     return clone.innerHTML;
   }
 
-  function branchHasHighlights(id, threadId = currentThreadId){
+  function branchHasHighlights(id, threadId = appState.currentThreadId){
     return getThreadHighlights(threadId).some(h => h.source === 'branch' && h.branchId === id);
   }
 
@@ -3283,7 +3279,7 @@
 
   function captureBranchSnapshot(id, threadId = null, { force = false, branch = null } = {}){
     const b = branch || branches[id]; if (!b) return;
-    const ownerThreadId = threadId || b.threadId || currentThreadId;
+    const ownerThreadId = threadId || b.threadId || appState.currentThreadId;
     const state = ensureThreadBranchState(ownerThreadId); if (!state) return;
     const recent = rememberBranchRecent(id, ownerThreadId);
     const hasExistingSnapshot = !!state.branchSnapshots[id];
@@ -3308,10 +3304,10 @@
       provider:b.provider,
       model:b.model,
     };
-    if (ownerThreadId === currentThreadId) updateMainBranchCount();
+    if (ownerThreadId === appState.currentThreadId) updateMainBranchCount();
   }
 
-  function syncOpenBranchSnapshots(threadId = currentThreadId){
+  function syncOpenBranchSnapshots(threadId = appState.currentThreadId){
     Object.keys(branches).forEach(id => {
       const b = branches[id];
       if ((b.threadId || threadId) === threadId) {
@@ -3350,17 +3346,17 @@
     }
     const item = {
       id:hid,
-      threadId:currentThreadId,
-      threadTitle:currentCrumbTitle,
+      threadId:appState.currentThreadId,
+      threadTitle:appState.currentCrumbTitle,
       text:normalizeTitleText(sel.text),
       createdAt:Date.now(),
       ...info,
     };
-    getThreadHighlights(currentThreadId).push(item);
+    getThreadHighlights(appState.currentThreadId).push(item);
     window.getSelection().removeAllRanges();
     hidePop();
     if (item.source === 'branch') {
-      captureBranchSnapshot(item.branchId, currentThreadId, { force:true });
+      captureBranchSnapshot(item.branchId, appState.currentThreadId, { force:true });
       persistAll();
     } else {
       saveCurrentThread();
@@ -3386,7 +3382,7 @@
 
   function renderHighlightsPanel(){
     if (!highlightList) return;
-    const items = getThreadHighlights(currentThreadId).slice().sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+    const items = getThreadHighlights(appState.currentThreadId).slice().sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
     highlightCount.textContent = String(items.length);
     highlightList.innerHTML = '';
     if (!items.length){
@@ -3463,7 +3459,7 @@
   function parentBranchRowFor(b){
     const parentId = b?.parentBid;
     if (!parentId) return null;
-    const tid = b.threadId || currentThreadId;
+    const tid = b.threadId || appState.currentThreadId;
     const state = ensureThreadBranchState(tid);
     const row = branchRowsForThread(tid, state).find(item => item.id === parentId);
     if (row) return row;
@@ -3511,8 +3507,8 @@
       syncBranchParentButton(b);
       return;
     }
-    captureBranchSnapshot(id, b.threadId || currentThreadId, { force:true });
-    openCtxBranch(b.threadId || currentThreadId, row);
+    captureBranchSnapshot(id, b.threadId || appState.currentThreadId, { force:true });
+    openCtxBranch(b.threadId || appState.currentThreadId, row);
   }
 
   function openBranchForHighlight(h){
@@ -3531,7 +3527,7 @@
     b.threadId = h.threadId;
     setBranchExpanded(b);
     if (!existed && snap) applyBranchSnapshot(b, snap);
-    activeBranchId = h.branchId;
+    appState.activeBranchId = h.branchId;
     rebalance();
     return b;
   }
@@ -3563,7 +3559,7 @@
   function goToHighlight(id){
     const h = findHighlightRecord(id); if (!h) return;
     closeHighlights();
-    if (h.threadId !== currentThreadId) renderThread(h.threadId);
+    if (h.threadId !== appState.currentThreadId) renderThread(h.threadId);
     requestAnimationFrame(() => requestAnimationFrame(() => focusHighlightSource(h)));
   }
 
@@ -3628,9 +3624,9 @@
     removeHighlightMarkupFromState(h.threadId, id);
     if (h.source === 'branch' && !state.branchRecents?.[h.branchId] && !state.highlights.some(item => item.source === 'branch' && item.branchId === h.branchId)){
       delete state.branchSnapshots[h.branchId];
-      if (h.threadId === currentThreadId) updateMainBranchCount();
+      if (h.threadId === appState.currentThreadId) updateMainBranchCount();
     }
-    if (h.threadId === currentThreadId) saveCurrentThread();
+    if (h.threadId === appState.currentThreadId) saveCurrentThread();
     else persistAll();
     renderHighlightsPanel();
     toast('Highlight removed');
@@ -3674,22 +3670,22 @@
 
   function renderThreadMap(){
     let entries = Object.entries(threadState).filter(([id, s]) => {
-      const msgs = id === currentThreadId ? mainMessages : (s.mainMessages || []);
+      const msgs = id === appState.currentThreadId ? mainMessages : (s.mainMessages || []);
       return msgs.some(m => m.role === 'user');
     });
     // Current thread always first
-    entries.sort(([a]) => a === currentThreadId ? -1 : 0);
+    entries.sort(([a]) => a === appState.currentThreadId ? -1 : 0);
 
     if (!entries.length){
       threadMapBody.innerHTML = '<div class="tm-empty">No threads with messages yet.</div>';
       return;
     }
     threadMapBody.innerHTML = entries.map(([id, state]) => {
-      const msgs = id === currentThreadId ? mainMessages : (state.mainMessages || []);
+      const msgs = id === appState.currentThreadId ? mainMessages : (state.mainMessages || []);
       const userCount = msgs.filter(m => m.role === 'user').length;
       const branchCount = Object.keys(state.branchSnapshots || {}).length;
       const title = resolveThreadTitle(state, 'Untitled chat');
-      const isCurrent = id === currentThreadId;
+      const isCurrent = id === appState.currentThreadId;
       const meta = [
         userCount + ' message' + (userCount !== 1 ? 's' : ''),
         branchCount ? branchCount + ' branch' + (branchCount !== 1 ? 'es' : '') : ''
@@ -3712,7 +3708,7 @@
   async function summarizeThread(id){
     const state = threadState[id];
     if (!state) return;
-    const msgs = id === currentThreadId ? mainMessages : (state.mainMessages || []);
+    const msgs = id === appState.currentThreadId ? mainMessages : (state.mainMessages || []);
     const snapshots = state.branchSnapshots || {};
 
     const key = apiKeys.deepseek;
@@ -3876,7 +3872,7 @@
   }
 
   function askInline(text){
-    const threadId = currentThreadId;
+    const threadId = appState.currentThreadId;
     const prompt = `About this passage: "${truncate(text,200)}"`;
     const files = getThreadFiles();
     const u = document.createElement('div');
@@ -3938,7 +3934,7 @@
         const st = threadState[threadId];
         addUsageToBucket(st, usage);
         setResponseMeta(t, usage);
-        if (currentThreadId === threadId) updateMainUsage();
+        if (appState.currentThreadId === threadId) updateMainUsage();
         if (shouldOfferContinue(usage)) showContinueAction(t, () => continueMain(continueCount), 'main', continueCount);
         addDownloadMdAction(t);
         addCopyAction(t);
@@ -3957,7 +3953,7 @@
           removeMessageRef(messageList, persistentAssistant);
           showError(t._contentEl, msg);
         }
-        saveTurn({ markUnread: threadId !== currentThreadId });
+        saveTurn({ markUnread: threadId !== appState.currentThreadId });
       },
       onAbort: () => {
         stopWorkingStatus(t);
@@ -3972,7 +3968,7 @@
           removeMessageRef(messageList, persistentAssistant);
           t.remove();
         }
-        saveTurn({ markUnread: threadId !== currentThreadId });
+        saveTurn({ markUnread: threadId !== appState.currentThreadId });
       },
     };
     if (isDeepSeekModel) callFn({ ...callArgs, model: prefs.model === 'deepseek-r1' ? 'deepseek-reasoner' : 'deepseek-chat' });
@@ -3981,12 +3977,11 @@
 
   // ---------- branch panels ----------
   const stack = $('#branch-stack');
-  const branches = {}; // id -> {el, parentBid, anchorBid, quote, depth, collapsed, reader}
-  let activeBranchId = null;
+  const branches = appState.branches;
   let branchLayoutRaf = 0;
   const ctxPanel = $('#ctx-panel'); // hoisted so rebalance() can reference it
 
-  function rememberBranchRecent(id, threadId = currentThreadId){
+  function rememberBranchRecent(id, threadId = appState.currentThreadId){
     const b = branches[id]; if (!b) return null;
     const state = ensureThreadBranchState(threadId); if (!state) return null;
     const now = Date.now();
@@ -4063,11 +4058,10 @@
   }
 
   // ---------- breadcrumb history ----------
-  const mainHistory = []; // [{title, h1HTML, eyebrow, chatHTML}]
-  let currentCrumbTitle = 'Non-linear chat system for research';
+  const mainHistory = appState.mainHistory;
 
   function captureMainState(){
-    return { title: currentCrumbTitle, h1HTML: $('#doc h1').innerHTML, eyebrow: $('#doc .eyebrow').textContent, chatHTML: streamHTMLForSave(), messages: [...mainMessages] };
+    return { title: appState.currentCrumbTitle, h1HTML: $('#doc h1').innerHTML, eyebrow: $('#doc .eyebrow').textContent, chatHTML: streamHTMLForSave(), messages: [...mainMessages] };
   }
 
   function renderCrumbs(){
@@ -4084,7 +4078,7 @@
       trail.appendChild(btn);
     });
     const sep = document.createElement('span'); sep.className = 'sep'; sep.textContent = '/'; trail.appendChild(sep);
-    const here = document.createElement('span'); here.className = 'here'; here.textContent = currentCrumbTitle; trail.appendChild(here);
+    const here = document.createElement('span'); here.className = 'here'; here.textContent = appState.currentCrumbTitle; trail.appendChild(here);
   }
 
   function restoreMain(idx){
@@ -4092,12 +4086,12 @@
     $('#doc h1').innerHTML = snap.h1HTML;
     $('#doc .eyebrow').textContent = snap.eyebrow;
     stream.innerHTML = snap.chatHTML;
-    currentCrumbTitle = snap.title;
+    appState.currentCrumbTitle = snap.title;
     if (snap.messages) mainMessages = [...snap.messages];
     mainHistory.splice(idx);
     renderCrumbs();
     // Persist the restored state so the thread isn't corrupted on next save
-    const state = threadState[currentThreadId];
+    const state = threadState[appState.currentThreadId];
     if (state) {
       state.stream = streamHTMLForSave();
       state.mainMessages = [...mainMessages];
@@ -4107,7 +4101,7 @@
         state.title = snap.title;
         state.promotedCrumbTitle = undefined;
       } else {
-        state.promotedCrumbTitle = currentCrumbTitle;
+        state.promotedCrumbTitle = appState.currentCrumbTitle;
       }
       state.mainHistory = mainHistory.map(s => ({ ...s }));
       persistAll();
@@ -4129,8 +4123,8 @@
       existing.depth = resolveBranchDepth(existing.parentBid, depthOverride || existing.depth);
       setBranchDepthUI(existing);
       closeOtherBranches(id);
-      activeBranchId = id;
-      rememberBranchRecent(id, existing.threadId || currentThreadId);
+      appState.activeBranchId = id;
+      rememberBranchRecent(id, existing.threadId || appState.currentThreadId);
       persistAll();
       rebalance();
       return existing.el;
@@ -4183,8 +4177,8 @@
       <div class="branch-resize" data-edge="bottom-left" title="Resize downward and sideways" aria-hidden="true"></div>
     `;
     stack.appendChild(el);
-    branches[id] = { el, threadId:currentThreadId, parentBid: parentBranchId, anchorBid: anchorBid || id, quote, depth, collapsed, reader:false, messages: [], createdAt:now, touchedAt:now };
-    activeBranchId = id;
+    branches[id] = { el, threadId:appState.currentThreadId, parentBid: parentBranchId, anchorBid: anchorBid || id, quote, depth, collapsed, reader:false, messages: [], createdAt:now, touchedAt:now };
+    appState.activeBranchId = id;
     // animate in
     requestAnimationFrame(() => el.classList.remove('entering'));
     rebalance();
@@ -4225,7 +4219,7 @@
 
     setTimeout(() => ta.focus(), 280);
     updateComposerOffset();
-    rememberBranchRecent(id, currentThreadId);
+    rememberBranchRecent(id, appState.currentThreadId);
     if (fresh) scheduleSaveCurrentThread();
     else persistAll();
   }
@@ -4308,7 +4302,7 @@
           if (shouldOfferContinue(usage)) showContinueAction(t, () => continueBranch(id, continueCount), '', continueCount);
           addDownloadMdAction(t);
           addCopyAction(t);
-          captureBranchSnapshot(id, b.threadId || currentThreadId, { force:true, branch:b });
+          captureBranchSnapshot(id, b.threadId || appState.currentThreadId, { force:true, branch:b });
           persistAll();
         },
         onError: (msg) => {
@@ -4335,7 +4329,7 @@
               onSettings: configErr ? openPrefs : null,
             });
           }
-          captureBranchSnapshot(id, b.threadId || currentThreadId, { force:true, branch:b });
+          captureBranchSnapshot(id, b.threadId || appState.currentThreadId, { force:true, branch:b });
           persistAll();
         },
         onAbort: () => {
@@ -4351,7 +4345,7 @@
             t.remove();
             syncBranchEmpty(b);
           }
-          captureBranchSnapshot(id, b.threadId || currentThreadId, { force:true, branch:b });
+          captureBranchSnapshot(id, b.threadId || appState.currentThreadId, { force:true, branch:b });
           persistAll();
         },
       });
@@ -4503,7 +4497,7 @@
       setBranchSize(b, Math.max(r.width, 620), Math.max(r.height, 480));
     }
     syncReaderButton(b);
-    activeBranchId = id;
+    appState.activeBranchId = id;
     rebalance();
   }
 
@@ -4534,14 +4528,14 @@
   function closeBranch(id){
     const b = branches[id]; if (!b) return;
     const parentBid = b.parentBid;
-    captureBranchSnapshot(id, b.threadId || currentThreadId, { force:true });
+    captureBranchSnapshot(id, b.threadId || appState.currentThreadId, { force:true });
     persistAll();
     b.el.style.transition = 'opacity 180ms, transform 180ms';
     b.el.style.opacity = '0'; b.el.style.transform = 'translateX(20px)';
     setTimeout(() => {
       b.el.remove(); delete branches[id];
-      if (activeBranchId === id) {
-        activeBranchId = (parentBid && branches[parentBid]) ? parentBid : null;
+      if (appState.activeBranchId === id) {
+        appState.activeBranchId = (parentBid && branches[parentBid]) ? parentBid : null;
       }
       rebalance(); updateComposerOffset();
       renderRecentBranches();
@@ -4554,11 +4548,11 @@
     Object.keys(branches).forEach(id => {
       if (id === keepId) return;
       const b = branches[id]; if (!b) return;
-      captureBranchSnapshot(id, b.threadId || currentThreadId, { force:true });
+      captureBranchSnapshot(id, b.threadId || appState.currentThreadId, { force:true });
       b.el.remove();
       delete branches[id];
     });
-    if (keepId && branches[keepId]) activeBranchId = keepId;
+    if (keepId && branches[keepId]) appState.activeBranchId = keepId;
     renderRecentBranches();
   }
   function closeUnrelatedBranches(keepAncestorId){
@@ -4572,7 +4566,7 @@
     Object.keys(branches).forEach(id => {
       if (keepIds.has(id)) return;
       const b = branches[id]; if (!b) return;
-      captureBranchSnapshot(id, b.threadId || currentThreadId, { force:true });
+      captureBranchSnapshot(id, b.threadId || appState.currentThreadId, { force:true });
       b.el.remove();
       delete branches[id];
     });
@@ -4605,12 +4599,12 @@
 
   function removeOpenBranchImmediately(id, threadId = null){
     const b = branches[id]; if (!b) return;
-    if (threadId && (b.threadId || currentThreadId) !== threadId) return;
+    if (threadId && (b.threadId || appState.currentThreadId) !== threadId) return;
     if (b.streaming) b.controller?.abort('branch_removed');
     b.el.remove();
     delete branches[id];
     delete branchAttachments[id];
-    if (activeBranchId === id) activeBranchId = null;
+    if (appState.activeBranchId === id) appState.activeBranchId = null;
   }
 
   function removeBranchRecords(threadId, ids){
@@ -4637,7 +4631,7 @@
       removeOpenBranchImmediately(id, threadId);
     });
 
-    if (threadId === currentThreadId){
+    if (threadId === appState.currentThreadId){
       unwrapBranchAnchorsInRoot($('#doc-content'), ids);
       unwrapBranchAnchorsInRoot(stream, ids);
       Object.values(branches).forEach(b => unwrapBranchAnchorsInRoot(b.el, ids));
@@ -4653,7 +4647,7 @@
     renderHighlightsPanel();
   }
 
-  async function deleteBranch(id, threadId = currentThreadId){
+  async function deleteBranch(id, threadId = appState.currentThreadId){
     if (!id) return;
     const state = ensureThreadBranchState(threadId);
     if (!state) return;
@@ -4668,7 +4662,7 @@
     const ids = Object.keys(branches);
     // Build ancestor chain of the active branch (ancestors that are still open)
     const ancestorChain = new Set();
-    let cursor = activeBranchId ? branches[activeBranchId]?.parentBid : null;
+    let cursor = appState.activeBranchId ? branches[appState.activeBranchId]?.parentBid : null;
     while (cursor && branches[cursor]) {
       ancestorChain.add(cursor);
       cursor = branches[cursor].parentBid;
@@ -4676,7 +4670,7 @@
     ids.forEach(id => {
       const el = branches[id].el;
       const isAncestor = ancestorChain.has(id);
-      el.style.zIndex = branches[id].reader ? '60' : id === activeBranchId ? '3' : isAncestor ? '2' : '1';
+      el.style.zIndex = branches[id].reader ? '60' : id === appState.activeBranchId ? '3' : isAncestor ? '2' : '1';
       el.classList.toggle('behind-active', isAncestor);
     });
     stack.classList.toggle('has-active', ids.length > 0);
@@ -4769,8 +4763,8 @@
     });
 
     // Snap child branches onto their open parent (branch-from-branch stacking)
-    if (activeBranchId && branches[activeBranchId]) {
-      let childId = activeBranchId;
+    if (appState.activeBranchId && branches[appState.activeBranchId]) {
+      let childId = appState.activeBranchId;
       let parentId = branches[childId].parentBid;
       while (parentId && branches[parentId]) {
         const parentTop = branches[parentId].el.style.top;
@@ -4813,7 +4807,7 @@
     } else if (act === 'close'){
       closeBranch(menuTargetId);
     } else if (act === 'delete'){
-      deleteBranch(menuTargetId, b.threadId || currentThreadId);
+      deleteBranch(menuTargetId, b.threadId || appState.currentThreadId);
     }
     closeMenu();
   });
@@ -4822,23 +4816,23 @@
     const b = branches[id]; if (!b) return;
     mainHistory.push(captureMainState());
     const title = titleFromQuote(b.quote);
-    currentCrumbTitle = title;
+    appState.currentCrumbTitle = title;
     $('#doc h1').innerHTML = `Now exploring: <span class="accent">${esc(title)}</span>`;
     $('#doc .eyebrow').textContent = 'Promoted from branch · ' + new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
     $('#doc-content').innerHTML = blankDocContent();
     stream.innerHTML = b.el.querySelector('.branch-body').innerHTML;
-    mainMessages = [...b.messages];
+    appState.mainMessages.length = 0; appState.mainMessages.push(...b.messages);
     docEl.classList.add('new-chat-mode');
     renderCrumbs();
     // Persist promoted state (branch content + mainHistory breadcrumb chain) to
     // threadState NOW so that closeBranch → persistAll and any subsequent
     // saveCurrentThread calls preserve the promoted view correctly.
-    const state = threadState[currentThreadId];
+    const state = threadState[appState.currentThreadId];
     if (state) {
       state.stream = streamHTMLForSave();
       state.mainMessages = [...mainMessages];
       state.mainHistory = mainHistory.map(s => ({ ...s }));
-      state.promotedCrumbTitle = currentCrumbTitle;
+      state.promotedCrumbTitle = appState.currentCrumbTitle;
       // Do NOT overwrite state.title — it must stay as the parent thread's title
       // so the sidebar button label is correct.
     }
@@ -4850,7 +4844,7 @@
   function openBranchFromAnchor(br, sourceBranchEl = null){
     if (!br?.dataset?.bid) return;
     const id = br.dataset.bid;
-    const snap = threadState[currentThreadId]?.branchSnapshots?.[id];
+    const snap = threadState[appState.currentThreadId]?.branchSnapshots?.[id];
     const parentBranchId = snap?.parentBid || sourceBranchEl?.dataset?.bid || null;
     // if a branch with this bid is open, focus it; else open new
     const existing = branches[id] || Object.values(branches).find(b => b.el.dataset.bid === id);
@@ -4860,7 +4854,7 @@
       setBranchDepthUI(existing);
       if (snap) applyBranchSnapshot(existing, snap);
       if (existing.collapsed) toggleCollapse(id);
-      activeBranchId = id;
+      appState.activeBranchId = id;
       rebalance();
       flash(existing.el);
       return;
@@ -5079,7 +5073,8 @@
 
   // ---------- api keys ----------
   const PROVIDER_LABELS = { anthropic:'Anthropic', deepseek:'DeepSeek', serper:'Serper', firecrawl:'Firecrawl', openai:'OpenAI', gemini:'Gemini', custom:'Other' };
-  const apiKeys = JSON.parse(localStorage.getItem('nl_api_keys') || '{}');
+  Object.assign(appState.apiKeys, JSON.parse(localStorage.getItem('nl_api_keys') || '{}'));
+  const apiKeys = appState.apiKeys;
 
   function maskKey(k){ return k.length < 10 ? '••••••••' : k.slice(0,4) + '••••••••' + k.slice(-4); }
 
@@ -5136,8 +5131,8 @@
   ctxScrim.addEventListener('click', closeCtx);
 
   // ---------- attachments ----------
-  const threadAttachments = {}; // threadId -> [{name, size, type, kind, content, base64}]
-  const branchAttachments = {}; // branchId -> [{name, size, type, kind, content, base64}]
+  const threadAttachments = appState.threadAttachments;
+  const branchAttachments = appState.branchAttachments;
   const MAX_TEXT_FILE_BYTES = 2_000_000;
   const MAX_PDF_BYTES = 20_000_000;
   const ATTACHMENT_CONTEXT_CHAR_LIMIT = 70_000;
@@ -5381,7 +5376,7 @@
     });
   }
 
-  function getThreadFiles(){ return threadAttachments[currentThreadId] || (threadAttachments[currentThreadId] = []); }
+  function getThreadFiles(){ return threadAttachments[appState.currentThreadId] || (threadAttachments[appState.currentThreadId] = []); }
   function getBranchFiles(branchId){ return branchAttachments[branchId] || (branchAttachments[branchId] = []); }
   function getBranchContextFiles(branchId){ return [...getThreadFiles(), ...(branchAttachments[branchId] || [])]; }
 
@@ -5534,8 +5529,8 @@
 
   function createProject(){
     const id = 'proj-' + Date.now();
-    const name = projectCount === 1 ? 'New project' : `New project ${projectCount}`;
-    projectCount += 1;
+    const name = appState.projectCount === 1 ? 'New project' : `New project ${appState.projectCount}`;
+    appState.projectCount += 1;
     projects[id] = { id, name, rules:'', files:[] };
     renderProjects();
     persistAll();
@@ -5653,8 +5648,8 @@
   function newChatInProject(pid){
     if (!projects[pid]) return;
     const id = 'chat-' + Date.now();
-    const title = newChatCount === 1 ? 'Untitled chat' : `Untitled chat ${newChatCount}`;
-    newChatCount += 1;
+    const title = appState.newChatCount === 1 ? 'Untitled chat' : `Untitled chat ${appState.newChatCount}`;
+    appState.newChatCount += 1;
     threadState[id] = { kind:'chat', title, stream:'', docContent:blankDocContent(), tokenIn:0, tokenCacheHit:0, tokenOut:0, cost:0, highlights:[], branchSnapshots:{}, branchRecents:{}, projectId: pid };
     addThreadButton(id, title);
     syncThreadRowVisibility();
@@ -5722,7 +5717,7 @@
   renderProjects();
 
   function branchSourceHTMLForThread(tid, state){
-    if (tid === currentThreadId){
+    if (tid === appState.currentThreadId){
       const liveDoc = state?.kind === 'doc' ? ($('#doc-content')?.innerHTML || '') : '';
       return `${liveDoc}\n${stream.innerHTML || ''}`;
     }
@@ -5787,7 +5782,7 @@
       mergeBranchRow(rows, { ...snap, touchedAt:snap.touchedAt || snap.createdAt || 1 }, 3000 + index);
     });
 
-    if (tid === currentThreadId){
+    if (tid === appState.currentThreadId){
       Object.entries(branches).forEach(([id, b], index) => {
         mergeBranchRow(rows, {
           id,
@@ -5838,7 +5833,7 @@
         const key = `${tid}:${row.id}`;
         if (seen.has(key)) return;
         seen.add(key);
-        const isOpen = tid === currentThreadId && !!branches[row.id];
+        const isOpen = tid === appState.currentThreadId && !!branches[row.id];
         const touchedAt = isOpen
           ? (branches[row.id].touchedAt || row.touchedAt || 0)
           : (row.touchedAt || 0);
@@ -5882,7 +5877,7 @@
   }
 
   function openCtxBranch(tid, row){
-    if (tid !== currentThreadId){
+    if (tid !== appState.currentThreadId){
       renderThread(tid);
       setTimeout(() => openCtxBranch(tid, row), 220);
       return;
@@ -5897,7 +5892,7 @@
       setBranchDepthUI(b);
       if (snap) applyBranchSnapshot(b, snap);
       if (b.collapsed) toggleCollapse(row.id);
-      activeBranchId = row.id;
+      appState.activeBranchId = row.id;
       rebalance();
       flash(b.el);
       const anchorBid = window.CSS?.escape ? CSS.escape(b.anchorBid || row.id) : String(b.anchorBid || row.id).replace(/"/g, '\\"');
@@ -5979,15 +5974,15 @@
 
     // pages (threads from sidebar) — when inside a thread, show only that thread's branches
     const allThreadBtns = $$('.sidebar [data-thread]');
-    const threadBtns = currentThreadId
-      ? allThreadBtns.filter(btn => btn.dataset.thread === currentThreadId)
+    const threadBtns = appState.currentThreadId
+      ? allThreadBtns.filter(btn => btn.dataset.thread === appState.currentThreadId)
       : allThreadBtns;
     threadBtns.forEach(btn => {
       const tid = btn.dataset.thread;
       const state = threadState[tid];
       const branchRows = branchRowsForThread(tid, state);
       const pageRow = document.createElement('div');
-      pageRow.className = 'ctx-page' + (tid === currentThreadId ? ' active' : '');
+      pageRow.className = 'ctx-page' + (tid === appState.currentThreadId ? ' active' : '');
       pageRow.innerHTML = `<i class="ti ti-file-text" style="font-size:12px;color:var(--text-3)"></i><span class="ctx-page-title">${esc(btn.dataset.title || btn.textContent.trim())}</span>${branchRows.length ? `<span class="ctx-count">${branchRows.length}</span>` : ''}`;
       pageRow.addEventListener('click', () => { renderThread(tid); closeCtx(); });
       tree.appendChild(pageRow);
@@ -5998,7 +5993,7 @@
     // page-level files
     const pf = $('#ctx-page-files');
     pf.innerHTML = '';
-    const files = threadAttachments[currentThreadId] || [];
+    const files = threadAttachments[appState.currentThreadId] || [];
     if (!files.length){
       pf.innerHTML = '<div class="ctx-empty">No files attached to this page.</div>';
     } else {
@@ -6030,12 +6025,12 @@
       .map(b => ({ id: b.dataset.thread, title: b.dataset.title || '' }));
     db.kv.put({ key: 'state', value: {
       threads: threadState,
-      current: currentThreadId,
+      current: appState.currentThreadId,
       dynamic: dynamicThreads,
       deletedThreads: [...deletedThreadIds],
-      chatCount: newChatCount,
+      chatCount: appState.newChatCount,
       projects: projects,
-      projectCount: projectCount,
+      appState.projectCount: appState.projectCount,
       prefs: {
         name: prefs.name,
         tone: prefs.tone,
@@ -6098,7 +6093,7 @@
           state.title = title;
           updateThreadButtonTitle(btn.dataset.thread, title);
         });
-      if (saved.chatCount) newChatCount = saved.chatCount;
+      if (saved.chatCount) appState.newChatCount = saved.chatCount;
       // Restore projects (additive [SCHEMA] field — absent in older saved state).
       if (saved.projects && typeof saved.projects === 'object'){
         Object.keys(saved.projects).forEach(pid => {
@@ -6106,10 +6101,10 @@
           if (sp && sp.id) projects[pid] = { id: sp.id, name: sp.name || 'Untitled project', rules: sp.rules || '', files: Array.isArray(sp.files) ? sp.files : [] };
         });
       }
-      if (saved.projectCount) projectCount = saved.projectCount;
+      if (saved.appState.projectCount) appState.projectCount = saved.appState.projectCount;
       renderProjects();
-      if (saved.current && !deletedThreadIds.has(saved.current) && $(`.sidebar [data-thread="${saved.current}"]`)) currentThreadId = saved.current;
-      else currentThreadId = 'doc-main';
+      if (saved.current && !deletedThreadIds.has(saved.current) && $(`.sidebar [data-thread="${saved.current}"]`)) appState.currentThreadId = saved.current;
+      else appState.currentThreadId = 'doc-main';
       refreshThreadUnreadIndicators();
       return true;
     } catch(e){
@@ -6312,13 +6307,13 @@
   (async () => {
     await loadPersistedState();        // merge saved state into threadState (async IndexedDB read)
     renderModelUI();
-    renderThread(currentThreadId, true); // render without overwriting with empty DOM
+    renderThread(appState.currentThreadId, true); // render without overwriting with empty DOM
     renderCtxPanel();
     checkForLocalUpdate();
     setInterval(checkForLocalUpdate, 5000);
     setTimeout(() => {
       // only open demo branches on a truly fresh session (no prior messages)
-      if (currentThreadId === 'doc-main' && !mainMessages.length && !stream.innerHTML.trim()){
+      if (appState.currentThreadId === 'doc-main' && !mainMessages.length && !stream.innerHTML.trim()){
         openBranch({ quote: 'Spatial memory does the heavy lifting', fresh: true, bid:'b1', anchorBid:'b1' });
       }
     }, 400);

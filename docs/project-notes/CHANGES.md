@@ -4,6 +4,23 @@ Each entry: **date · summary · files touched · why changed · risks · tests 
 
 ---
 
+## 2026-05-24 — TASK-M04: Lift shared state into core/state.js
+
+- **Summary:** Created `frontend/core/state.js` exporting a single `appState` object. Updated `frontend/app.js` to import it and use `appState.X` for all shared primitives; object/collection variables use local `const X = appState.X` aliases (same reference, zero other changes needed). Fixed 2 `mainMessages` full-array reassignments to use splice-in-place pattern.
+- **Files touched:** `frontend/core/state.js` (new), `frontend/app.js`, `CHANGELOG.md`, `docs/project-notes/`
+- **Why changed:** TASK-M04 per MIGRATION.md — shared state must live in a single importable module before M05 can extract feature modules.
+- **State map:**
+  - Primitives (→ appState.X everywhere): `currentThreadId` (82 refs), `activeBranchId` (17), `currentCrumbTitle` (17), `newChatCount` (8), `projectCount` (8), `mainStreaming` (4), `_activeController` (3)
+  - Objects/arrays (→ const alias = appState.X): `prefs`, `threadState`, `branches`, `projects`, `apiKeys`, `mainMessages`, `mainHistory`, `streamingThreadIds`, `mainControllers`, `threadAttachments`, `branchAttachments`
+  - Kept local (single-module use): `changelogLoaded`, `branchLayoutRaf`, `streamScrollLocked`, `saveTimer`, `turnSaveTimers`, log state vars
+- **Fragile areas check:**
+  - Branch reopen/single-instance (#002–#004): `branches` object is same reference via alias, all branch logic unchanged. ✓
+  - Branch persistence across switches (#008/#009): `threadState` object is same reference via alias; `appState.currentThreadId` replaces `currentThreadId` in all thread-switch logic. ✓
+  - Branch research/tool status (#010–#018): `mainStreaming`, `streamingThreadIds` moved to appState; logic unchanged. ✓
+- **Risks:** Primitive reassignment scope — all 143 primitive occurrences word-replaced with `\b` boundaries; verified no double-substitution.
+- **Tests run:** curl 200 on app.js, core/state.js, index.html.
+- **Next steps:** Human runs **hard** smoke test (create, nest, reopen, persist-across-switch branches + search-tool branch). If green, proceed to TASK-M05.
+
 ## 2026-05-24 — TASK-M03: Externalize JS as a single ES module
 
 - **Summary:** Moved the 6,326-line `<script>` block into `frontend/app.js` loaded via `<script type="module" src="./app.js">`. Removed the outermost IIFE wrapper `(function(){...})()` — module scope replaces it. No logic changed. CDN globals (Dexie, mermaid) remain available: Dexie loads synchronously before the module, mermaid via `defer` also before the module (both precede the module in document order).

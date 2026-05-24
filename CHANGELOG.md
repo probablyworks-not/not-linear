@@ -5,6 +5,11 @@ All notable repository changes made by AI agents should be recorded here.
 ## 2026-05-24
 
 - Agent: Claude (Sonnet 4.6)
+- Summary: TASK-M04 — Lift shared state into core/state.js. Created `frontend/core/state.js` exporting `appState`. Updated `app.js`: 7 primitives (currentThreadId, activeBranchId, etc., 143 total refs) → `appState.X`; 11 objects/arrays (threadState, branches, prefs, etc.) → const alias pattern. No logic changed.
+- Files changed: `frontend/core/state.js` (new), `frontend/app.js`, `CHANGELOG.md`, `docs/project-notes/`
+- Behavior changes: None. All Fragile areas (branch reopen, persist, tool status) preserved — same object references, same logic.
+
+- Agent: Claude (Sonnet 4.6)
 - Summary: TASK-M03 — Externalize JS. Moved 6,326-line `<script>` block into `frontend/app.js` as an ES module (`<script type="module" src="./app.js">`). Stripped outer IIFE wrapper; module scope replaces it. No logic changed.
 - Files changed: `frontend/index.html`, `frontend/app.js` (new), `CHANGELOG.md`, `docs/project-notes/`
 - Behavior changes: None. CDN globals (Dexie, mermaid) available before module executes per document order.

@@ -45,7 +45,7 @@ Each entry: **ID · Status · Goal · Context · Files likely involved · Accept
 ---
 
 ## TASK-M04 — Shared state → `core/state.js` (highest risk)
-- **Status:** Todo
+- **Status:** Done
 - **Goal:** Map every shared mutable value and cross-section helper; lift shared state into `core/state.js`; lift shared helpers into their modules; repoint all references.
 - **Context:** This is the only non-mechanical phase. The IIFE implicitly shares all top-level let/const; splitting breaks those. Getting the state map right makes M05 purely mechanical. Go slow.
 - **Files likely involved:** `frontend/app.js`, `frontend/core/state.js` (new), any helper modules created
