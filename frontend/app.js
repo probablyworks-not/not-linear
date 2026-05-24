@@ -1,5 +1,6 @@
 import { appState } from './core/state.js';
   import { esc, renderMarkdown, hasMarkdownTable, markdownTextFromRendered, renderMermaidIn, friendlyError, isConfigError } from './core/markdown.js';
+  import { toast, confirmDeleteItem, confirmDeleteChat, confirmDeleteBranch } from './core/ui.js';
   const $ = (s,r=document) => r.querySelector(s);
   const $$ = (s,r=document) => [...r.querySelectorAll(s)];
   const truncate = (s, n=70) => s.length > n ? s.slice(0,n-1).trim() + '…' : s;
@@ -2366,66 +2367,7 @@ import { appState } from './core/state.js';
   window.addEventListener('resize', () => setSidebar(sidebar.classList.contains('open')));
 
   // ---------- confirm dialog ----------
-  const deleteConfirm = $('#delete-confirm');
-  const deleteConfirmTitle = $('#delete-confirm-title');
-  const deleteConfirmDesc = $('#delete-confirm-desc');
-  const deleteConfirmName = $('#delete-confirm-name');
-  const deleteConfirmCancel = $('#delete-confirm-cancel');
-  const deleteConfirmDelete = $('#delete-confirm-delete');
-  let pendingDeleteConfirm = null;
-  let lastConfirmFocus = null;
-
-  function closeDeleteConfirm(result = false){
-    if (!pendingDeleteConfirm) return;
-    const resolve = pendingDeleteConfirm;
-    pendingDeleteConfirm = null;
-    deleteConfirm.classList.remove('show');
-    deleteConfirm.setAttribute('aria-hidden', 'true');
-    if (lastConfirmFocus?.focus) lastConfirmFocus.focus();
-    resolve(result);
-  }
-
-  function confirmDeleteItem({ heading, name, before, after, actionLabel }){
-    if (pendingDeleteConfirm) closeDeleteConfirm(false);
-    lastConfirmFocus = document.activeElement;
-    deleteConfirmTitle.textContent = heading;
-    deleteConfirmDesc.textContent = before + ' ';
-    deleteConfirmName.textContent = `"${name}"`;
-    deleteConfirmDesc.appendChild(deleteConfirmName);
-    deleteConfirmDesc.appendChild(document.createTextNode(after));
-    deleteConfirmDelete.textContent = actionLabel;
-    deleteConfirm.classList.add('show');
-    deleteConfirm.setAttribute('aria-hidden', 'false');
-    setTimeout(() => deleteConfirmCancel.focus(), 0);
-    return new Promise(resolve => { pendingDeleteConfirm = resolve; });
-  }
-
-  function confirmDeleteChat(title){
-    return confirmDeleteItem({
-      heading:'Delete chat?',
-      name:title,
-      before:'This removes',
-      after:' from the left panel and clears its saved messages.',
-      actionLabel:'Delete chat',
-    });
-  }
-
-  function confirmDeleteBranch(title, count = 1){
-    const childCount = Math.max(0, count - 1);
-    return confirmDeleteItem({
-      heading:count > 1 ? 'Delete branches?' : 'Delete branch?',
-      name:title,
-      before:'This removes',
-      after:count > 1 ? ` and ${childCount} child branch${childCount === 1 ? '' : 'es'} from this chat.` : ' from this chat and clears its saved messages.',
-      actionLabel:count > 1 ? 'Delete branches' : 'Delete branch',
-    });
-  }
-
-  deleteConfirmCancel.addEventListener('click', () => closeDeleteConfirm(false));
-  deleteConfirmDelete.addEventListener('click', () => closeDeleteConfirm(true));
-  deleteConfirm.addEventListener('click', e => {
-    if (e.target === deleteConfirm) closeDeleteConfirm(false);
-  });
+  // (toast, confirmDeleteItem, confirmDeleteChat, confirmDeleteBranch live in core/ui.js — imported above)
 
   function autosize(t){ t.style.height='auto'; t.style.height=Math.min(t.scrollHeight,160)+'px'; }
 
@@ -5996,14 +5938,7 @@ import { appState } from './core/state.js';
   window.addEventListener('beforeunload', saveCurrentThread);
 
   // ---------- toast ----------
-  const toastEl = $('#toast'), toastText = $('#toast-text');
-  let toastT;
-  function toast(msg){
-    toastText.textContent = msg;
-    toastEl.classList.add('show');
-    clearTimeout(toastT);
-    toastT = setTimeout(() => toastEl.classList.remove('show'), 1800);
-  }
+  // (toast lives in core/ui.js — imported above)
 
   // ---------- local update prompt ----------
   const updateRefresh = $('#update-refresh');
