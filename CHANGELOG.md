@@ -5,6 +5,11 @@ All notable repository changes made by AI agents should be recorded here.
 ## 2026-05-24
 
 - Agent: Claude (Sonnet 4.6)
+- Summary: TASK-M03 — Externalize JS. Moved 6,326-line `<script>` block into `frontend/app.js` as an ES module (`<script type="module" src="./app.js">`). Stripped outer IIFE wrapper; module scope replaces it. No logic changed.
+- Files changed: `frontend/index.html`, `frontend/app.js` (new), `CHANGELOG.md`, `docs/project-notes/`
+- Behavior changes: None. CDN globals (Dexie, mermaid) available before module executes per document order.
+
+- Agent: Claude (Sonnet 4.6)
 - Summary: TASK-M02 — Extract CSS. Moved 650-line `<style>` block into `frontend/styles/tokens.css` (design tokens), `frontend/styles/base.css` (layout/chrome), `frontend/styles/chat.css` (chat/branches/composer). No CSS rules changed.
 - Files changed: `frontend/index.html`, `frontend/styles/tokens.css` (new), `frontend/styles/base.css` (new), `frontend/styles/chat.css` (new), `CHANGELOG.md`, `docs/project-notes/`
 - Behavior changes: None — pure file split, zero rule changes. Bug #022 (highlights light-mode) preserved: all highlight classes use CSS variables only.

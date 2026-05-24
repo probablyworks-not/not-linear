@@ -35,7 +35,7 @@ Each entry: **ID · Status · Goal · Context · Files likely involved · Accept
 ---
 
 ## TASK-M03 — Externalize JS as a module (still one file)
-- **Status:** Todo
+- **Status:** Done
 - **Goal:** Move the giant `<script>` into `frontend/app.js`, loaded via `<script type="module" src="./app.js">`; remove/adapt the IIFE wrapper.
 - **Context:** First JS extraction step. Still one file — no logic split yet. Validates that the ES module boundary itself doesn't break anything before the harder shared-state work in M04.
 - **Files likely involved:** `frontend/index.html`, `frontend/app.js` (new)

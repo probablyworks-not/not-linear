@@ -4,6 +4,13 @@ Each entry: **date/time · task or bug ID · command category · result · impor
 
 ---
 
+## 2026-05-24 — TASK-M03 — curl verification — pass
+
+- **Category:** test
+- **Result:** pass
+- **Output:** HTTP 200 on `/frontend/app.js` and `/frontend/index.html`. IIFE wrapper stripped, module tag in place.
+- **Follow-up:** Human runs full smoke test. Emphasis: chat, branches, branch reopen/persist, search tools — all require the JS to execute correctly as a module.
+
 ## 2026-05-24 — TASK-M02 — curl verification — pass
 
 - **Category:** test

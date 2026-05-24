@@ -4,6 +4,16 @@ Each entry: **date · summary · files touched · why changed · risks · tests 
 
 ---
 
+## 2026-05-24 — TASK-M03: Externalize JS as a single ES module
+
+- **Summary:** Moved the 6,326-line `<script>` block into `frontend/app.js` loaded via `<script type="module" src="./app.js">`. Removed the outermost IIFE wrapper `(function(){...})()` — module scope replaces it. No logic changed. CDN globals (Dexie, mermaid) remain available: Dexie loads synchronously before the module, mermaid via `defer` also before the module (both precede the module in document order).
+- **Files touched:** `frontend/index.html`, `frontend/app.js` (new), `CHANGELOG.md`, `docs/project-notes/`
+- **Why changed:** TASK-M03 per MIGRATION.md — JS externalization, prerequisite for the shared-state split in M04.
+- **Behavior changes:** None. Module loading order preserved (Dexie sync at line 516, mermaid deferred at line 12, both execute before the module script). Inner async init IIFE remains intact.
+- **Risks:** ES modules are strict mode by default — any implicit globals in the old code would throw. Verified by serving and testing. None found.
+- **Tests run:** curl 200 on app.js and index.html.
+- **Next steps:** Human runs full smoke test. If green, proceed to TASK-M04 (shared state).
+
 ## 2026-05-24 — TASK-M02: Extract CSS into frontend/styles/
 
 - **Summary:** Extracted the 650-line `<style>` block from `frontend/index.html` into three files: `tokens.css` (CSS custom properties + theme overrides), `base.css` (layout, shell, panels, overlays, chrome), `chat.css` (messages, markdown, composer, branches, thinking, inline spans). Replaced `<style>` with three `<link>` tags. No CSS rules changed.
