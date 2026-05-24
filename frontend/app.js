@@ -2,6 +2,7 @@ import { appState } from './core/state.js';
   import { esc, renderMarkdown, hasMarkdownTable, markdownTextFromRendered, renderMermaidIn, friendlyError, isConfigError } from './core/markdown.js';
   import { toast, confirmDeleteItem, confirmDeleteChat, confirmDeleteBranch } from './core/ui.js';
   import { requestLog, RequestTimeoutError, signalWithTimeout, readStreamChunk, readResponseBody, safeJsonForLog, summarizeMessagesForLog, beginBackendTrace, endBackendTrace, loggedFetch, readLoggedErrorPayload, REQUEST_LOG_LIMIT, RUNTIME_LOG_SYNC_ENDPOINT, RUNTIME_LOG_SYNC_DEBOUNCE_MS, TOOL_TIMEOUT_MS, SEARCH_TIMEOUT_MS, PAGE_READ_TIMEOUT_MS, SCRAPE_TIMEOUT_MS, MODEL_CONNECT_TIMEOUT_MS, MODEL_STREAM_IDLE_TIMEOUT_MS, TOOL_SYNTHESIS_IDLE_TIMEOUT_MS, DEEPSEEK_MAX_TOOL_ROUNDS } from './core/api-client.js';
+  import { persistAll, loadPersistedState, deletedThreadIds, STATIC_THREAD_IDS } from './core/store.js';
   import { modelLabelFromId } from './providers/tools.js';
   import { callClaude } from './providers/claude.js';
   import { callDeepSeek } from './providers/deepseek.js';
@@ -4546,107 +4547,7 @@ import { appState } from './core/state.js';
     }
   }
 
-  // ---------- persistence (IndexedDB via Dexie — ~1 GB cap, survives localStorage overflow) ----------
-  const NL_STORE = 'nl_state_v2'; // kept only for one-time migration from localStorage
-  const STATIC_THREAD_IDS = new Set(['doc-main','pricing','onboarding','planning']);
-  const deletedThreadIds = new Set();
-
-  const db = new Dexie('notlinear');
-  db.version(1).stores({ kv: 'key' });
-
-  function persistAll(){
-    const dynamicThreads = $$('.sidebar [data-thread]')
-      .filter(b => !STATIC_THREAD_IDS.has(b.dataset.thread))
-      .map(b => ({ id: b.dataset.thread, title: b.dataset.title || '' }));
-    db.kv.put({ key: 'state', value: {
-      threads: threadState,
-      current: appState.currentThreadId,
-      dynamic: dynamicThreads,
-      deletedThreads: [...deletedThreadIds],
-      chatCount: appState.newChatCount,
-      projects: projects,
-      projectCount: appState.projectCount,
-      prefs: {
-        name: prefs.name,
-        tone: prefs.tone,
-        context: prefs.context,
-        model: prefs.model,
-        mode: prefs.mode,
-        folderName: prefs.folderName,
-        searxngUrl: prefs.searxngUrl,
-        thinking: prefs.thinking,
-        theme: prefs.theme,
-      },
-    }}).catch(e => console.warn('notlinear: save failed —', e.message));
-  }
-
-  async function loadPersistedState(){
-    try {
-      let saved;
-      const stored = await db.kv.get('state');
-      if (stored) {
-        saved = stored.value;
-      } else {
-        // One-time migration: import existing data from localStorage then clear it
-        const raw = localStorage.getItem(NL_STORE);
-        if (raw) {
-          saved = JSON.parse(raw);
-          await db.kv.put({ key: 'state', value: saved });
-          localStorage.removeItem(NL_STORE);
-        }
-      }
-      if (!saved) return false;
-      if (saved.prefs){
-        Object.assign(prefs, saved.prefs);
-        prefs.thinking = false; // always off by default; user must re-enable each session
-        renderPrefsUI();
-      }
-      deletedThreadIds.clear();
-      (saved.deletedThreads || []).forEach(id => {
-        if (id && id !== 'doc-main') deletedThreadIds.add(id);
-      });
-      deletedThreadIds.forEach(id => {
-        delete threadState[id];
-        $$('.sidebar [data-thread]').find(btn => btn.dataset.thread === id)?.remove();
-      });
-      // Re-create any dynamic thread buttons
-      const existingIds = new Set($$('.sidebar [data-thread]').map(b => b.dataset.thread));
-      (saved.dynamic || []).forEach(({ id, title }) => {
-        if (deletedThreadIds.has(id)) return;
-        const savedTitle = resolveThreadTitle(saved.threads?.[id], title);
-        if (!existingIds.has(id)) addThreadButton(id, savedTitle);
-      });
-      // Merge saved thread states over the empty defaults
-      if (saved.threads) Object.assign(threadState, saved.threads);
-      deletedThreadIds.forEach(id => delete threadState[id]);
-      $$('.sidebar [data-thread]')
-        .filter(btn => !STATIC_THREAD_IDS.has(btn.dataset.thread))
-        .forEach(btn => {
-          const state = threadState[btn.dataset.thread];
-          if (!state) return;
-          const title = resolveThreadTitle(state, btn.dataset.title || btn.textContent);
-          state.title = title;
-          updateThreadButtonTitle(btn.dataset.thread, title);
-        });
-      if (saved.chatCount) appState.newChatCount = saved.chatCount;
-      // Restore projects (additive [SCHEMA] field — absent in older saved state).
-      if (saved.projects && typeof saved.projects === 'object'){
-        Object.keys(saved.projects).forEach(pid => {
-          const sp = saved.projects[pid];
-          if (sp && sp.id) projects[pid] = { id: sp.id, name: sp.name || 'Untitled project', rules: sp.rules || '', files: Array.isArray(sp.files) ? sp.files : [] };
-        });
-      }
-      if (saved.projectCount) appState.projectCount = saved.projectCount;
-      renderProjects();
-      if (saved.current && !deletedThreadIds.has(saved.current) && $(`.sidebar [data-thread="${saved.current}"]`)) appState.currentThreadId = saved.current;
-      else appState.currentThreadId = 'doc-main';
-      refreshThreadUnreadIndicators();
-      return true;
-    } catch(e){
-      console.warn('notlinear: load failed —', e.message);
-      return false;
-    }
-  }
+  // ---------- persistence (IndexedDB) — persistAll, loadPersistedState, deletedThreadIds, STATIC_THREAD_IDS live in core/store.js ----------
 
   // ---------- topbar shadow ----------
   document.addEventListener('scroll', () => {
@@ -4833,7 +4734,7 @@ import { appState } from './core/state.js';
 
   // ---------- init ----------
   (async () => {
-    await loadPersistedState();        // merge saved state into threadState (async IndexedDB read)
+    await loadPersistedState({ renderPrefsUI, resolveThreadTitle, addThreadButton, updateThreadButtonTitle, refreshThreadUnreadIndicators, renderProjects }); // merge saved state into threadState (async IndexedDB read)
     renderModelUI();
     renderThread(appState.currentThreadId, true); // render without overwriting with empty DOM
     renderCtxPanel();
