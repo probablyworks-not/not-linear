@@ -5441,7 +5441,7 @@ import { appState } from './core/state.js';
       deletedThreads: [...deletedThreadIds],
       chatCount: appState.newChatCount,
       projects: projects,
-      appState.projectCount: appState.projectCount,
+      projectCount: appState.projectCount,
       prefs: {
         name: prefs.name,
         tone: prefs.tone,
@@ -5512,7 +5512,7 @@ import { appState } from './core/state.js';
           if (sp && sp.id) projects[pid] = { id: sp.id, name: sp.name || 'Untitled project', rules: sp.rules || '', files: Array.isArray(sp.files) ? sp.files : [] };
         });
       }
-      if (saved.appState.projectCount) appState.projectCount = saved.appState.projectCount;
+      if (saved.projectCount) appState.projectCount = saved.projectCount;
       renderProjects();
       if (saved.current && !deletedThreadIds.has(saved.current) && $(`.sidebar [data-thread="${saved.current}"]`)) appState.currentThreadId = saved.current;
       else appState.currentThreadId = 'doc-main';
