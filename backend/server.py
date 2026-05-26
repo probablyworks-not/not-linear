@@ -42,6 +42,79 @@ def replace_runtime_log_section(existing, block):
     return existing.rstrip() + "\n\n" + block + "\n"
 
 
+# ---------- Coding Projects scan (read-only) ----------
+# The four convention files notlinear reads per project. Match is case-insensitive
+# on the stem, with or without a .md extension.
+CP_CONVENTION_STEMS = ("readme", "changelog", "bugs", "tasks")
+CP_MAX_FILE_BYTES = 1_000_000   # cap per convention file we read into text
+CP_MAX_LISTING = 500            # cap the shallow top-level listing
+
+
+def _cp_entry_meta(entry_path):
+    st = os.stat(entry_path)
+    return {"size": st.st_size, "mtime": int(st.st_mtime * 1000)}
+
+
+def scan_project(folder_path):
+    """Read-only scan of a single project folder.
+
+    Returns the display name, a shallow (non-recursive) listing of the folder's
+    top-level entries, and the parsed text + metadata of the four convention
+    files. All reads are confined to `folder_path` (no recursion, no traversal):
+    filenames come from os.scandir of that directory, never from caller input.
+    """
+    base = Path(folder_path).expanduser().resolve()
+    if not base.exists() or not base.is_dir():
+        return {"ok": False, "error": "not a directory: %s" % folder_path}
+
+    listing = []
+    files = {stem: {"present": False} for stem in CP_CONVENTION_STEMS}
+
+    with os.scandir(base) as it:
+        entries = sorted(it, key=lambda e: e.name.lower())
+    for entry in entries:
+        if entry.name.startswith("."):
+            continue
+        if len(listing) < CP_MAX_LISTING:
+            try:
+                meta = _cp_entry_meta(entry.path)
+            except OSError:
+                meta = {"size": 0, "mtime": 0}
+            listing.append({
+                "name": entry.name,
+                "isDir": entry.is_dir(),
+                "size": meta["size"],
+                "mtime": meta["mtime"],
+            })
+        if not entry.is_file():
+            continue
+        stem = entry.name.lower()
+        if stem.endswith(".md"):
+            stem = stem[:-3]
+        if stem in CP_CONVENTION_STEMS and not files[stem]["present"]:
+            slot = {"present": True, "filename": entry.name}
+            try:
+                slot.update(_cp_entry_meta(entry.path))
+                if slot["size"] <= CP_MAX_FILE_BYTES:
+                    with open(entry.path, "r", encoding="utf-8", errors="replace") as fh:
+                        slot["text"] = fh.read()
+                else:
+                    slot["tooBig"] = True
+                    slot["text"] = ""
+            except OSError as exc:
+                slot["error"] = str(exc)
+                slot["text"] = ""
+            files[stem] = slot
+
+    return {
+        "ok": True,
+        "name": base.name,
+        "path": str(base),
+        "listing": listing,
+        "files": files,
+    }
+
+
 class NotlinearHandler(SimpleHTTPRequestHandler):
     def _json(self, code, obj):
         body = json.dumps(obj).encode("utf-8")
@@ -61,6 +134,32 @@ class NotlinearHandler(SimpleHTTPRequestHandler):
 
     def do_POST(self):
         path = self.path.split("?", 1)[0]
+
+        if path == "/__notlinear_pick_folder":
+            try:
+                script = 'POSIX path of (choose folder with prompt "Select a coding project folder")'
+                result = subprocess.run(["osascript", "-e", script], capture_output=True, text=True, timeout=120)
+                if result.returncode != 0:
+                    self._json(200, {"ok": False, "cancelled": True})
+                    return
+                self._json(200, {"ok": True, "path": result.stdout.strip()})
+            except Exception as exc:
+                self._json(500, {"ok": False, "error": str(exc)})
+            return
+
+        if path == "/__notlinear_scan_project":
+            try:
+                length = int(self.headers.get("content-length", "0"))
+                body = self.rfile.read(length) if length else b"{}"
+                data = json.loads(body.decode("utf-8"))
+                folder_path = (data.get("path") or "").strip()
+                if not folder_path:
+                    self._json(400, {"ok": False, "error": "path required"})
+                    return
+                self._json(200, scan_project(folder_path))
+            except Exception as exc:
+                self._json(500, {"ok": False, "error": str(exc)})
+            return
 
         if path == "/__notlinear_open_files":
             try:

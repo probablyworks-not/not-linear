@@ -4,6 +4,7 @@ import { appState } from './core/state.js';
   import { requestLog, RequestTimeoutError, signalWithTimeout, readStreamChunk, readResponseBody, safeJsonForLog, summarizeMessagesForLog, beginBackendTrace, endBackendTrace, loggedFetch, readLoggedErrorPayload, REQUEST_LOG_LIMIT, RUNTIME_LOG_SYNC_ENDPOINT, RUNTIME_LOG_SYNC_DEBOUNCE_MS, TOOL_TIMEOUT_MS, SEARCH_TIMEOUT_MS, PAGE_READ_TIMEOUT_MS, SCRAPE_TIMEOUT_MS, MODEL_CONNECT_TIMEOUT_MS, MODEL_STREAM_IDLE_TIMEOUT_MS, TOOL_SYNTHESIS_IDLE_TIMEOUT_MS, DEEPSEEK_MAX_TOOL_ROUNDS } from './core/api-client.js';
   import { persistAll, loadPersistedState, deletedThreadIds, STATIC_THREAD_IDS } from './core/store.js';
   import { registerView, mountView } from './core/registry.js';
+  import { initCodingProjects } from './views/coding-projects.js';
   import { modelLabelFromId } from './providers/tools.js';
   import { callClaude } from './providers/claude.js';
   import { callDeepSeek } from './providers/deepseek.js';
@@ -3496,8 +3497,8 @@ import { appState } from './core/state.js';
     $('#searxng-url').value = prefs.searxngUrl || '';
     markSegValue(prefs.tone || 'concise');
     markSegValue(prefs.model || 'sonnet');
-    markSegValue(prefs.theme || 'dark');
-    applyTheme(prefs.theme);
+    markSegValue(prefs.theme || 'light');
+    applyTheme(prefs.theme || 'light');   // default theme is light (PRD §9) when unset
     renderModelUI();
     renderModeUI();
     renderUserNameUI();
@@ -4741,6 +4742,7 @@ import { appState } from './core/state.js';
     mount: () => {},   // chat mounts inline below; future views implement mount/unmount
     unmount: () => {},
   });
+  initCodingProjects();   // registers the coding-projects view + wires its sidebar launcher
 
   (async () => {
     await loadPersistedState({ renderPrefsUI, resolveThreadTitle, addThreadButton, updateThreadButtonTitle, refreshThreadUnreadIndicators, renderProjects }); // merge saved state into threadState (async IndexedDB read)

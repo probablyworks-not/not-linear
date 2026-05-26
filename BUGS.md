@@ -343,6 +343,33 @@ None currently tracked.
   4. Confirm the branch shows the retrieved-results fallback rather than a tiny stopped partial answer.
 - Related: #012, #015, #016.
 
+### #024 — Toasts hidden behind the Coding Projects overlay
+- Date discovered: 2026-05-26
+- Date fixed: 2026-05-26
+- Agent: Claude (Opus 4.7)
+- Symptom: In the Coding Projects view, actions that should toast (browse/add folder, icon updated, comment deleted, "restart the server") appeared to do nothing — no feedback. Made the "open folder" browse button seem broken.
+- Root cause: `.toast` is `z-index:300`, but the Coding Projects overlay `#cp-screen` is `z-index:400` (matches `.project-screen`). Any toast fired while the overlay is open renders *behind* it and is invisible. Introduced with the CP02 overlay; surfaced in CP07 when the browse button's "restart the server" toast couldn't be seen.
+- Fix: Raised `.toast` `z-index` from 300 → 500 in `frontend/styles/base.css` so toasts always sit above the overlay (400) and other panels. Global change; benefits chat too.
+- Files touched: `frontend/styles/base.css`, `BUGS.md`, `CHANGELOG.md`, `docs/project-notes/`
+- Manual test case:
+  1. Open Coding Projects; click "+ add folder" → browse, or add a project, or update an emoji.
+  2. Confirm the toast (e.g. "added <name>", "icon updated") is visible above the overlay.
+  3. In chat, trigger a toast (e.g. copy as quote) and confirm it still shows normally.
+- Related: separate from the stale-server 404 (that needs a `backend/server.py` restart, not a code fix).
+
+### #025 — "create" buttons on missing-file blocks rendered as clipped 32px squares
+- Date discovered: 2026-05-26
+- Date fixed: 2026-05-26
+- Agent: Claude (Opus 4.7)
+- Symptom: On a Coding Projects project page, the "create" buttons in the bugs/tasks/changelog/overview missing-file blocks looked misaligned/broken — the text spilled out of a tiny square border. Most visible when a scan failed (all four blocks showed the missing-file state at once).
+- Root cause: `blockHtml` gave the create button class `cp-btn ghost cp-create`. The `ghost` modifier is the **icon-only square** variant — `.cp-btn.ghost{width:32px;padding:0;justify-content:center}` (used by the rescan icon button). Applied to a text button ("create"), it forced a 32px-wide box with the label overflowing the border. `.cp-create{height:26px;margin-left:auto}` could not correct the width because `.cp-btn.ghost` (specificity 0,2,0) outranks `.cp-create` (0,1,0).
+- Fix: Dropped `ghost` from that button (`cp-btn ghost cp-create` → `cp-btn cp-create`) in `frontend/views/coding-projects.js`. It now uses the base `.cp-btn` (auto width, `padding:0 12px`) with `.cp-create`'s `height:26px;margin-left:auto`, rendering a properly sized right-aligned text button. No CSS changed.
+- Files touched: `frontend/views/coding-projects.js`, `BUGS.md`, `CHANGELOG.md`, `docs/project-notes/`
+- Manual test case:
+  1. Open a Coding Projects project that is missing at least one of readme/changelog/bugs/tasks.
+  2. Confirm the "create" button in each missing block is a normal pill-sized button with the label inside its border, right-aligned in the dashed row — not a clipped square.
+- Related: stale-server 404 / #024 (the "scan failed" state that surfaced all four buttons at once is a separate operational issue — restart `backend/server.py`).
+
 ### #022 — Highlights panel text was unreadable in light mode
 - Date discovered: 2026-05-09
 - Date fixed: 2026-05-09

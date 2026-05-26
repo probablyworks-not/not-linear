@@ -10,10 +10,11 @@
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.0.0/dist/tabler-icons.min.css">
 <link rel="icon" href="logo.svg">
 <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js" defer></script>
-<script>(function(){var t=localStorage.getItem('nl_theme');if(t==='light'||t==='grey')document.documentElement.setAttribute('data-theme',t);})();</script>
+<script>(function(){var t=localStorage.getItem('nl_theme')||'light';if(t==='light'||t==='grey')document.documentElement.setAttribute('data-theme',t);})();</script>
 <link rel="stylesheet" href="styles/tokens.css">
 <link rel="stylesheet" href="styles/base.css">
 <link rel="stylesheet" href="styles/chat.css">
+<link rel="stylesheet" href="styles/coding-projects.css">
 </head>
 <body>
 
@@ -44,6 +45,9 @@
 
     <div class="side-section side-section-row">Projects<button class="side-section-add" id="new-project" type="button" title="New project"><i class="ti ti-plus"></i></button></div>
     <div id="projects-list"></div>
+
+    <div class="side-section side-section-row cp-side-toggle" id="cp-side-head"><span><i class="ti ti-chevron-down cp-caret"></i>coding projects</span><button class="side-section-add" id="cp-add-project" type="button" title="Add coding project"><i class="ti ti-plus"></i></button></div>
+    <div id="cp-side-list"></div>
 
     <div class="side-section">Threads</div>
     <div class="side-item thread-row active" data-thread="doc-main" data-title="Non-linear chat system"><button type="button" class="thread-open"><i class="ti ti-file-text"></i><span class="thread-title">Non-linear chat system</span></button></div>
@@ -511,6 +515,27 @@
       </div>
     </div>
   </div>
+</div>
+
+<!-- Coding Projects overlay (full-screen, like .project-screen — see ADR-006) -->
+<div class="cp-screen" id="cp-screen">
+  <div class="cp-bar">
+    <button class="ic-btn" id="cp-back" title="Back to chat" aria-label="Back to chat"><i class="ti ti-arrow-left"></i></button>
+    <div class="cp-crumb"><i class="ti ti-folder-code"></i><span class="cp-crumb-here" id="cp-crumb">coding projects</span></div>
+  </div>
+  <div class="cp-scroll" id="cp-scroll">
+    <div class="cp-inner" id="cp-inner"></div>
+  </div>
+  <!-- file preview drawer (read-only) -->
+  <aside class="cp-drawer" id="cp-drawer" aria-hidden="true">
+    <div class="cp-drawer-head">
+      <span class="cp-drawer-path" id="cp-drawer-path"></span>
+      <span class="cp-drawer-size" id="cp-drawer-size"></span>
+      <button class="ic-btn" id="cp-drawer-reveal" title="Reveal in Finder"><i class="ti ti-external-link"></i></button>
+      <button class="ic-btn" id="cp-drawer-close" title="Close"><i class="ti ti-x"></i></button>
+    </div>
+    <div class="cp-drawer-body" id="cp-drawer-body"></div>
+  </aside>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/dexie@4/dist/dexie.min.js"></script>
