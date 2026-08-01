@@ -3,16 +3,30 @@ import argparse
 import base64
 import json
 import mimetypes
+import re
+import signal
 import subprocess
+import threading
 import os
+import urllib.error
+import urllib.request
 from datetime import datetime, timezone
+from html.parser import HTMLParser
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from urllib.parse import urlparse
 
 
 APP_DIR = Path(__file__).resolve().parent
 REPO_ROOT = APP_DIR.parent
 LOGS_PATH = REPO_ROOT / "logs.md"
+FEEDBACK_DIR = REPO_ROOT / "feedback"
+FEEDBACK_MEDIA_DIR = FEEDBACK_DIR / "media"
+FEEDBACK_PATH = FEEDBACK_DIR / "FEEDBACK.md"
+
+# One screen recording at a time; handlers run on server threads, so guard with a lock.
+_recording_lock = threading.Lock()
+_recording = {"proc": None, "path": None}
 LOG_START = "<!-- notlinear-runtime-log:start -->"
 LOG_END = "<!-- notlinear-runtime-log:end -->"
 MAX_BODY_BYTES = 1_500_000
@@ -46,8 +60,29 @@ def replace_runtime_log_section(existing, block):
 # The four convention files notlinear reads per project. Match is case-insensitive
 # on the stem, with or without a .md extension.
 CP_CONVENTION_STEMS = ("readme", "changelog", "bugs", "tasks")
-CP_MAX_FILE_BYTES = 1_000_000   # cap per convention file we read into text
+CP_MAX_FILE_BYTES = 1_000_000   # cap per file we read into text
 CP_MAX_LISTING = 500            # cap the shallow top-level listing
+CP_MAX_MARKDOWN_FILES = 200     # cap recursive markdown previews
+CP_MAX_CONTEXT_FILES = 300      # cap for the combined markdown+code context list
+CP_SKIP_DIRS = {
+    ".git", ".hg", ".svn", ".idea", ".vscode",
+    "node_modules", ".venv", "venv", "__pycache__",
+    "dist", "build", ".next", ".turbo", "coverage",
+}
+# Lock files and generated files that are not useful as context
+CP_SKIP_FILES = {
+    "package-lock.json", "yarn.lock", "pnpm-lock.yaml",
+    "composer.lock", "gemfile.lock", "poetry.lock", "cargo.lock",
+}
+CP_TEXT_EXTENSIONS = {
+    ".md", ".txt", ".rst",
+    ".py", ".js", ".ts", ".tsx", ".jsx", ".mjs", ".cjs",
+    ".go", ".rs", ".rb", ".java", ".php", ".c", ".cpp", ".h", ".cs", ".swift",
+    ".sh", ".bash", ".zsh",
+    ".json", ".yaml", ".yml", ".toml",
+    ".sql", ".graphql",
+    ".css", ".scss", ".sass", ".html", ".xml",
+}
 
 
 def _cp_entry_meta(entry_path):
@@ -55,13 +90,92 @@ def _cp_entry_meta(entry_path):
     return {"size": st.st_size, "mtime": int(st.st_mtime * 1000)}
 
 
+def _cp_read_text_slot(file_path, filename):
+    slot = {"present": True, "filename": filename}
+    try:
+        slot.update(_cp_entry_meta(file_path))
+        if slot["size"] <= CP_MAX_FILE_BYTES:
+            with open(file_path, "r", encoding="utf-8", errors="replace") as fh:
+                slot["text"] = fh.read()
+        else:
+            slot["tooBig"] = True
+            slot["text"] = ""
+    except OSError as exc:
+        slot["error"] = str(exc)
+        slot["text"] = ""
+    return slot
+
+
+def _cp_markdown_files(base):
+    markdown_files = []
+    truncated = False
+    for root, dirs, filenames in os.walk(base):
+        dirs[:] = sorted(
+            d for d in dirs
+            if not d.startswith(".") and d not in CP_SKIP_DIRS
+        )
+        for filename in sorted(filenames, key=str.lower):
+            if filename.startswith(".") or not filename.lower().endswith(".md"):
+                continue
+            file_path = Path(root) / filename
+            try:
+                resolved = file_path.resolve()
+                resolved.relative_to(base)
+            except (OSError, ValueError):
+                continue
+            rel_path = os.path.relpath(resolved, base)
+            slot = _cp_read_text_slot(resolved, filename)
+            slot["relativePath"] = rel_path
+            markdown_files.append(slot)
+            if len(markdown_files) >= CP_MAX_MARKDOWN_FILES:
+                truncated = True
+                return markdown_files, truncated
+    return markdown_files, truncated
+
+
+def _cp_context_files(base):
+    """Recursively collect all readable text/code files under base for LLM context injection."""
+    context_files = []
+    truncated = False
+    for root, dirs, filenames in os.walk(base):
+        dirs[:] = sorted(
+            d for d in dirs
+            if not d.startswith(".") and d not in CP_SKIP_DIRS
+        )
+        for filename in sorted(filenames, key=str.lower):
+            if filename.startswith("."):
+                continue
+            if filename.lower() in CP_SKIP_FILES:
+                continue
+            if ".min." in filename.lower():
+                continue
+            ext = os.path.splitext(filename)[1].lower()
+            if ext not in CP_TEXT_EXTENSIONS:
+                continue
+            file_path = Path(root) / filename
+            try:
+                resolved = file_path.resolve()
+                resolved.relative_to(base)
+            except (OSError, ValueError):
+                continue
+            rel_path = os.path.relpath(resolved, base)
+            slot = _cp_read_text_slot(resolved, filename)
+            slot["relativePath"] = rel_path
+            context_files.append(slot)
+            if len(context_files) >= CP_MAX_CONTEXT_FILES:
+                truncated = True
+                return context_files, truncated
+    return context_files, truncated
+
+
 def scan_project(folder_path):
     """Read-only scan of a single project folder.
 
     Returns the display name, a shallow (non-recursive) listing of the folder's
-    top-level entries, and the parsed text + metadata of the four convention
-    files. All reads are confined to `folder_path` (no recursion, no traversal):
-    filenames come from os.scandir of that directory, never from caller input.
+    top-level entries, the parsed text + metadata of the four convention files,
+    capped markdown previews for the Coding Projects view, and a combined
+    markdown+code file list (contextFiles) for LLM folder context injection.
+    Reads are confined to `folder_path`.
     """
     base = Path(folder_path).expanduser().resolve()
     if not base.exists() or not base.is_dir():
@@ -92,19 +206,10 @@ def scan_project(folder_path):
         if stem.endswith(".md"):
             stem = stem[:-3]
         if stem in CP_CONVENTION_STEMS and not files[stem]["present"]:
-            slot = {"present": True, "filename": entry.name}
-            try:
-                slot.update(_cp_entry_meta(entry.path))
-                if slot["size"] <= CP_MAX_FILE_BYTES:
-                    with open(entry.path, "r", encoding="utf-8", errors="replace") as fh:
-                        slot["text"] = fh.read()
-                else:
-                    slot["tooBig"] = True
-                    slot["text"] = ""
-            except OSError as exc:
-                slot["error"] = str(exc)
-                slot["text"] = ""
-            files[stem] = slot
+            files[stem] = _cp_read_text_slot(entry.path, entry.name)
+
+    markdown_files, markdown_files_truncated = _cp_markdown_files(base)
+    context_files, context_files_truncated = _cp_context_files(base)
 
     return {
         "ok": True,
@@ -112,10 +217,181 @@ def scan_project(folder_path):
         "path": str(base),
         "listing": listing,
         "files": files,
+        "markdownFiles": markdown_files,
+        "markdownFilesTruncated": markdown_files_truncated,
+        "contextFiles": context_files,
+        "contextFilesTruncated": context_files_truncated,
     }
 
 
+# ---------- Notes link preview (read-only outbound fetch — see ADR-023) ----------
+LINK_PREVIEW_TIMEOUT_S = 6
+LINK_PREVIEW_MAX_BYTES = 512_000
+
+
+class _LinkPreviewParser(HTMLParser):
+    """Pulls <title>, a description meta tag, and a favicon link out of an
+    HTML head. Best-effort — any single missing tag just leaves that field
+    blank rather than failing the whole parse."""
+
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.title = ""
+        self.description = ""
+        self.favicon = ""
+        self._in_title = False
+
+    def handle_starttag(self, tag, attrs):
+        attrs = dict(attrs)
+        if tag == "title":
+            self._in_title = True
+        elif tag == "meta":
+            name = (attrs.get("name") or attrs.get("property") or "").lower()
+            if name in ("description", "og:description") and not self.description:
+                self.description = (attrs.get("content") or "").strip()
+        elif tag == "link":
+            rel = (attrs.get("rel") or "").lower()
+            if "icon" in rel and not self.favicon:
+                self.favicon = (attrs.get("href") or "").strip()
+
+    def handle_endtag(self, tag):
+        if tag == "title":
+            self._in_title = False
+
+    def handle_data(self, data):
+        if self._in_title and not self.title:
+            self.title = data.strip()
+
+
+def link_preview(url):
+    """Fetch `url` server-side (the frontend can't CORS-fetch arbitrary
+    sites) and return a small preview: title/description/favicon/domain.
+    Read-only, best-effort — any failure degrades to {"ok": False}, never
+    raises. Trust boundary: this server is local-first/single-user (see
+    ADR-023) — only the URL scheme is validated, no private-IP blocking.
+    """
+    parsed = urlparse(url)
+    if parsed.scheme not in ("http", "https") or not parsed.netloc:
+        return {"ok": False, "error": "url must be http(s)"}
+
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": "notlinear-link-preview/1"})
+        with urllib.request.urlopen(req, timeout=LINK_PREVIEW_TIMEOUT_S) as resp:
+            raw = resp.read(LINK_PREVIEW_MAX_BYTES)
+            charset = resp.headers.get_content_charset() or "utf-8"
+    except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError, ValueError) as exc:
+        return {"ok": False, "error": str(exc)}
+
+    try:
+        html = raw.decode(charset, errors="replace")
+    except LookupError:
+        html = raw.decode("utf-8", errors="replace")
+
+    p = _LinkPreviewParser()
+    try:
+        p.feed(html)
+    except Exception:
+        pass  # best-effort — return whatever was parsed before the error
+
+    favicon = p.favicon
+    if favicon and not favicon.startswith(("http://", "https://", "data:")):
+        favicon = f"{parsed.scheme}://{parsed.netloc}" + (favicon if favicon.startswith("/") else f"/{favicon}")
+    elif not favicon:
+        favicon = f"{parsed.scheme}://{parsed.netloc}/favicon.ico"
+
+    return {
+        "ok": True,
+        "title": p.title or parsed.netloc,
+        "description": p.description,
+        "domain": parsed.netloc,
+        "favicon": favicon,
+    }
+
+
+def _feedback_next_id():
+    if not FEEDBACK_PATH.exists():
+        return 1
+    ids = re.findall(r"^## FB-(\d+)", FEEDBACK_PATH.read_text(encoding="utf-8"), flags=re.M)
+    return max((int(i) for i in ids), default=0) + 1
+
+
+def _feedback_media_path(kind, ext):
+    FEEDBACK_MEDIA_DIR.mkdir(parents=True, exist_ok=True)
+    stamp = datetime.now().strftime("%Y-%m-%d_%H%M%S")
+    path = FEEDBACK_MEDIA_DIR / f"{stamp}_{kind}.{ext}"
+    n = 1
+    while path.exists():
+        path = FEEDBACK_MEDIA_DIR / f"{stamp}_{kind}-{n}.{ext}"
+        n += 1
+    return path
+
+
+def _feedback_append_entry(data):
+    kind = "Bug" if data.get("type") == "bug" else "Idea"
+    text = (data.get("text") or "").strip()
+    media = [m for m in data.get("media") or [] if isinstance(m, str)]
+    ctx = data.get("context") or {}
+    fb_id = f"FB-{_feedback_next_id():03d}"
+    stamp = datetime.now().strftime("%Y-%m-%d %H:%M")
+    lines = [f"## {fb_id} · {kind} · {stamp} · status: open"]
+    view = ctx.get("view") or "?"
+    thread = ctx.get("thread")
+    lines.append(f"- View: {view}" + (f", thread `{thread}`" if thread else ""))
+    for m in media:
+        lines.append(f"- Media: {m}")
+    lines.append("")
+    lines.append(text or "(no description)")
+    lines.append("")
+    FEEDBACK_DIR.mkdir(parents=True, exist_ok=True)
+    existing = FEEDBACK_PATH.read_text(encoding="utf-8") if FEEDBACK_PATH.exists() else "# Feedback log\n"
+    FEEDBACK_PATH.write_text(existing.rstrip("\n") + "\n\n" + "\n".join(lines), encoding="utf-8")
+    return fb_id
+
+
+def _media_file_from_rel(rel):
+    """Resolve a repo-relative path and require it to live inside feedback/media/."""
+    p = (REPO_ROOT / (rel or "")).resolve()
+    FEEDBACK_MEDIA_DIR.mkdir(parents=True, exist_ok=True)
+    if not str(p).startswith(str(FEEDBACK_MEDIA_DIR.resolve()) + os.sep):
+        raise ValueError("path outside feedback media dir")
+    return p
+
+
+def _feedback_parse_entries():
+    if not FEEDBACK_PATH.exists():
+        return []
+    entries = []
+    for block in re.split(r"^## ", FEEDBACK_PATH.read_text(encoding="utf-8"), flags=re.M)[1:]:
+        lines = block.splitlines()
+        m = re.match(r"(FB-\d+) · (\w+) · (.+?) · status: (\S+)", lines[0])
+        if not m:
+            continue
+        entry = {"id": m[1], "type": m[2].lower(), "date": m[3], "status": m[4],
+                 "view": "", "thread": "", "media": [], "text": ""}
+        body = []
+        for ln in lines[1:]:
+            if ln.startswith("- View: "):
+                vm = re.match(r"([^,]+)(?:, thread `(.*)`)?$", ln[len("- View: "):])
+                if vm:
+                    entry["view"], entry["thread"] = vm[1].strip(), (vm[2] or "")
+            elif ln.startswith("- Media: "):
+                entry["media"].append(ln[len("- Media: "):].strip())
+            else:
+                body.append(ln)
+        entry["text"] = "\n".join(body).strip()
+        entries.append(entry)
+    entries.reverse()  # newest first for the settings list
+    return entries
+
+
 class NotlinearHandler(SimpleHTTPRequestHandler):
+    def end_headers(self):
+        # No build step and no versioned asset URLs (see CLAUDE.md) — always
+        # revalidate so edited frontend files show up without guessing which
+        # cache (browser, WKWebView) is holding a stale copy.
+        self.send_header("Cache-Control", "no-store, must-revalidate")
+        super().end_headers()
+
     def _json(self, code, obj):
         body = json.dumps(obj).encode("utf-8")
         self.send_response(code)
@@ -157,6 +433,20 @@ class NotlinearHandler(SimpleHTTPRequestHandler):
                     self._json(400, {"ok": False, "error": "path required"})
                     return
                 self._json(200, scan_project(folder_path))
+            except Exception as exc:
+                self._json(500, {"ok": False, "error": str(exc)})
+            return
+
+        if path == "/__notlinear_link_preview":
+            try:
+                length = int(self.headers.get("content-length", "0"))
+                body = self.rfile.read(length) if length else b"{}"
+                data = json.loads(body.decode("utf-8"))
+                url = (data.get("url") or "").strip()
+                if not url:
+                    self._json(400, {"ok": False, "error": "url required"})
+                    return
+                self._json(200, link_preview(url))
             except Exception as exc:
                 self._json(500, {"ok": False, "error": str(exc)})
             return
@@ -245,6 +535,111 @@ class NotlinearHandler(SimpleHTTPRequestHandler):
                     save_path += ".md"
                 Path(save_path).write_text(content, encoding="utf-8")
                 self._json(200, {"ok": True, "path": save_path})
+            except Exception as exc:
+                self._json(500, {"ok": False, "error": str(exc)})
+            return
+
+        if path == "/__notlinear_feedback_shot":
+            try:
+                length = int(self.headers.get("content-length", "0"))
+                body = self.rfile.read(length) if length else b"{}"
+                mode = (json.loads(body.decode("utf-8")).get("mode") or "full").strip()
+                shot_path = _feedback_media_path("shot", "png")
+                cmd = ["screencapture", "-x", "-t", "png", str(shot_path)]
+                if mode == "area":
+                    cmd.insert(1, "-i")  # interactive selection; Escape cancels
+                result = subprocess.run(cmd, capture_output=True, text=True,
+                                        timeout=240 if mode == "area" else 30)
+                if not shot_path.exists():
+                    if mode == "area":
+                        self._json(200, {"ok": False, "cancelled": True})
+                    else:
+                        err = result.stderr.strip() or "screencapture failed — check Screen Recording permission in System Settings"
+                        self._json(500, {"ok": False, "error": err})
+                    return
+                self._json(200, {"ok": True, "path": str(shot_path.relative_to(REPO_ROOT))})
+            except Exception as exc:
+                self._json(500, {"ok": False, "error": str(exc)})
+            return
+
+        if path == "/__notlinear_feedback_record":
+            try:
+                length = int(self.headers.get("content-length", "0"))
+                body = self.rfile.read(length) if length else b"{}"
+                data = json.loads(body.decode("utf-8"))
+                action = (data.get("action") or "").strip()
+                with _recording_lock:
+                    if action == "start":
+                        if _recording["proc"] and _recording["proc"].poll() is None:
+                            self._json(409, {"ok": False, "error": "already recording"})
+                            return
+                        rec_path = _feedback_media_path("rec", "mov")
+                        cmd = ["screencapture", "-v", "-x", str(rec_path)]
+                        if (data.get("mode") or "full") == "area":
+                            cmd.insert(1, "-i")  # select area first, then recording starts
+                        proc = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                        _recording["proc"], _recording["path"] = proc, rec_path
+                        self._json(200, {"ok": True, "recording": True})
+                    elif action == "stop":
+                        proc, rec_path = _recording["proc"], _recording["path"]
+                        _recording["proc"], _recording["path"] = None, None
+                        if not proc or proc.poll() is not None:
+                            # area mode: Escape during selection ends the process with no file
+                            if rec_path and not rec_path.exists():
+                                self._json(200, {"ok": False, "cancelled": True})
+                                return
+                            self._json(409, {"ok": False, "error": "not recording"})
+                            return
+                        proc.send_signal(signal.SIGINT)
+                        proc.wait(timeout=15)
+                        if not rec_path.exists():
+                            self._json(200, {"ok": False, "cancelled": True,
+                                             "error": "no recording captured — selection cancelled or Screen Recording permission missing"})
+                            return
+                        self._json(200, {"ok": True, "path": str(rec_path.relative_to(REPO_ROOT))})
+                    else:
+                        self._json(400, {"ok": False, "error": "action must be start or stop"})
+            except Exception as exc:
+                self._json(500, {"ok": False, "error": str(exc)})
+            return
+
+        if path == "/__notlinear_feedback_upload":
+            try:
+                length = int(self.headers.get("content-length", "0"))
+                data = json.loads(self.rfile.read(length).decode("utf-8"))
+                target = _media_file_from_rel(data.get("path"))
+                target.write_bytes(base64.b64decode(data.get("base64") or ""))
+                self._json(200, {"ok": True, "path": str(target.relative_to(REPO_ROOT))})
+            except Exception as exc:
+                self._json(500, {"ok": False, "error": str(exc)})
+            return
+
+        if path == "/__notlinear_feedback_discard":
+            try:
+                length = int(self.headers.get("content-length", "0"))
+                data = json.loads(self.rfile.read(length).decode("utf-8"))
+                target = _media_file_from_rel(data.get("path"))
+                if target.exists():
+                    target.unlink()
+                self._json(200, {"ok": True})
+            except Exception as exc:
+                self._json(500, {"ok": False, "error": str(exc)})
+            return
+
+        if path == "/__notlinear_feedback_list":
+            try:
+                self._json(200, {"ok": True, "entries": _feedback_parse_entries()})
+            except Exception as exc:
+                self._json(500, {"ok": False, "error": str(exc)})
+            return
+
+        if path == "/__notlinear_feedback_save":
+            try:
+                length = int(self.headers.get("content-length", "0"))
+                body = self.rfile.read(length) if length else b"{}"
+                data = json.loads(body.decode("utf-8"))
+                fb_id = _feedback_append_entry(data)
+                self._json(200, {"ok": True, "id": fb_id, "path": str(FEEDBACK_PATH.relative_to(REPO_ROOT))})
             except Exception as exc:
                 self._json(500, {"ok": False, "error": str(exc)})
             return

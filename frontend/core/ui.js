@@ -13,6 +13,22 @@ export function toast(msg){
   toastT = setTimeout(() => toastEl.classList.remove('show'), 1800);
 }
 
+// ---------- Tab-inserts-a-tab for free-text composers ----------
+// Browsers default Tab inside a <textarea> to shifting focus to the next
+// focusable element, which reads as "Tab does nothing" in a chat/comment
+// composer where the user is typing prose and expects a tab character on
+// the current line, not to be bounced out of the field.
+export function wireTabInsertsTab(textarea){
+  textarea.addEventListener('keydown', e => {
+    if (e.key !== 'Tab' || e.shiftKey || e.metaKey || e.ctrlKey || e.altKey) return;
+    e.preventDefault();
+    const start = textarea.selectionStart, end = textarea.selectionEnd;
+    textarea.value = textarea.value.slice(0, start) + '\t' + textarea.value.slice(end);
+    textarea.selectionStart = textarea.selectionEnd = start + 1;
+    textarea.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+}
+
 // ---------- confirm dialog ----------
 const deleteConfirm = document.querySelector('#delete-confirm');
 const deleteConfirmTitle = document.querySelector('#delete-confirm-title');
@@ -32,6 +48,11 @@ function closeDeleteConfirm(result = false){
   if (lastConfirmFocus?.focus) lastConfirmFocus.focus();
   resolve(result);
 }
+
+export function isDeleteConfirmOpen(){ return !!pendingDeleteConfirm; }
+export function isDeleteConfirmDeleteFocused(){ return document.activeElement === deleteConfirmDelete; }
+export function cancelDeleteConfirm(){ closeDeleteConfirm(false); }
+export function acceptDeleteConfirm(){ closeDeleteConfirm(true); }
 
 export function confirmDeleteItem({ heading, name, before, after, actionLabel }){
   if (pendingDeleteConfirm) closeDeleteConfirm(false);

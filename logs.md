@@ -35,18 +35,347 @@ Authorization headers and API keys are redacted before logging. Model request bo
 <!-- notlinear-runtime-log:start -->
 ## Latest runtime log
 
-_Last synced: 2026-05-26T13:52:12+00:00_
+_Last synced: 2026-08-01T14:44:11+00:00_
 
-_Event count: 4_
+_Event count: 32_
 
 ```json
 [
   {
-    "timestamp": "2026-05-26T13:52:10.937Z",
+    "timestamp": "2026-08-01T14:44:04.758Z",
     "id": 1,
     "kind": "http",
     "phase": "start",
-    "startedAt": "2026-05-26T13:52:10.937Z",
+    "startedAt": "2026-08-01T14:44:04.757Z",
+    "method": "POST",
+    "url": "/__notlinear_scan_project",
+    "provider": null,
+    "label": null,
+    "timeoutMs": 0,
+    "headers": {
+      "content-type": "application/json"
+    },
+    "body": {
+      "path": "/Users/yash/Claude/Aviso_2/"
+    }
+  },
+  {
+    "timestamp": "2026-08-01T14:44:05.047Z",
+    "id": 1,
+    "kind": "http",
+    "phase": "end",
+    "startedAt": "2026-08-01T14:44:04.757Z",
+    "endedAt": "2026-08-01T14:44:05.047Z",
+    "durationMs": 290,
+    "method": "POST",
+    "url": "/__notlinear_scan_project",
+    "provider": null,
+    "label": null,
+    "timeoutMs": 0,
+    "status": 200,
+    "ok": true,
+    "statusText": "OK"
+  },
+  {
+    "timestamp": "2026-08-01T14:44:05.048Z",
+    "id": 1,
+    "kind": "http",
+    "phase": "body_start",
+    "provider": null,
+    "label": "cp_scan:json",
+    "timeoutMs": 20000,
+    "status": 200,
+    "ok": true
+  },
+  {
+    "timestamp": "2026-08-01T14:44:05.065Z",
+    "id": 1,
+    "kind": "http",
+    "phase": "body_end",
+    "provider": null,
+    "label": "cp_scan:json",
+    "durationMs": 18,
+    "status": 200,
+    "ok": true
+  },
+  {
+    "timestamp": "2026-08-01T14:44:05.065Z",
+    "id": 2,
+    "kind": "http",
+    "phase": "start",
+    "startedAt": "2026-08-01T14:44:05.065Z",
+    "method": "POST",
+    "url": "/__notlinear_scan_project",
+    "provider": null,
+    "label": null,
+    "timeoutMs": 0,
+    "headers": {
+      "content-type": "application/json"
+    },
+    "body": {
+      "path": "/Users/yash/Claude/Aviso_2/"
+    }
+  },
+  {
+    "timestamp": "2026-08-01T14:44:05.153Z",
+    "id": 2,
+    "kind": "http",
+    "phase": "end",
+    "startedAt": "2026-08-01T14:44:05.065Z",
+    "endedAt": "2026-08-01T14:44:05.153Z",
+    "durationMs": 88,
+    "method": "POST",
+    "url": "/__notlinear_scan_project",
+    "provider": null,
+    "label": null,
+    "timeoutMs": 0,
+    "status": 200,
+    "ok": true,
+    "statusText": "OK"
+  },
+  {
+    "timestamp": "2026-08-01T14:44:05.153Z",
+    "id": 2,
+    "kind": "http",
+    "phase": "body_start",
+    "provider": null,
+    "label": "cp_scan:json",
+    "timeoutMs": 20000,
+    "status": 200,
+    "ok": true
+  },
+  {
+    "timestamp": "2026-08-01T14:44:05.167Z",
+    "id": 2,
+    "kind": "http",
+    "phase": "body_end",
+    "provider": null,
+    "label": "cp_scan:json",
+    "durationMs": 13,
+    "status": 200,
+    "ok": true
+  },
+  {
+    "timestamp": "2026-08-01T14:44:05.167Z",
+    "id": 3,
+    "kind": "http",
+    "phase": "start",
+    "startedAt": "2026-08-01T14:44:05.167Z",
+    "method": "POST",
+    "url": "/__notlinear_scan_project",
+    "provider": null,
+    "label": null,
+    "timeoutMs": 0,
+    "headers": {
+      "content-type": "application/json"
+    },
+    "body": {
+      "path": "/Users/yash/Downloads/notlinear/"
+    }
+  },
+  {
+    "timestamp": "2026-08-01T14:44:05.214Z",
+    "id": 3,
+    "kind": "http",
+    "phase": "end",
+    "startedAt": "2026-08-01T14:44:05.167Z",
+    "endedAt": "2026-08-01T14:44:05.214Z",
+    "durationMs": 46,
+    "method": "POST",
+    "url": "/__notlinear_scan_project",
+    "provider": null,
+    "label": null,
+    "timeoutMs": 0,
+    "status": 200,
+    "ok": true,
+    "statusText": "OK"
+  },
+  {
+    "timestamp": "2026-08-01T14:44:05.214Z",
+    "id": 3,
+    "kind": "http",
+    "phase": "body_start",
+    "provider": null,
+    "label": "cp_scan:json",
+    "timeoutMs": 20000,
+    "status": 200,
+    "ok": true
+  },
+  {
+    "timestamp": "2026-08-01T14:44:05.222Z",
+    "id": 3,
+    "kind": "http",
+    "phase": "body_end",
+    "provider": null,
+    "label": "cp_scan:json",
+    "durationMs": 8,
+    "status": 200,
+    "ok": true
+  },
+  {
+    "timestamp": "2026-08-01T14:44:05.222Z",
+    "id": 4,
+    "kind": "http",
+    "phase": "start",
+    "startedAt": "2026-08-01T14:44:05.222Z",
+    "method": "POST",
+    "url": "https://api.deepseek.com/v1/chat/completions",
+    "provider": null,
+    "label": null,
+    "timeoutMs": 0,
+    "headers": {
+      "content-type": "application/json",
+      "Authorization": "[redacted]"
+    },
+    "body": {
+      "model": "deepseek-chat",
+      "max_tokens": 80,
+      "stream": false,
+      "messages": "[1 messages]"
+    }
+  },
+  {
+    "timestamp": "2026-08-01T14:44:05.223Z",
+    "id": 5,
+    "kind": "http",
+    "phase": "start",
+    "startedAt": "2026-08-01T14:44:05.222Z",
+    "method": "POST",
+    "url": "/__notlinear_scan_project",
+    "provider": null,
+    "label": null,
+    "timeoutMs": 0,
+    "headers": {
+      "content-type": "application/json"
+    },
+    "body": {
+      "path": "/Users/yash/Claude/Linkedin GTM/"
+    }
+  },
+  {
+    "timestamp": "2026-08-01T14:44:05.229Z",
+    "id": 5,
+    "kind": "http",
+    "phase": "end",
+    "startedAt": "2026-08-01T14:44:05.222Z",
+    "endedAt": "2026-08-01T14:44:05.229Z",
+    "durationMs": 7,
+    "method": "POST",
+    "url": "/__notlinear_scan_project",
+    "provider": null,
+    "label": null,
+    "timeoutMs": 0,
+    "status": 200,
+    "ok": true,
+    "statusText": "OK"
+  },
+  {
+    "timestamp": "2026-08-01T14:44:05.229Z",
+    "id": 5,
+    "kind": "http",
+    "phase": "body_start",
+    "provider": null,
+    "label": "cp_scan:json",
+    "timeoutMs": 20000,
+    "status": 200,
+    "ok": true
+  },
+  {
+    "timestamp": "2026-08-01T14:44:05.229Z",
+    "id": 5,
+    "kind": "http",
+    "phase": "body_end",
+    "provider": null,
+    "label": "cp_scan:json",
+    "durationMs": 0,
+    "status": 200,
+    "ok": true
+  },
+  {
+    "timestamp": "2026-08-01T14:44:05.229Z",
+    "id": 6,
+    "kind": "http",
+    "phase": "start",
+    "startedAt": "2026-08-01T14:44:05.229Z",
+    "method": "POST",
+    "url": "/__notlinear_scan_project",
+    "provider": null,
+    "label": null,
+    "timeoutMs": 0,
+    "headers": {
+      "content-type": "application/json"
+    },
+    "body": {
+      "path": "/Users/yash/Downloads/notlinear/"
+    }
+  },
+  {
+    "timestamp": "2026-08-01T14:44:05.250Z",
+    "id": 6,
+    "kind": "http",
+    "phase": "end",
+    "startedAt": "2026-08-01T14:44:05.229Z",
+    "endedAt": "2026-08-01T14:44:05.249Z",
+    "durationMs": 20,
+    "method": "POST",
+    "url": "/__notlinear_scan_project",
+    "provider": null,
+    "label": null,
+    "timeoutMs": 0,
+    "status": 200,
+    "ok": true,
+    "statusText": "OK"
+  },
+  {
+    "timestamp": "2026-08-01T14:44:05.250Z",
+    "id": 6,
+    "kind": "http",
+    "phase": "body_start",
+    "provider": null,
+    "label": "cp_scan:json",
+    "timeoutMs": 20000,
+    "status": 200,
+    "ok": true
+  },
+  {
+    "timestamp": "2026-08-01T14:44:05.257Z",
+    "id": 6,
+    "kind": "http",
+    "phase": "body_end",
+    "provider": null,
+    "label": "cp_scan:json",
+    "durationMs": 7,
+    "status": 200,
+    "ok": true
+  },
+  {
+    "timestamp": "2026-08-01T14:44:05.257Z",
+    "id": 7,
+    "kind": "http",
+    "phase": "start",
+    "startedAt": "2026-08-01T14:44:05.257Z",
+    "method": "POST",
+    "url": "https://api.deepseek.com/v1/chat/completions",
+    "provider": null,
+    "label": null,
+    "timeoutMs": 0,
+    "headers": {
+      "content-type": "application/json",
+      "Authorization": "[redacted]"
+    },
+    "body": {
+      "model": "deepseek-chat",
+      "max_tokens": 80,
+      "stream": false,
+      "messages": "[1 messages]"
+    }
+  },
+  {
+    "timestamp": "2026-08-01T14:44:05.257Z",
+    "id": 8,
+    "kind": "http",
+    "phase": "start",
+    "startedAt": "2026-08-01T14:44:05.257Z",
     "method": "POST",
     "url": "/__notlinear_scan_project",
     "provider": null,
@@ -60,44 +389,121 @@ _Event count: 4_
     }
   },
   {
-    "timestamp": "2026-05-26T13:52:10.967Z",
-    "id": 1,
+    "timestamp": "2026-08-01T14:44:05.311Z",
+    "id": 8,
     "kind": "http",
     "phase": "end",
-    "startedAt": "2026-05-26T13:52:10.937Z",
-    "endedAt": "2026-05-26T13:52:10.967Z",
-    "durationMs": 31,
+    "startedAt": "2026-08-01T14:44:05.257Z",
+    "endedAt": "2026-08-01T14:44:05.311Z",
+    "durationMs": 54,
     "method": "POST",
     "url": "/__notlinear_scan_project",
     "provider": null,
     "label": null,
     "timeoutMs": 0,
-    "status": 404,
-    "ok": false,
-    "statusText": "Not Found"
+    "status": 200,
+    "ok": true,
+    "statusText": "OK"
   },
   {
-    "timestamp": "2026-05-26T13:52:10.968Z",
-    "id": 1,
+    "timestamp": "2026-08-01T14:44:05.311Z",
+    "id": 8,
     "kind": "http",
     "phase": "body_start",
     "provider": null,
     "label": "cp_scan:json",
     "timeoutMs": 20000,
-    "status": 404,
-    "ok": false
+    "status": 200,
+    "ok": true
   },
   {
-    "timestamp": "2026-05-26T13:52:10.969Z",
-    "id": 1,
+    "timestamp": "2026-08-01T14:44:05.312Z",
+    "id": 8,
     "kind": "http",
-    "phase": "body_error",
+    "phase": "body_end",
     "provider": null,
     "label": "cp_scan:json",
-    "durationMs": 0,
-    "status": 404,
-    "ok": false,
-    "error": "The string did not match the expected pattern."
+    "durationMs": 1,
+    "status": 200,
+    "ok": true
+  },
+  {
+    "timestamp": "2026-08-01T14:44:05.661Z",
+    "id": 4,
+    "kind": "http",
+    "phase": "end",
+    "startedAt": "2026-08-01T14:44:05.222Z",
+    "endedAt": "2026-08-01T14:44:05.661Z",
+    "durationMs": 439,
+    "method": "POST",
+    "url": "https://api.deepseek.com/v1/chat/completions",
+    "provider": null,
+    "label": null,
+    "timeoutMs": 0,
+    "status": 200,
+    "ok": true,
+    "statusText": ""
+  },
+  {
+    "timestamp": "2026-08-01T14:44:05.662Z",
+    "id": 4,
+    "kind": "http",
+    "phase": "body_start",
+    "provider": null,
+    "label": "cp_status:json",
+    "timeoutMs": 20000,
+    "status": 200,
+    "ok": true
+  },
+  {
+    "timestamp": "2026-08-01T14:44:05.681Z",
+    "id": 7,
+    "kind": "http",
+    "phase": "end",
+    "startedAt": "2026-08-01T14:44:05.257Z",
+    "endedAt": "2026-08-01T14:44:05.681Z",
+    "durationMs": 424,
+    "method": "POST",
+    "url": "https://api.deepseek.com/v1/chat/completions",
+    "provider": null,
+    "label": null,
+    "timeoutMs": 0,
+    "status": 200,
+    "ok": true,
+    "statusText": ""
+  },
+  {
+    "timestamp": "2026-08-01T14:44:05.682Z",
+    "id": 7,
+    "kind": "http",
+    "phase": "body_start",
+    "provider": null,
+    "label": "cp_status:json",
+    "timeoutMs": 20000,
+    "status": 200,
+    "ok": true
+  },
+  {
+    "timestamp": "2026-08-01T14:44:10.352Z",
+    "id": 7,
+    "kind": "http",
+    "phase": "body_end",
+    "provider": null,
+    "label": "cp_status:json",
+    "durationMs": 4670,
+    "status": 200,
+    "ok": true
+  },
+  {
+    "timestamp": "2026-08-01T14:44:10.353Z",
+    "id": 4,
+    "kind": "http",
+    "phase": "body_end",
+    "provider": null,
+    "label": "cp_status:json",
+    "durationMs": 4691,
+    "status": 200,
+    "ok": true
   }
 ]
 ```

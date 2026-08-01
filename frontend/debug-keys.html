@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>API Key Debugger</title>
+  <style>
+    body { font-family: monospace; padding: 20px; background: #1a1a1a; color: #eee; }
+    .section { margin: 20px 0; border: 1px solid #555; padding: 15px; border-radius: 5px; }
+    h2 { margin-top: 0; color: #4ade80; }
+    pre { background: #111; padding: 10px; border-radius: 3px; overflow-x: auto; }
+    button { padding: 10px 20px; margin: 5px 5px 5px 0; background: #4ade80; color: #000; border: none; border-radius: 3px; cursor: pointer; }
+    button:hover { background: #22c55e; }
+    .key-entry { background: #222; padding: 10px; margin: 5px 0; border-radius: 3px; display: flex; justify-content: space-between; align-items: center; }
+    .error { color: #f87171; }
+    .success { color: #4ade80; }
+  </style>
+</head>
+<body>
+
+<h1>🔑 API Key Debugger</h1>
+
+<div class="section">
+  <h2>Stored Keys (localStorage)</h2>
+  <div id="stored-keys"></div>
+  <button onclick="location.reload()">Refresh</button>
+  <button onclick="clearAllKeys()">⚠️ Clear All Keys</button>
+</div>
+
+<div class="section">
+  <h2>Add a Test Key</h2>
+  <input type="text" id="test-provider" placeholder="Provider (e.g., anthropic)" style="padding:8px; width:200px;">
+  <input type="password" id="test-key" placeholder="API Key" style="padding:8px; width:200px;">
+  <button onclick="addTestKey()">Add Key</button>
+</div>
+
+<div class="section">
+  <h2>Test Delete</h2>
+  <select id="delete-provider" style="padding:8px;">
+    <option value="">-- Select a key to delete --</option>
+  </select>
+  <button onclick="deleteTestKey()">Delete Selected</button>
+</div>
+
+<div class="section">
+  <h2>Browser Capabilities</h2>
+  <pre id="capabilities"></pre>
+</div>
+
+<script>
+function displayKeys() {
+  const stored = localStorage.getItem('nl_api_keys');
+  const keys = stored ? JSON.parse(stored) : {};
+  const container = document.getElementById('stored-keys');
+
+  if (!Object.keys(keys).length) {
+    container.innerHTML = '<p style="color: #999;">No keys stored.</p>';
+    return;
+  }
+
+  container.innerHTML = Object.entries(keys).map(([provider, key]) => `
+    <div class="key-entry">
+      <span><strong>${provider}</strong>: ${key.slice(0,4)}...${key.slice(-4)} (${key.length} chars)</span>
+      <button onclick="deleteKey('${provider}')">Delete</button>
+    </div>
+  `).join('');
+
+  // Update delete dropdown
+  const select = document.getElementById('delete-provider');
+  select.innerHTML = '<option value="">-- Select a key to delete --</option>' +
+    Object.keys(keys).map(p => `<option value="${p}">${p}</option>`).join('');
+}
+
+function deleteKey(provider) {
+  const keys = JSON.parse(localStorage.getItem('nl_api_keys') || '{}');
+  delete keys[provider];
+  localStorage.setItem('nl_api_keys', JSON.stringify(keys));
+  console.log(`✅ Deleted ${provider}`);
+  displayKeys();
+}
+
+function clearAllKeys() {
+  if (confirm('Delete ALL stored API keys?')) {
+    localStorage.setItem('nl_api_keys', '{}');
+    console.log('✅ Cleared all keys');
+    displayKeys();
+  }
+}
+
+function addTestKey() {
+  const provider = document.getElementById('test-provider').value.trim();
+  const key = document.getElementById('test-key').value.trim();
+
+  if (!provider || !key) {
+    alert('Please fill in both fields');
+    return;
+  }
+
+  const keys = JSON.parse(localStorage.getItem('nl_api_keys') || '{}');
+  keys[provider] = key;
+  localStorage.setItem('nl_api_keys', JSON.stringify(keys));
+
+  document.getElementById('test-provider').value = '';
+  document.getElementById('test-key').value = '';
+  console.log(`✅ Added ${provider}`);
+  displayKeys();
+}
+
+function deleteTestKey() {
+  const provider = document.getElementById('delete-provider').value;
+  if (!provider) return;
+  deleteKey(provider);
+}
+
+function checkCapabilities() {
+  const info = {
+    'localStorage available': typeof localStorage !== 'undefined',
+    'localStorage can set': (() => {
+      try { localStorage.setItem('__test__', '1'); localStorage.removeItem('__test__'); return true; } catch(_) { return false; }
+    })(),
+    'User agent': navigator.userAgent.slice(0, 50) + '...',
+  };
+
+  document.getElementById('capabilities').textContent = JSON.stringify(info, null, 2);
+}
+
+// Init
+displayKeys();
+checkCapabilities();
+</script>
+
+</body>
+</html>

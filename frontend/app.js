@@ -1,10 +1,55 @@
 import { appState } from './core/state.js';
   import { esc, renderMarkdown, hasMarkdownTable, markdownTextFromRendered, renderMermaidIn, friendlyError, isConfigError } from './core/markdown.js';
-  import { toast, confirmDeleteItem, confirmDeleteChat, confirmDeleteBranch } from './core/ui.js';
+  import { toast, confirmDeleteItem, confirmDeleteChat, confirmDeleteBranch, isDeleteConfirmOpen, isDeleteConfirmDeleteFocused, cancelDeleteConfirm, acceptDeleteConfirm, wireTabInsertsTab } from './core/ui.js';
   import { requestLog, RequestTimeoutError, signalWithTimeout, readStreamChunk, readResponseBody, safeJsonForLog, summarizeMessagesForLog, beginBackendTrace, endBackendTrace, loggedFetch, readLoggedErrorPayload, REQUEST_LOG_LIMIT, RUNTIME_LOG_SYNC_ENDPOINT, RUNTIME_LOG_SYNC_DEBOUNCE_MS, TOOL_TIMEOUT_MS, SEARCH_TIMEOUT_MS, PAGE_READ_TIMEOUT_MS, SCRAPE_TIMEOUT_MS, MODEL_CONNECT_TIMEOUT_MS, MODEL_STREAM_IDLE_TIMEOUT_MS, TOOL_SYNTHESIS_IDLE_TIMEOUT_MS, DEEPSEEK_MAX_TOOL_ROUNDS } from './core/api-client.js';
   import { persistAll, loadPersistedState, deletedThreadIds, STATIC_THREAD_IDS } from './core/store.js';
-  import { registerView, mountView } from './core/registry.js';
+  import { registerView, mountView, onViewChange, getActiveViewId, registerChatOpener, registerNoteOpener, registerTabRefresher } from './core/registry.js';
   import { initCodingProjects } from './views/coding-projects.js';
+  import { initNotes, openNoteInTab, openNotesIndex, getCurrentNotesTabId, getNoteTabMeta, noteExists, ensureNotesLoadedForTabs } from './views/notes.js';
+  import { initFeedback } from './core/feedback.js';
+  import { openEmojiPicker } from './core/emoji.js';
+  import { loadMindGarden, renderIconSvg, parseIconToken } from './core/mind-garden.js';
+  // A stored glyph value is either an emoji char or a Mind Garden token of
+  // the form `icon:<id>` or `icon:<id>:<hex>`. This helper hides that branch.
+  const glyphHTML = (value, { fallback = '', size = 22 } = {}) => {
+    if (!value) return fallback;
+    const parsed = parseIconToken(value);
+    if (parsed){
+      const svg = renderIconSvg(parsed.id, { size, color: parsed.color });
+      return svg || fallback;
+    }
+    return esc(value);
+  };
+  // Default hand-drawn glyphs (Mind Garden icons, notlinear Redesign RD02) shown
+  // on a project/thread row when it has no user-chosen emoji/icon — cycles by
+  // creation order. Literal colors (not tokens.css vars): renderIconSvg sets a
+  // plain SVG `stroke` attribute, which can't resolve var(--x); see ADR-015.
+  const PROJECT_ICON_CYCLE = [
+    { id: 'iris',    color: 'oklch(55% 0.11 290)' },
+    { id: 'acorn',   color: 'oklch(52% 0.10 55)' },
+    { id: 'compass', color: 'oklch(48% 0.08 195)' },
+    { id: 'star',    color: 'oklch(55% 0.13 25)' },
+  ];
+  const THREAD_ICON_CYCLE = [
+    { id: 'branch',  color: '#58A6FF' },
+    { id: 'compass', color: 'oklch(48% 0.08 195)' },
+    { id: 'roots',   color: 'oklch(50% 0.10 145)' },
+    { id: 'star',    color: 'oklch(55% 0.13 25)' },
+  ];
+  const cycleGlyphHTML = (cycle, index, fallback, size = 20) => {
+    const h = cycle[((index % cycle.length) + cycle.length) % cycle.length];
+    return renderIconSvg(h.id, { size, color: h.color }) || fallback;
+  };
+  // The 4 seed threads are hardcoded rows in index.html (no dataset.iconIndex,
+  // unlike JS-created threads) — compute their cycle position from their fixed
+  // STATIC_THREAD_IDS order so both cases share one formula.
+  const THREAD_ICON_STATIC_ORDER = [...STATIC_THREAD_IDS];
+  const threadIconIndex = (id) => {
+    const staticIdx = THREAD_ICON_STATIC_ORDER.indexOf(id);
+    if (staticIdx >= 0) return staticIdx;
+    const dynamicCount = $$('.sidebar [data-thread]').filter(el => !THREAD_ICON_STATIC_ORDER.includes(el.dataset.thread)).length;
+    return THREAD_ICON_STATIC_ORDER.length + dynamicCount;
+  };
   import { modelLabelFromId } from './providers/tools.js';
   import { callClaude } from './providers/claude.js';
   import { callDeepSeek } from './providers/deepseek.js';
@@ -174,7 +219,7 @@ import { appState } from './core/state.js';
   // ---------- real Claude API ----------
   const mainMessages = appState.mainMessages;
 
-  function buildSystemPrompt(){
+  function buildSystemPrompt({ extraContext = '' } = {}){
     const tones = {
       concise: 'Be concise and direct. Tight answers unless the question genuinely needs depth.',
       friendly: 'Be warm and conversational, like a knowledgeable friend.',
@@ -247,6 +292,7 @@ import { appState } from './core/state.js';
       parts.push('End with a verdict — Proceed, Revise, or Scrap — and one sentence of reasoning. Do not soften this. Validation is available everywhere; your value is finding what breaks before it breaks.');
     }
     parts.push(tones[prefs.tone] || tones.concise);
+    if (extraContext) parts.push(extraContext);
     return parts.join('\n');
   }
 
@@ -632,6 +678,19 @@ import { appState } from './core/state.js';
       setTimeout(() => URL.revokeObjectURL(url), 10000);
     });
     row.appendChild(btn);
+  }
+
+  function addSourcesBar(t, sources, label = 'Sources:', icon = 'ti-files') {
+    if (!sources?.length) return;
+    if (t.querySelector('.msg-sources')) return;
+    const row = document.createElement('div');
+    row.className = 'msg-sources';
+    row.innerHTML = `<i class="ti ${icon}"></i><span class="msg-sources-label">${esc(label)}</span>${
+      sources.map(name => `<span class="msg-source-chip">${esc(name)}</span>`).join('')
+    }`;
+    const meta = t.querySelector('.llm-meta');
+    if (meta) t.insertBefore(row, meta);
+    else t.appendChild(row);
   }
 
   function addCopyAction(t){
@@ -1110,6 +1169,7 @@ import { appState } from './core/state.js';
     }
     renderCrumbs();
     $('#doc h1').innerHTML = state.kind === 'doc' ? state.h1 : (state.h1 || `${esc(appState.currentCrumbTitle)}`);
+    refreshDocTitleEmoji();
     $('#doc .eyebrow').textContent = state.kind === 'doc' ? state.eyebrow : '';
     const _usageLabel = fmtUsage(state.tokenIn || 0, state.tokenOut || 0, { cost:state.cost, cacheHitTokens:state.tokenCacheHit || 0, provider:state.provider, model:state.model }) || '—';
     const _branchCount = Object.keys(state.branchSnapshots || {}).length;
@@ -1128,6 +1188,7 @@ import { appState } from './core/state.js';
       state.stream = stream.innerHTML;
       persistAll();
     }
+    attachImagePreviewListeners();
     hydrateMainContinueControl();
     hydrateDownloadButtons();
     refreshMainAttach();
@@ -1141,12 +1202,87 @@ import { appState } from './core/state.js';
     if (hadUnread) persistAll();
     renderHighlightsPanel();
     renderRecentBranches();
+    updateCtxRankingButton();
+    if (ctxPanel?.classList.contains('show')) renderCtxPanel();
+    mountView('chat');
+    syncThreadTab(id);
   }
 
   function bindThreadButton(btn){
     ensureThreadDeleteControl(btn);
     const openBtn = btn.querySelector('.thread-open') || btn;
     openBtn.addEventListener('click', () => renderThread(btn.dataset.thread));
+    wireThreadEmoji(btn);
+    refreshThreadGlyph(btn.dataset.thread);
+  }
+
+  // ----- per-thread emoji icons -----
+  function threadRowEl(id){ return $$('.sidebar [data-thread]').find(item => item.dataset.thread === id); }
+
+  // The leading glyph is the thread's chosen emoji, or its default Tabler icon
+  // (stored on the row as data-icon) when none is set.
+  function refreshThreadGlyph(id){
+    const btn = threadRowEl(id);
+    const span = btn?.querySelector('.thread-emoji');
+    if (!span) return;
+    const emoji = threadState[id]?.emoji;
+    const tablerFallback = `<i class="ti ${btn.dataset.icon || 'ti-message'}"></i>`;
+    const index = btn.dataset.iconIndex != null ? Number(btn.dataset.iconIndex) : threadIconIndex(id);
+    const defaultGlyph = cycleGlyphHTML(THREAD_ICON_CYCLE, index, tablerFallback);
+    span.innerHTML = emoji ? glyphHTML(emoji, { fallback: defaultGlyph }) : defaultGlyph;
+    span.classList.toggle('has-emoji', !!emoji);
+  }
+
+  function refreshAllThreadGlyphs(){ $$('.sidebar [data-thread]').forEach(btn => refreshThreadGlyph(btn.dataset.thread)); }
+
+  // Title-side emoji button (left of the H1). Mirrors the sidebar thread-emoji
+  // — same threadState[id].emoji field — so setting from either spot updates both.
+  function refreshDocTitleEmoji(){
+    const span = $('#doc-title-emoji');
+    if (!span) return;
+    const id = appState.currentThreadId;
+    const emoji = threadState[id]?.emoji;
+    const fallback = '<i class="ti ti-mood-smile"></i>';
+    span.innerHTML = emoji ? glyphHTML(emoji, { fallback, size: 38 }) : fallback;
+    span.classList.toggle('has-emoji', !!emoji);
+  }
+
+  (function wireDocTitleEmoji(){
+    const span = $('#doc-title-emoji');
+    if (!span) return;
+    const open = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const id = appState.currentThreadId;
+      if (!id) return;
+      openEmojiPicker(span, (emoji) => {
+        const state = threadState[id] || (threadState[id] = { kind:'chat', title:'Untitled chat', stream:'' });
+        state.emoji = emoji;
+        refreshDocTitleEmoji();
+        refreshThreadGlyph(id);
+        persistAll();
+      });
+    };
+    span.addEventListener('click', open);
+    span.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') open(e); });
+  })();
+
+  function wireThreadEmoji(btn){
+    const span = btn.querySelector('.thread-emoji');
+    if (!span) return;
+    const open = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const id = btn.dataset.thread;
+      openEmojiPicker(span, (emoji) => {
+        const state = threadState[id] || (threadState[id] = { kind:'chat', title: btn.dataset.title || 'Untitled chat', stream:'' });
+        state.emoji = emoji;
+        refreshThreadGlyph(id);
+        persistAll();
+      });
+    };
+    span.addEventListener('click', open);
+    span.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') open(e); });
   }
 
   function addThreadButton(id, title){
@@ -1154,9 +1290,12 @@ import { appState } from './core/state.js';
     btn.className = 'side-item thread-row active';
     btn.dataset.thread = id;
     btn.dataset.title = title;
-    btn.innerHTML = `<button type="button" class="thread-open"><i class="ti ti-message"></i><span class="thread-title">${esc(title)}</span></button>`;
-    const anchor = $$('.side-section').find(s => s.textContent.trim() === 'Recent branches') || $('#open-prefs');
-    anchor.before(btn);
+    btn.dataset.icon = 'ti-message';
+    btn.dataset.iconIndex = String(threadIconIndex(id));
+    btn.innerHTML = `<button type="button" class="thread-open"><span class="thread-emoji" role="button" tabindex="0" title="Set emoji"><i class="ti ti-message"></i></span><span class="thread-title">${esc(title)}</span></button>`;
+    const threadsList = $('#threads-list');
+    if (threadsList) threadsList.appendChild(btn);
+    else (($$('.side-section').find(s => s.textContent.trim() === 'Recent branches')) || $('#open-prefs')).before(btn);
     bindThreadButton(btn);
     return btn;
   }
@@ -1213,6 +1352,7 @@ import { appState } from './core/state.js';
     appState.newChatCount += 1;
     threadState[id] = { kind:'chat', title, stream:'', docContent:blankDocContent(), tokenIn:0, tokenCacheHit:0, tokenOut:0, cost:0, highlights:[], branchSnapshots:{}, branchRecents:{} };
     addThreadButton(id, title);
+    refreshThreadGlyph(id);
     renderThread(id);
     closePrefs();
     closeCtx();
@@ -1267,6 +1407,7 @@ import { appState } from './core/state.js';
 
   mainInput.addEventListener('input', () => { autosize(mainInput); updateMainSendState(); });
   mainInput.addEventListener('keydown', e => { if (e.key==='Enter' && !e.shiftKey){ e.preventDefault(); if (!appState.mainStreaming) sendMain(); } });
+  wireTabInsertsTab(mainInput);
   mainInput.addEventListener('paste', async e => {
     const items = e.clipboardData?.items;
     if (!items) return;
@@ -1289,6 +1430,58 @@ import { appState } from './core/state.js';
     saveCurrentThread();
   });
 
+  // ---------- emoji insertion (composer + document body) ----------
+  // Remember the last caret/selection inside the document so the emoji can be
+  // dropped where the user was typing, even after they click the toolbar button.
+  let savedDocRange = null;
+  document.addEventListener('selectionchange', () => {
+    const sel = window.getSelection();
+    if (!sel || !sel.rangeCount) return;
+    const dc = $('#doc-content');
+    const r = sel.getRangeAt(0);
+    if (dc && dc.contains(r.commonAncestorContainer)) savedDocRange = r.cloneRange();
+  });
+
+  function insertEmojiIntoDoc(value){
+    const dc = $('#doc-content');
+    if (!dc) return;
+    dc.focus();
+    let range = savedDocRange;
+    if (!range || !dc.contains(range.commonAncestorContainer)){
+      range = document.createRange();
+      range.selectNodeContents(dc);
+      range.collapse(false);   // caret at the very end
+    }
+    range.deleteContents();
+    let node;
+    const parsed = parseIconToken(value);
+    if (parsed){
+      // Mind Garden glyph — parse the SVG markup into an actual element so it
+      // lives in the doc as a proper inline node rather than a text blob.
+      const wrap = document.createElement('span');
+      wrap.className = 'mg-inline';
+      wrap.contentEditable = 'false';
+      wrap.dataset.icon = value.slice(5);
+      wrap.innerHTML = renderIconSvg(parsed.id, { size: 24, color: parsed.color });
+      node = wrap.firstChild ? wrap : document.createTextNode(value);
+    } else {
+      node = document.createTextNode(value);
+    }
+    range.insertNode(node);
+    range.setStartAfter(node);
+    range.collapse(true);
+    const sel = window.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(range);
+    savedDocRange = range.cloneRange();
+    dc.dispatchEvent(new Event('input', { bubbles: true }));   // reuse the doc save path
+  }
+
+  $('#doc-emoji-btn')?.addEventListener('click', (e) => {
+    e.preventDefault();
+    openEmojiPicker(e.currentTarget, (value) => insertEmojiIntoDoc(value));
+  });
+
   function providerForPref(value = prefs.model){
     if (value === 'deepseek' || value === 'deepseek-r1') return 'deepseek';
     if (value === 'gpt-4o' || value === 'gpt-4o-mini') return 'openai';
@@ -1297,6 +1490,7 @@ import { appState } from './core/state.js';
   }
 
   function modelIdForPref(value = prefs.model){
+    if (value === 'opus') return 'claude-opus-4-8';
     if (value === 'haiku') return 'claude-haiku-4-5-20251001';
     if (value === 'deepseek') return 'deepseek-chat';
     if (value === 'deepseek-r1') return 'deepseek-reasoner';
@@ -1310,9 +1504,9 @@ import { appState } from './core/state.js';
   // modelLabelFromId is imported from providers/tools.js
 
   function modelPricing(model = modelIdForPref()){
-    return String(model).includes('haiku')
-      ? { in: 1 / 1e6, out: 5 / 1e6 }
-      : { in: 3 / 1e6, out: 15 / 1e6 };
+    if (String(model).includes('haiku')) return { in: 1 / 1e6, out: 5 / 1e6 };
+    if (String(model).includes('opus')) return { in: 15 / 1e6, out: 75 / 1e6 };
+    return { in: 3 / 1e6, out: 15 / 1e6 };
   }
 
   // deepseek-chat and deepseek-reasoner map to DeepSeek V4 Flash aliases.
@@ -1322,8 +1516,8 @@ import { appState } from './core/state.js';
 
   // Returns { callFn, buildUserContent, callArgs } for the given model preference.
   // Add a new provider by adding an entry here + a call function above.
-  function getLLMAdapter(modelPref = prefs.model){
-    const systemPrompt = buildSystemPrompt();
+  function getLLMAdapter(modelPref = prefs.model, { extraContext = '' } = {}){
+    const systemPrompt = buildSystemPrompt({ extraContext });
     if (modelPref === 'deepseek' || modelPref === 'deepseek-r1'){
       return { callFn: callDeepSeek, buildUserContent: buildPlainUserContent,
         callArgs: { model: modelPref === 'deepseek-r1' ? 'deepseek-reasoner' : 'deepseek-chat', systemPrompt, tools: buildDeepSeekTools() } };
@@ -1607,22 +1801,30 @@ import { appState } from './core/state.js';
     t._thinkingEl.classList.remove('open');
   }
 
-  function sendMain(){
+  async function sendMain(){
     streamScrollLocked = false; // new send → resume auto-scroll
-    const files = getThreadFiles();
+    const files = [...getThreadFiles()];
     const rawText = mainInput.value.trim();
     if (!rawText && !files.length) return;
     const text = rawText || 'Please summarize the attached file(s).';
     const titleSeed = rawText || files.map(f => f.name.split('/').pop()).join(', ');
     mainInput.value=''; autosize(mainInput); updateMainSendState();
-    runMainTurn(text, { displayText:text, files, titleSeed });
+    getThreadFiles().length = 0; refreshMainAttach(); renderCtxPanel();
+    const pid = threadState[appState.currentThreadId]?.projectId;
+    const rankingMode = threadState[appState.currentThreadId]?.rankingMode || 'inherit';
+    const { contextBlock, sources, mode } = await buildProjectFolderContext(pid, rawText, rankingMode);
+    runMainTurn(text, { displayText:text, files, titleSeed, extraContext:contextBlock, sources, mode });
   }
 
   function continueMain(continueCount=0){
-    runMainTurn(CONTINUE_PROMPT, { displayText:'Continue', files:[], titleSeed:null, continueCount: continueCount + 1 });
+    const lastImages = mainMessages.length > 0
+      ? (mainMessages[mainMessages.length - (mainMessages[mainMessages.length - 1]?.role === 'assistant' ? 2 : 1)]?.attachments || [])
+          .map(att => ({ kind: att.type, base64: att.base64, type: att.mediaType, name: att.name }))
+      : [];
+    runMainTurn(CONTINUE_PROMPT, { displayText:'Continue', files:lastImages, titleSeed:null, continueCount: continueCount + 1 });
   }
 
-  function runMainTurn(text, { displayText=text, files=[], titleSeed=null, continueCount=0 } = {}){
+  function runMainTurn(text, { displayText=text, files=[], titleSeed=null, continueCount=0, extraContext='', sources=[], mode='none' } = {}){
     const threadId = appState.currentThreadId;
     if (threadState[threadId]?.kind === 'chat' && titleSeed && isUntitledTitle(appState.currentCrumbTitle)){
       const title = setThreadTitle(threadId, titleFromPrompt(titleSeed));
@@ -1632,8 +1834,20 @@ import { appState } from './core/state.js';
     const turnId = makeTurnId();
     u.className = 'msg user';
     u.dataset.turnId = turnId;
-    u.innerHTML = `<div class="bub">${esc(displayText)}</div>`;
+    const imageChips = files.filter(f => f.kind === 'image' && f.base64).map(f =>
+      `<img src="data:${f.type};base64,${f.base64}" alt="${esc(f.name)}" style="height:120px;width:120px;object-fit:cover;border-radius:4px;margin-right:6px;margin-bottom:6px;cursor:pointer" class="msg-image" data-name="${esc(f.name)}" />`
+    ).join('');
+    const fileChips = files.filter(f => f.kind !== 'image').map(f =>
+      `<span class="file-chip"><i class="ti ${fileIcon(f)}"></i><span class="fn" title="${esc(f.name)}">${esc(f.name.split('/').pop())}</span><span style="color:var(--text-3);font-size:10px;margin-left:2px">${fmtSize(f.size)}</span></span>`
+    ).join('');
+    const hasMedia = imageChips || fileChips;
+    u.innerHTML = `<div class="bub"><div style="margin-bottom:${hasMedia ? '8px' : '0'}">${esc(displayText)}</div><div style="display:flex;flex-wrap:wrap;gap:4px">${imageChips}${fileChips}</div></div>`;
     stream.appendChild(u);
+    u.querySelectorAll('.msg-image').forEach(img => {
+      img.addEventListener('click', (e) => {
+        openImagePreview(img.src, img.dataset.name);
+      });
+    });
 
     const t = makeAiMessageEl();
     t.dataset.turnId = turnId;
@@ -1646,7 +1860,7 @@ import { appState } from './core/state.js';
     let messageList = mainMessages;
     let fallbackHTML = streamHTMLForSave();
 
-    let adapter = getLLMAdapter(prefs.model);
+    let adapter = getLLMAdapter(prefs.model, { extraContext });
     const userContent = adapter.buildUserContent(text, files);
     let msgs = [...previousMessages, { role:'user', content: userContent }];
     let didAutoSwitch = false;
@@ -1699,6 +1913,11 @@ import { appState } from './core/state.js';
           if (shouldOfferContinue(usage)) showContinueAction(t, () => continueMain(continueCount), 'main', continueCount);
           addDownloadMdAction(t);
           addCopyAction(t);
+          if (sources.length) {
+            const label = mode === 'deepseek' ? 'Sources (DeepSeek):' : 'Sources (keywords):';
+            const icon = mode === 'deepseek' ? 'ti-brain' : 'ti-files';
+            addSourcesBar(t, sources, label, icon);
+          }
           saveTurn({ markUnread:true });
         },
         onError: (msg) => {
@@ -2337,6 +2556,137 @@ import { appState } from './core/state.js';
   threadMapToggle?.addEventListener('click', () => setThreadMap(!threadMapPanel.classList.contains('show')));
   $('#thread-map-close')?.addEventListener('click', () => setThreadMap(false));
 
+  // ---------- spatial branch canvas (notlinear Redesign TASK-RD08) ----------
+  // Read-only visualization over the existing `branches` state — never writes
+  // to it. Node click reuses the existing openBranch({bid}) re-focus path.
+  const branchCanvas = $('#branch-canvas');
+  const bcViewport = $('#bc-viewport');
+  const bcPlane = $('#bc-plane');
+  const bcEdgesSvg = $('#bc-edges');
+  const bcNodesEl = $('#bc-nodes');
+  const BC_NODE_W = 230, BC_NODE_H = 92, BC_GAP_X = 130, BC_GAP_Y = 26;
+  let bcFocusedId = null; // 'doc' | branch id | null
+  let bcPan = { x: 60, y: 40 };
+  let bcDrag = null;
+
+  function bcLayout(){
+    const tid = appState.currentThreadId;
+    // Source from the same merged row list (doc anchors + snapshots + recents + live
+    // branches) that the Hierarchy panel uses, so both views agree on what exists —
+    // not just branches that happen to be open in memory this session.
+    const rows = branchRowsForThread(tid, threadState[tid]);
+    const entries = rows.map(row => [row.id, row]);
+    const byId = Object.fromEntries(entries);
+    const childrenOf = {}; // 'doc' | parent bid -> [id]
+    entries.forEach(([id, b]) => {
+      const pkey = (b.parentBid && byId[b.parentBid]) ? b.parentBid : 'doc';
+      (childrenOf[pkey] = childrenOf[pkey] || []).push(id);
+    });
+    Object.values(childrenOf).forEach(arr => arr.sort((a, b) => (byId[a].order ?? 0) - (byId[b].order ?? 0)));
+
+    const positions = {};
+    let leafY = 0;
+    function place(key, depth){
+      const kids = childrenOf[key] || [];
+      if (!kids.length){
+        const y = leafY; leafY += BC_NODE_H + BC_GAP_Y;
+        if (key !== 'doc') positions[key] = { x: depth * (BC_NODE_W + BC_GAP_X), y, depth };
+        return y;
+      }
+      const ys = kids.map(kid => place(kid, depth + 1));
+      const y = (Math.min(...ys) + Math.max(...ys)) / 2;
+      if (key !== 'doc') positions[key] = { x: depth * (BC_NODE_W + BC_GAP_X), y, depth };
+      return y;
+    }
+    const docY = place('doc', 0);
+    positions.doc = { x: 0, y: docY, depth: 0 };
+    return { byId, childrenOf, positions };
+  }
+
+  function bcRender(){
+    const { byId, positions } = bcLayout();
+    const ids = ['doc', ...Object.keys(byId)];
+    const maxDepth = Math.max(0, ...ids.map(id => positions[id]?.depth || 0));
+    const maxY = Math.max(0, ...ids.map(id => positions[id]?.y || 0));
+    const planeW = (maxDepth + 1) * (BC_NODE_W + BC_GAP_X) + 40;
+    const planeH = maxY + BC_NODE_H + 80;
+    bcEdgesSvg.setAttribute('width', planeW);
+    bcEdgesSvg.setAttribute('height', planeH);
+
+    $('#bc-count').textContent = `${Object.keys(byId).length} branch${Object.keys(byId).length === 1 ? '' : 'es'}`;
+
+    let edgesHtml = '';
+    Object.entries(byId).forEach(([id, b]) => {
+      const pkey = (b.parentBid && byId[b.parentBid]) ? b.parentBid : 'doc';
+      const p = positions[pkey], n = positions[id];
+      if (!p || !n) return;
+      const x1 = p.x + BC_NODE_W, y1 = p.y + BC_NODE_H / 2;
+      const x2 = n.x, y2 = n.y + BC_NODE_H / 2;
+      const mx = (x1 + x2) / 2;
+      const active = bcFocusedId === id || bcFocusedId === pkey;
+      edgesHtml += `<path d="M ${x1} ${y1} C ${mx} ${y1}, ${mx} ${y2}, ${x2 - 8} ${y2}" stroke="${active ? 'var(--branch)' : 'var(--rule-2)'}" stroke-width="${active ? 2.2 : 1.4}" fill="none" stroke-linecap="round" opacity="${!bcFocusedId || active ? 1 : 0.35}"/>`;
+    });
+    bcEdgesSvg.innerHTML = edgesHtml;
+
+    const nodeHtml = (id, isDoc) => {
+      const pos = positions[id];
+      const isFocused = bcFocusedId === id;
+      const dimmed = !!bcFocusedId && !isFocused;
+      const b = isDoc ? null : byId[id];
+      const title = isDoc ? (resolveThreadTitle(threadState[appState.currentThreadId], 'Main thread')) : titleFromQuote(b.quote);
+      const liveMessages = !isDoc && branches[id]?.messages;
+      const lastMsg = !isDoc && Array.isArray(liveMessages) ? [...liveMessages].reverse().find(m => m.role === 'assistant') : null;
+      const excerptRaw = isDoc ? 'Main document' : (lastMsg?.content && typeof lastMsg.content === 'string' ? lastMsg.content : (b?.quote || ''));
+      const excerpt = truncate((excerptRaw || '').replace(/\s+/g, ' ').trim(), 110);
+      const kindLabel = isDoc ? 'Main thread' : ((pos.depth >= 2) ? 'Sub-branch' : 'Branch');
+      return `<div class="bc-node${isDoc ? ' doc' : ''}${isFocused ? ' focused' : ''}${dimmed ? ' dimmed' : ''}" data-bc-id="${esc(id)}" style="left:${pos.x}px;top:${pos.y}px;width:${BC_NODE_W}px">
+        <div class="bc-node-top">
+          <span class="bc-node-chip" style="background:${isDoc ? 'var(--bg-3)' : 'var(--branch-soft)'};color:${isDoc ? 'var(--text-2)' : 'var(--branch)'}">${isDoc ? '■' : '┣'}</span>
+          <div class="bc-node-title">${esc(title)}</div>
+        </div>
+        <div class="bc-node-excerpt">${esc(excerpt)}</div>
+        <div class="bc-node-tag" style="background:${isDoc ? 'var(--bg-3)' : 'var(--branch-soft)'};color:${isDoc ? 'var(--text-3)' : 'var(--branch)'}">${esc(kindLabel)}</div>
+      </div>`;
+    };
+    bcNodesEl.innerHTML = nodeHtml('doc', true) + Object.keys(byId).map(id => nodeHtml(id, false)).join('');
+    bcNodesEl.querySelectorAll('.bc-node').forEach(el => {
+      el.addEventListener('click', () => {
+        const id = el.dataset.bcId;
+        if (id === 'doc'){ closeBranchCanvas(); return; }
+        const row = bcLayout().byId[id];
+        closeBranchCanvas();
+        if (row) openCtxBranch(appState.currentThreadId, row);
+        else openBranch({ bid: id });
+      });
+    });
+    bcPlane.style.transform = `translate(${bcPan.x}px, ${bcPan.y}px)`;
+  }
+
+  function openBranchCanvas(){
+    bcFocusedId = null;
+    bcPan = { x: 60, y: 40 };
+    bcRender();
+    branchCanvas.classList.add('show');
+  }
+  function closeBranchCanvas(){ branchCanvas.classList.remove('show'); }
+
+  bcViewport.addEventListener('mousedown', (e) => {
+    if (e.target.closest('.bc-node')) return;
+    bcDrag = { sx: e.clientX, sy: e.clientY, px: bcPan.x, py: bcPan.y };
+    bcViewport.classList.add('grabbing');
+  });
+  window.addEventListener('mousemove', (e) => {
+    if (!bcDrag) return;
+    const dx = e.clientX - bcDrag.sx, dy = e.clientY - bcDrag.sy;
+    bcPan = { x: bcDrag.px + dx, y: bcDrag.py + dy };
+    bcPlane.style.transform = `translate(${bcPan.x}px, ${bcPan.y}px)`;
+  });
+  window.addEventListener('mouseup', () => { bcDrag = null; bcViewport.classList.remove('grabbing'); });
+
+  $('#branch-canvas-toggle')?.addEventListener('click', () => { closePrefs(); closeCtx(); openBranchCanvas(); });
+  $('#bc-close')?.addEventListener('click', closeBranchCanvas);
+  $('#bc-close-left')?.addEventListener('click', closeBranchCanvas);
+
   // ---------- selection popover ----------
   const pop = $('#pop');
   let lastSel = null;
@@ -2588,6 +2938,9 @@ import { appState } from './core/state.js';
     if (body) {
       body.innerHTML = snap.bodyHTML || '';
       rehydrateTableMarkdown(body, b.messages);
+      body.querySelectorAll('.msg-image').forEach(img => {
+        img.addEventListener('click', () => openImagePreview(img.src, img.dataset.name));
+      });
     }
     syncBranchEmpty(b);
     updateBranchUsage(b.el.dataset.bid);
@@ -2608,6 +2961,14 @@ import { appState } from './core/state.js';
     // folder level
     const fsep = document.createElement('span'); fsep.className = 'sep'; fsep.textContent = '/'; trail.appendChild(fsep);
     const folder = document.createElement('span'); folder.className = 'crumb-folder'; folder.textContent = prefs.folderName || 'Workspace'; trail.appendChild(folder);
+    // project level — show when this chat belongs to a project
+    const activeProject = getActiveProject();
+    if (activeProject) {
+      const psep = document.createElement('span'); psep.className = 'sep'; psep.textContent = '/'; trail.appendChild(psep);
+      const pbtn = document.createElement('button'); pbtn.className = 'crumb-link'; pbtn.textContent = activeProject.name || 'Project';
+      pbtn.addEventListener('click', () => openProjectPanel(activeProject.id));
+      trail.appendChild(pbtn);
+    }
     // history chain
     mainHistory.forEach((snap, i) => {
       const sep = document.createElement('span'); sep.className = 'sep'; sep.textContent = '/'; trail.appendChild(sep);
@@ -2728,6 +3089,11 @@ import { appState } from './core/state.js';
     el.querySelector('[data-h="menu"]').addEventListener('click', (e) => openMenu(e.currentTarget, id));
     el.querySelector('[data-h="close"]').addEventListener('click', () => closeBranch(id));
     wireBranchResize(el, id);
+    // Action-bar clicks must never reach the head's collapse toggle. We stop
+    // propagation here rather than relying on the head guard below: toggleReader
+    // rewrites the maximize icon mid-click, detaching e.target, which makes the
+    // guard's `e.target.closest('.actions')` return null and wrongly collapse.
+    el.querySelector('.branch-head .actions').addEventListener('click', (e) => e.stopPropagation());
     el.querySelector('.branch-head').addEventListener('click', (e) => {
       if (e.target.closest('.actions')) return;
       toggleCollapse(id);
@@ -2739,6 +3105,7 @@ import { appState } from './core/state.js';
     el.querySelector('.branch-body').addEventListener('scroll', scheduleBranchLayout, { passive:true });
     ta.addEventListener('input', () => { autosize(ta); updateBranchSendState(id); });
     ta.addEventListener('keydown', e => { if (e.key==='Enter' && !e.shiftKey){ e.preventDefault(); if (!branches[id]?.streaming) sendBranchMsg(id); } });
+    wireTabInsertsTab(ta);
     ta.addEventListener('paste', async e => {
       const items = e.clipboardData?.items;
       if (!items) return;
@@ -2779,36 +3146,58 @@ import { appState } from './core/state.js';
     sb.disabled = !ta.value.trim() && !(branchAttachments[id] || []).length;
   }
 
-  function sendBranchMsg(id){
+  async function sendBranchMsg(id){
     const b = branches[id]; if (!b) return;
     const ta = b.el.querySelector('textarea');
-    const files = getBranchContextFiles(id);
+    const files = [...getBranchContextFiles(id)];
     const rawText = ta.value.trim();
     if (!rawText && !(branchAttachments[id] || []).length) return;
     const text = rawText || 'Please summarize the attached file(s).';
     ta.value = ''; autosize(ta); updateBranchSendState(id);
-    runBranchTurn(id, text, { displayText:text, files });
+    if (branchAttachments[id]) { branchAttachments[id].length = 0; refreshBranchAttach(id); renderCtxPanel(); }
+    const threadId = b.threadId || appState.currentThreadId;
+    const pid = threadState[threadId]?.projectId;
+    const rankingMode = threadState[threadId]?.rankingMode || 'inherit';
+    const { contextBlock, sources, mode } = await buildProjectFolderContext(pid, rawText, rankingMode);
+    runBranchTurn(id, text, { displayText:text, files, extraContext:contextBlock, sources, mode });
   }
 
   function continueBranch(id, continueCount=0){
-    runBranchTurn(id, CONTINUE_PROMPT, { displayText:'Continue', files:getBranchContextFiles(id), continueCount: continueCount + 1 });
+    const b = branches[id];
+    const lastImages = (b?.messages.length > 0)
+      ? (b.messages[b.messages.length - (b.messages[b.messages.length - 1]?.role === 'assistant' ? 2 : 1)]?.attachments || [])
+          .map(att => ({ kind: att.type, base64: att.base64, type: att.mediaType, name: att.name }))
+      : [];
+    runBranchTurn(id, CONTINUE_PROMPT, { displayText:'Continue', files:[...getBranchContextFiles(id), ...lastImages], continueCount: continueCount + 1 });
   }
 
-  function runBranchTurn(id, text, { displayText=text, files=getBranchContextFiles(id), continueCount=0 } = {}){
+  function runBranchTurn(id, text, { displayText=text, files=getBranchContextFiles(id), continueCount=0, extraContext='', sources=[], mode='none' } = {}){
     const b = branches[id]; if (!b) return;
     const body = b.el.querySelector('.branch-body');
     syncBranchEmpty(b, false);
 
     const u = document.createElement('div');
     u.className = 'msg user';
-    u.innerHTML = `<div class="bub">${esc(displayText)}</div>`;
+    const imageChips = files.filter(f => f.kind === 'image' && f.base64).map(f =>
+      `<img src="data:${f.type};base64,${f.base64}" alt="${esc(f.name)}" style="height:120px;width:120px;object-fit:cover;border-radius:4px;margin-right:6px;margin-bottom:6px;cursor:pointer" class="msg-image" data-name="${esc(f.name)}" />`
+    ).join('');
+    const fileChips = files.filter(f => f.kind !== 'image').map(f =>
+      `<span class="file-chip"><i class="ti ${fileIcon(f)}"></i><span class="fn" title="${esc(f.name)}">${esc(f.name.split('/').pop())}</span><span style="color:var(--text-3);font-size:10px;margin-left:2px">${fmtSize(f.size)}</span></span>`
+    ).join('');
+    const hasMedia = imageChips || fileChips;
+    u.innerHTML = `<div class="bub"><div style="margin-bottom:${hasMedia ? '8px' : '0'}">${esc(displayText)}</div><div style="display:flex;flex-wrap:wrap;gap:4px">${imageChips}${fileChips}</div></div>`;
     body.appendChild(u);
+    u.querySelectorAll('.msg-image').forEach(img => {
+      img.addEventListener('click', (e) => {
+        openImagePreview(img.src, img.dataset.name);
+      });
+    });
 
     const t = makeAiMessageEl();
     body.appendChild(t);
     body.scrollTop = body.scrollHeight;
 
-    let adapter = getLLMAdapter(prefs.model);
+    let adapter = getLLMAdapter(prefs.model, { extraContext });
     let msgs = buildBranchContext(id, text, (msg) => adapter.buildUserContent(msg, files));
     let didAutoSwitch = false;
     const persistentUser = { role:'user', content:text };
@@ -2840,6 +3229,11 @@ import { appState } from './core/state.js';
           if (shouldOfferContinue(usage)) showContinueAction(t, () => continueBranch(id, continueCount), '', continueCount);
           addDownloadMdAction(t);
           addCopyAction(t);
+          if (sources.length) {
+            const label = mode === 'deepseek' ? 'Sources (DeepSeek):' : 'Sources (keywords):';
+            const icon = mode === 'deepseek' ? 'ti-brain' : 'ti-files';
+            addSourcesBar(t, sources, label, icon);
+          }
           captureBranchSnapshot(id, b.threadId || appState.currentThreadId, { force:true, branch:b });
           persistAll();
         },
@@ -2856,7 +3250,7 @@ import { appState } from './core/state.js';
             const configErr = isConfigError(msg);
             if (/claude.*rate limit/i.test(msg) && !didAutoSwitch && apiKeys.deepseek) {
               didAutoSwitch = true;
-              adapter = getLLMAdapter('deepseek');
+              adapter = getLLMAdapter('deepseek', { extraContext });
               msgs = buildBranchContext(id, text, (msg) => adapter.buildUserContent(msg, files));
               setAiStatus(t, 'Claude rate limited — switching to DeepSeek…');
               doBranchCall();
@@ -3198,6 +3592,16 @@ import { appState } from './core/state.js';
 
   function rebalance(){
     const ids = Object.keys(branches);
+    // Reader mode is a focus state. If a child branch opens while its parent is
+    // still reader-sized, the parent can otherwise keep fixed geometry above it.
+    ids.forEach(id => {
+      const b = branches[id];
+      if (id !== appState.activeBranchId && b.reader) {
+        b.reader = false;
+        b.el.classList.remove('reader');
+        syncReaderButton(b);
+      }
+    });
     // Build ancestor chain of the active branch (ancestors that are still open)
     const ancestorChain = new Set();
     let cursor = appState.activeBranchId ? branches[appState.activeBranchId]?.parentBid : null;
@@ -3208,7 +3612,7 @@ import { appState } from './core/state.js';
     ids.forEach(id => {
       const el = branches[id].el;
       const isAncestor = ancestorChain.has(id);
-      el.style.zIndex = branches[id].reader ? '60' : id === appState.activeBranchId ? '3' : isAncestor ? '2' : '1';
+      el.style.zIndex = id === appState.activeBranchId ? (branches[id].reader ? '60' : '3') : isAncestor ? '2' : branches[id].reader ? '60' : '1';
       el.classList.toggle('behind-active', isAncestor);
     });
     stack.classList.toggle('has-active', ids.length > 0);
@@ -3263,7 +3667,20 @@ import { appState } from './core/state.js';
       if (branches[id].reader) branches[id].el.classList.remove('source-out');
     });
 
-    const placements = ids.filter(id => !branches[id].reader).map((id, index) => {
+    // Ancestors of an open reader-mode branch must stay stacked behind it —
+    // repositioning them via anchor math detaches them into a stray blurred
+    // fragment next to the (wider, fixed-position) reader panel.
+    const readerAncestors = new Set();
+    ids.forEach(id => {
+      if (!branches[id].reader) return;
+      let cursor = branches[id].parentBid;
+      while (cursor && branches[cursor]) { readerAncestors.add(cursor); cursor = branches[cursor].parentBid; }
+    });
+    ids.forEach(id => {
+      branches[id].el.classList.toggle('reader-eclipsed', readerAncestors.has(id));
+    });
+
+    const placements = ids.filter(id => !branches[id].reader && !readerAncestors.has(id)).map((id, index) => {
       const b = branches[id];
       const anchor = branchAnchorEl(b);
       const anchorRect = anchor?.getBoundingClientRect();
@@ -3499,6 +3916,7 @@ import { appState } from './core/state.js';
     markSegValue(prefs.model || 'sonnet');
     markSegValue(prefs.theme || 'light');
     applyTheme(prefs.theme || 'light');   // default theme is light (PRD §9) when unset
+    populateRankingLlmSelect();
     renderModelUI();
     renderModeUI();
     renderUserNameUI();
@@ -3527,14 +3945,87 @@ import { appState } from './core/state.js';
   $('#pref-name').addEventListener('input', e => { prefs.name = e.target.value; renderUserNameUI(); persistPrefs(); });
   $('#pref-context').addEventListener('input', e => { prefs.context = e.target.value; persistPrefs(); });
   $('#searxng-url').addEventListener('input', e => { prefs.searxngUrl = e.target.value.trim(); persistPrefs(); });
+  $('#ranking-llm-select')?.addEventListener('change', e => { prefs.rankingLlm = e.target.value; persistPrefs(); });
 
-  // ---------- changelog ----------
+  // Populate ranking LLM select when prefs open
+  function populateRankingLlmSelect(){
+    const sel = document.getElementById('ranking-llm-select');
+    if (sel) sel.value = prefs.rankingLlm || 'none';
+  }
+
+  // ---------- changelog / product story (notlinear Redesign TASK-RD06) ----------
   const changelogToggle = $('#changelog-toggle');
   const changelogView = $('#changelog-view');
   const changelogContent = $('#changelog-content');
   const changelogSource = $('#changelog-source');
   const changelogRefresh = $('#changelog-refresh');
   let changelogLoaded = false;
+
+  // Newest-first, for inline browsing. Built by parseStoryChapters() below.
+  let storyChapters = [];
+  let storyBrowseIndex = 0;
+
+  const STORY_HUES = ['#5B93E0', '#9C82D6', '#4FAA9F', '#9A9A9A'];
+  const STORY_HERO_ICONS = ['branch', 'balance', 'roots', 'hummingbird'];
+  const STORY_TAG_HUES = {
+    Fix:         { id: 'star',    hex: 'oklch(55% 0.13 25)' },
+    Feature:     { id: 'compass', hex: 'oklch(48% 0.08 195)' },
+    Improvement: { id: 'acorn',   hex: 'oklch(52% 0.10 55)' },
+  };
+
+  // Mechanical grouping, not LLM-generated (2026-07-25 decision, ADR-018): one
+  // chapter per "## <date>" heading in CHANGELOG.md, narrative = the first
+  // entry's Summary line verbatim, one item per entry's Summary tagged by
+  // keyword. No fabricated headlines/copy.
+  function parseStoryChapters(md){
+    const chapters = [];
+    let current = null;
+    for (const line of md.split('\n')){
+      const dateMatch = line.match(/^##\s+(.+)$/);
+      if (dateMatch){ current = { date: dateMatch[1].trim(), entries: [] }; chapters.push(current); continue; }
+      const summaryMatch = current && line.match(/^-\s*Summary:\s*(.+)$/i);
+      if (summaryMatch) current.entries.push(summaryMatch[1].trim());
+    }
+    const tagFor = (s) => /\bfix(es|ed)?\b/i.test(s) ? 'Fix'
+      : /\bimprove|\boptimi[sz]e|\brefactor|\bupdate\b/i.test(s) ? 'Improvement'
+      : 'Feature';
+    return chapters.filter(c => c.entries.length).map((c, i) => ({
+      date: c.date,
+      hue: STORY_HUES[i % STORY_HUES.length],
+      heroIcon: STORY_HERO_ICONS[i % STORY_HERO_ICONS.length],
+      narrative: c.entries[0],
+      items: c.entries.map(s => ({ text: s.length > 100 ? s.slice(0, 97) + '…' : s, tag: tagFor(s) })),
+    }));
+  }
+
+  function renderStoryChapterInline(){
+    const ch = storyChapters[storyBrowseIndex];
+    if (!ch){ changelogContent.innerHTML = '<p class="story-empty">No changelog entries found.</p>'; return; }
+    const heroSvg = renderIconSvg(ch.heroIcon, { size: 26, color: ch.hue }) || '';
+    const itemsHtml = ch.items.map(it => {
+      const h = STORY_TAG_HUES[it.tag];
+      const tagSvg = renderIconSvg(h.id, { size: 11, color: h.hex }) || '';
+      return `<div class="story-item"><span class="story-item-icon" style="background:${h.hex}22">${tagSvg}</span><span class="story-item-text">${esc(it.text)}</span><span class="story-item-tag" style="color:${h.hex}">${esc(it.tag)}</span></div>`;
+    }).join('');
+    const dotsHtml = storyChapters.map((_, i) => `<span class="story-dot${i === storyBrowseIndex ? ' on' : ''}"></span>`).join('');
+    changelogContent.innerHTML = `
+      <div class="story-card">
+        <div class="story-hero" style="background:${ch.hue}22">${heroSvg}</div>
+        <div class="story-date">${esc(ch.date)}</div>
+        <p class="story-narrative">${esc(ch.narrative)}</p>
+        <div class="story-items">${itemsHtml}</div>
+      </div>
+      <div class="story-pager">
+        <button type="button" class="story-pager-btn" id="story-older"${storyBrowseIndex >= storyChapters.length - 1 ? ' disabled' : ''}><i class="ti ti-arrow-left"></i>Older</button>
+        <div class="story-dots">${dotsHtml}</div>
+        <button type="button" class="story-pager-btn" id="story-newer"${storyBrowseIndex <= 0 ? ' disabled' : ''}>Newer<i class="ti ti-arrow-right"></i></button>
+      </div>
+      <button type="button" class="story-play-btn" id="story-play"><span class="story-play-ico">▶</span>Play the story</button>
+    `;
+    $('#story-older')?.addEventListener('click', () => { storyBrowseIndex = Math.min(storyChapters.length - 1, storyBrowseIndex + 1); renderStoryChapterInline(); });
+    $('#story-newer')?.addEventListener('click', () => { storyBrowseIndex = Math.max(0, storyBrowseIndex - 1); renderStoryChapterInline(); });
+    $('#story-play')?.addEventListener('click', () => openStoryPlayer());
+  }
 
   async function loadChangelog({ force = false } = {}){
     if (changelogLoaded && !force) return;
@@ -3553,7 +4044,9 @@ import { appState } from './core/state.js';
     } catch(e){
       source = 'Bundled copy';
     }
-    changelogContent.innerHTML = renderMarkdown(text);
+    storyChapters = parseStoryChapters(text);
+    storyBrowseIndex = 0;
+    renderStoryChapterInline();
     changelogSource.textContent = source;
     changelogLoaded = true;
   }
@@ -3566,6 +4059,59 @@ import { appState } from './core/state.js';
 
   changelogToggle.addEventListener('click', () => setChangelogOpen(changelogView.hidden));
   changelogRefresh.addEventListener('click', () => loadChangelog({ force:true }));
+
+  // ---------- product story: fullscreen player ----------
+  const storyPlayer = $('#story-player');
+  const storyPlayerSegs = $('#story-player-segs');
+  const storyPlayerMeta = $('#story-player-meta');
+  const storyPlayerChapter = $('#story-player-chapter');
+  let storyPlayChapters = [];   // newest-first — play walks backward through history
+  let storyPlayIndex = 0;
+
+  function renderStoryPlayerFrame(){
+    const ch = storyPlayChapters[storyPlayIndex];
+    if (!ch) return;
+    storyPlayerSegs.innerHTML = storyPlayChapters.map((_, i) =>
+      `<div class="story-player-seg${i <= storyPlayIndex ? ' on' : ''}" style="--sp-hue:${ch.hue}"></div>`).join('');
+    storyPlayerMeta.textContent = `Update ${storyPlayIndex + 1} of ${storyPlayChapters.length} · ${ch.date}`;
+    const heroSvg = renderIconSvg(ch.heroIcon, { size: 44, color: '#fff' }) || '';
+    const itemsHtml = ch.items.map(it => {
+      const h = STORY_TAG_HUES[it.tag];
+      const tagSvg = renderIconSvg(h.id, { size: 13, color: h.hex }) || '';
+      return `<div class="story-player-item"><span class="story-player-item-icon" style="background:${h.hex}33">${tagSvg}</span><span class="story-player-item-text">${esc(it.text)}</span></div>`;
+    }).join('');
+    storyPlayerChapter.innerHTML = `
+      <div class="story-player-hero" style="background:${ch.hue}55">${heroSvg}</div>
+      <div class="story-player-date">${esc(ch.date)}</div>
+      <p class="story-player-narrative">${esc(ch.narrative)}</p>
+      <div class="story-player-items">${itemsHtml}</div>
+    `;
+    $('#story-player-prev').disabled = storyPlayIndex <= 0;
+    $('#story-player-next').innerHTML = storyPlayIndex >= storyPlayChapters.length - 1 ? '<i class="ti ti-check"></i>' : '<i class="ti ti-chevron-right"></i>';
+  }
+
+  function openStoryPlayer(){
+    if (!storyChapters.length) return;
+    storyPlayChapters = storyChapters;
+    storyPlayIndex = 0;
+    renderStoryPlayerFrame();
+    storyPlayer.classList.add('show');
+  }
+  function closeStoryPlayer(){ storyPlayer.classList.remove('show'); }
+  function storyPlayerPrev(){ if (storyPlayIndex > 0){ storyPlayIndex--; renderStoryPlayerFrame(); } }
+  function storyPlayerNext(){
+    if (storyPlayIndex >= storyPlayChapters.length - 1){ closeStoryPlayer(); return; }
+    storyPlayIndex++;
+    renderStoryPlayerFrame();
+  }
+  $('#story-player-close').addEventListener('click', closeStoryPlayer);
+  $('#story-player-prev').addEventListener('click', storyPlayerPrev);
+  $('#story-player-next').addEventListener('click', storyPlayerNext);
+  $('#updates-story-open')?.addEventListener('click', async () => {
+    if (!changelogLoaded) await loadChangelog();
+    openStoryPlayer();
+    setSidebar(false);
+  });
 
   // ---------- runtime logs ----------
   const logsToggle = $('#logs-toggle');
@@ -3663,10 +4209,36 @@ import { appState } from './core/state.js';
   // ---------- context panel ----------
   const ctxScrim = $('#ctx-scrim');
   function openCtx(){ ctxPanel.classList.add('show'); ctxScrim.classList.add('show'); renderCtxPanel(); }
-  function closeCtx(){ ctxPanel.classList.remove('show'); ctxScrim.classList.remove('show'); }
+  function closeCtx(){ ctxPanel.classList.remove('show'); ctxScrim.classList.remove('show'); branchPickerActive = false; }
   $('#ctx-toggle').addEventListener('click', () => ctxPanel.classList.contains('show') ? closeCtx() : openCtx());
   $('#ctx-close').addEventListener('click', closeCtx);
   ctxScrim.addEventListener('click', closeCtx);
+  $('#ctx-add-file')?.addEventListener('click', () => {
+    triggerFilePicker({ branchId: null });
+  });
+
+  // Context Ranking popover
+  const ctxRankingPopover = document.getElementById('ctx-ranking-popover');
+  const ctxRankingBtn = document.getElementById('ctx-ranking-btn');
+  const ctxRankingSelect = document.getElementById('ctx-ranking-mode');
+  const ctxRankingClose = document.getElementById('ctx-ranking-close');
+
+  ctxRankingBtn?.addEventListener('click', () => {
+    ctxRankingPopover.style.display = ctxRankingPopover.style.display === 'none' ? 'block' : 'none';
+    if (ctxRankingPopover.style.display === 'block') {
+      const id = appState.currentThreadId;
+      if (ctxRankingSelect) ctxRankingSelect.value = threadState[id]?.rankingMode || 'inherit';
+    }
+  });
+
+  ctxRankingClose?.addEventListener('click', closeCtxRankingPopover);
+  ctxRankingSelect?.addEventListener('change', e => {
+    const id = appState.currentThreadId;
+    if (threadState[id]) {
+      threadState[id].rankingMode = e.target.value;
+      persistAll();
+    }
+  });
 
   // ---------- attachments ----------
   const threadAttachments = appState.threadAttachments;
@@ -3824,6 +4396,14 @@ import { appState } from './core/state.js';
     document.body.appendChild(overlay);
   }
 
+  function attachImagePreviewListeners(){
+    document.querySelectorAll('.msg-image').forEach(img => {
+      img.addEventListener('click', () => {
+        openImagePreview(img.src, img.dataset.name);
+      });
+    });
+  }
+
   function buildAttachmentContext(files, options={}){
     const list = files.filter(Boolean);
     if (!list.length) return '';
@@ -3857,13 +4437,18 @@ import { appState } from './core/state.js';
         body = body.slice(0, remaining).trimEnd() + '\n[attachment context truncated]';
       }
 
-      const header = `<attached_file name="${safeFileAttr(f.name)}" size="${fmtSize(f.size)}" type="${safeFileAttr(f.type || 'unknown')}">`;
-      const block = `${header}\n${body}\n</attached_file>`;
+      let block;
+      if (f.kind === 'branch'){
+        block = `<attached_branch quote="${safeFileAttr(f.quote || '')}">\n${body}\n</attached_branch>`;
+      } else {
+        const header = `<attached_file name="${safeFileAttr(f.name)}" size="${fmtSize(f.size)}" type="${safeFileAttr(f.type || 'unknown')}">`;
+        block = `${header}\n${body}\n</attached_file>`;
+      }
       parts.push(block);
       remaining -= block.length;
     }
 
-    return `Attached file context (${list.length} file${list.length === 1 ? '' : 's'}). Use it when relevant, and say when a file could not be read.\n\n${parts.join('\n\n')}`;
+    return `Attached context (${list.length} item${list.length === 1 ? '' : 's'}). Use it when relevant, and say when something could not be read.\n\n${parts.join('\n\n')}`;
   }
 
   function buildTextUserContent(text, files, options={}){
@@ -3900,6 +4485,12 @@ import { appState } from './core/state.js';
     files.forEach((f, i) => {
       const chip = document.createElement('span');
       chip.className = 'file-chip';
+      if (f.kind === 'branch'){
+        chip.innerHTML = `<i class="ti ti-git-branch"></i><span class="fn" title="${esc(f.quote || f.name)}">${esc(f.name)}</span><span style="color:var(--text-3);font-size:10px;margin-left:2px">${f.messageCount} turn${f.messageCount === 1 ? '' : 's'}</span><button title="Remove">×</button>`;
+        chip.querySelector('button').addEventListener('click', () => onRemove(i));
+        rowEl.appendChild(chip);
+        return;
+      }
       if (f.kind === 'image' && f.base64){
         const src = `data:${f.type};base64,${f.base64}`;
         chip.innerHTML = `<img src="${src}" style="height:16px;width:16px;object-fit:cover;border-radius:2px;vertical-align:middle;margin-right:3px"><span class="fn" title="${esc(f.name)}">${esc(f.name.split('/').pop())}</span><span style="color:var(--text-3);font-size:10px;margin-left:2px">${fmtSize(f.size)}</span><button title="Remove">×</button>`;
@@ -3946,27 +4537,60 @@ import { appState } from './core/state.js';
   document.addEventListener('mousedown', e => {
     if (attachMenu.classList.contains('show') && !attachMenu.contains(e.target) && !e.target.closest('#main-attach-btn') && !e.target.closest('.branch-attach-btn')) attachMenu.classList.remove('show');
   });
+  function _makeSyncFilePicker(folder, deliver){
+    const input = document.createElement('input');
+    input.type = 'file';
+    if (folder) input.webkitdirectory = true;
+    input.multiple = true;
+    input.style.cssText = 'position:fixed;top:-9999px;left:-9999px;width:1px;height:1px;';
+    input.addEventListener('change', ev => {
+      const files = [...ev.target.files];
+      if (files.length) deliver(files);
+      if (input.parentNode) input.parentNode.removeChild(input);
+    });
+    document.body.appendChild(input);
+    input.click();
+  }
+
   async function triggerFilePicker({ folder=false, branchId=null, onFiles=null }={}){
     const deliver = (fileObjs) => onFiles ? onFiles(fileObjs) : handleFileInput(fileObjs, branchId);
-    // Native macOS app (WKWebView)
+    // WKWebView / Safari — window.webkit is defined. WKUIDelegate (runOpenPanelWith)
+    // handles <input type="file"> natively; skip osascript and create the input
+    // SYNCHRONOUSLY so the click fires while still inside the user-gesture call stack
+    // → runOpenPanelWith is invoked → NSOpenPanel appears in front of the app window.
+    if (window.__notlinearDesktop || window.webkit) {
+      _makeSyncFilePicker(folder, deliver);
+      return;
+    }
+    // Native macOS app (WKWebView with custom message handler)
     if (window.webkit?.messageHandlers?.notlinear) {
       const callbackId = Math.random().toString(36).slice(2);
       window.__nlNativeFileCallback = function(id, fileInfos) {
         if (id !== callbackId) return;
         delete window.__nlNativeFileCallback;
-        if (!fileInfos || !fileInfos.length) return;
-        const fileObjs = fileInfos.map(f => {
-          const binary = atob(f.base64 || '');
-          const bytes = new Uint8Array(binary.length);
-          for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-          return new File([bytes], f.name, { type: f.type });
-        });
-        deliver(fileObjs);
+        if (!fileInfos || !fileInfos.length) {
+          toast('File picker returned no files');
+          return;
+        }
+        try {
+          const fileObjs = fileInfos.map(f => {
+            const binary = atob(f.base64 || '');
+            const bytes = new Uint8Array(binary.length);
+            for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+            return new File([bytes], f.name, { type: f.type || '' });
+          });
+          deliver(fileObjs);
+        } catch(e) {
+          toast('File decode error: ' + (e.message || e));
+          console.error('notlinear: native file decode error', e);
+        }
       };
       window.webkit.messageHandlers.notlinear.postMessage({ action:'pickFile', folder, callbackId });
       return;
     }
-    // Native macOS via Python dev server (/__notlinear_open_files uses osascript)
+    // Native macOS via Python dev server (/__notlinear_open_files uses osascript).
+    // Only exits early when files are actually delivered. Cancelled or error
+    // falls through so the browser picker always opens as a reliable fallback.
     try {
       const resp = await fetch('/__notlinear_open_files', {
         method: 'POST',
@@ -3975,8 +4599,7 @@ import { appState } from './core/state.js';
       });
       if (resp.ok) {
         const data = await resp.json();
-        if (data.cancelled) return;
-        if (data.ok && data.files?.length) {
+        if (!data.cancelled && data.ok && data.files?.length) {
           const fileObjs = data.files
             .filter(f => !f.tooBig && f.base64)
             .map(f => {
@@ -3985,35 +4608,70 @@ import { appState } from './core/state.js';
               for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
               return new File([bytes], f.name, { type: f.type || 'application/octet-stream' });
             });
-          if (fileObjs.length) deliver(fileObjs);
+          if (fileObjs.length) { deliver(fileObjs); return; }
         }
-        return;
+        // cancelled or no usable files → fall through to browser picker
       }
     } catch { /* server not running — fall through */ }
-    // Browser fallback
-    const input = document.createElement('input');
-    input.type = 'file';
-    if (folder) input.webkitdirectory = true;
-    input.multiple = true;
-    input.style.cssText = 'position:fixed;top:-9999px;left:-9999px;width:1px;height:1px;';
-    input.addEventListener('change', ev => {
-      deliver(ev.target.files);
-      if (input.parentNode) input.parentNode.removeChild(input);
-    });
-    document.body.appendChild(input);
-    input.click();
+    // Browser fallback (after async break; works in browsers, not after await in strict WKWebView)
+    _makeSyncFilePicker(folder, deliver);
   }
 
   attachMenu.addEventListener('click', e => {
     const btn = e.target.closest('button'); if (!btn) return;
     const act = btn.dataset.act;
+    attachMenu.classList.remove('show');
+    if (act === 'branch') { openBranchContextPicker(); return; }
     const isFolder = act === 'folder';
     const branchId = attachTarget;
     triggerFilePicker({ folder: isFolder, branchId });
-    attachMenu.classList.remove('show');
   });
 
   $('#main-attach-btn').addEventListener('click', e => openAttachMenu(e.currentTarget, null));
+
+  // ---------- attach a branch's transcript as context (via Context panel, click-to-toggle) ----------
+  let branchPickerActive = false;
+
+  function branchMessagesFor(threadId, branchId){
+    return branches[branchId]?.messages
+      ?? threadState[threadId]?.branchSnapshots?.[branchId]?.messages
+      ?? [];
+  }
+
+  function branchToAttachment(threadId, row){
+    const messages = branchMessagesFor(threadId, row.id);
+    const transcript = messages.map(m => `[${m.role}] ${typeof m.content === 'string' ? m.content : ''}`).join('\n\n');
+    return {
+      name: titleFromQuote(row.quote || 'Untitled branch'),
+      kind: 'branch',
+      branchId: row.id,
+      quote: row.quote || '',
+      messageCount: messages.length,
+      content: `Quote explored: "${row.quote || ''}"\n\n${transcript}`,
+    };
+  }
+
+  function pickerTargetFiles(){
+    return attachTarget ? getBranchFiles(attachTarget) : getThreadFiles();
+  }
+
+  function toggleBranchContext(row){
+    const targetFiles = pickerTargetFiles();
+    const idx = targetFiles.findIndex(f => f.kind === 'branch' && f.branchId === row.id);
+    if (idx >= 0){
+      targetFiles.splice(idx, 1);
+    } else {
+      targetFiles.push(branchToAttachment(appState.currentThreadId, row));
+    }
+    if (attachTarget) refreshBranchAttach(attachTarget); else refreshMainAttach();
+    renderCtxPanel();
+  }
+
+  function openBranchContextPicker(){
+    branchPickerActive = true;
+    toast('Click a branch to add it as context — click again to remove');
+    openCtx();
+  }
 
   async function handleFileInput(files, branchId){
     const read = await readFiles(files);
@@ -4027,14 +4685,206 @@ import { appState } from './core/state.js';
     renderCtxPanel();
   }
 
-  $('#file-input-main').addEventListener('change', e => { handleFileInput(e.target.files, null); e.target.value=''; });
-  $('#folder-input-main').addEventListener('change', e => { handleFileInput(e.target.files, null); e.target.value=''; });
-  $('#file-input-branch').addEventListener('change', e => { handleFileInput(e.target.files, attachTarget); e.target.value=''; });
-  $('#folder-input-branch').addEventListener('change', e => { handleFileInput(e.target.files, attachTarget); e.target.value=''; });
+  $('#file-input-main').addEventListener('change', e => { handleFileInput([...e.target.files], null); e.target.value=''; });
+  $('#folder-input-main').addEventListener('change', e => { handleFileInput([...e.target.files], null); e.target.value=''; });
+  $('#file-input-branch').addEventListener('change', e => { handleFileInput([...e.target.files], attachTarget); e.target.value=''; });
+  $('#folder-input-branch').addEventListener('change', e => { handleFileInput([...e.target.files], attachTarget); e.target.value=''; });
 
   // ---------- projects ----------
   const projectPanel = $('#project-panel');
   let activePanelProjectId = null;
+
+  // Project folder context injection via keyword matching
+  const PROJECT_SCAN_CACHE_TTL_MS = 5 * 60 * 1000;
+  const projectScanCache = new Map();
+
+  async function fetchProjectScan(pid) {
+    const p = projects[pid];
+    if (!p?.path) return null;
+    const hit = projectScanCache.get(pid);
+    if (hit && (Date.now() - hit.fetchedAt) < PROJECT_SCAN_CACHE_TTL_MS) return hit.scan;
+    try {
+      const res = await fetch('/__notlinear_scan_project', {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ path: p.path }),
+      });
+      if (!res.ok) return null;
+      const scan = await res.json();
+      if (!scan.ok) return null;
+      projectScanCache.set(pid, { scan, fetchedAt: Date.now() });
+      return scan;
+    } catch { return null; }
+  }
+
+  const KEYWORD_STOP_WORDS = new Set([
+    'the','and','for','that','this','with','from','have','are','was','were',
+    'will','would','could','should','what','when','where','which','who','how',
+    'why','can','not','but','you','your','we','our','they','their','it','its',
+    'be','been','being','do','does','did','has','had','is','in','on','at','to',
+    'of','a','an','as','by','or','so','if','then','than','also','any','all',
+    'about','tell','me','more','give','please','explain','describe','show',
+    'list','find','get','make','use','need','want','know','think','see','say',
+  ]);
+
+  function extractKeywords(text) {
+    return [...new Set(
+      text.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').split(/\s+/)
+        .filter(w => w.length >= 3 && !KEYWORD_STOP_WORDS.has(w))
+    )].slice(0, 20);
+  }
+
+  // Project folder context caching (TASK-CTX02)
+  const projectKeywordCache = new Map();
+  const projectRankingCache = new Map();
+  const KEYWORD_CACHE_TTL_MS = 30 * 60 * 1000;
+  const RANKING_CACHE_TTL_MS = 10 * 60 * 1000;
+  const RANKING_TIMEOUT_MS = 5000;
+
+  const PROJECT_FOLDER_FILE_CHAR_LIMIT = 3000;
+  const PROJECT_FOLDER_MAX_FILES = 10;
+
+  async function generateSearchKeywords(query, effectiveMode = (prefs.rankingLlm || 'none')) {
+    const key = appState.apiKeys?.deepseek;
+    if (!key || effectiveMode === 'none' || effectiveMode === 'keywords') return extractKeywords(query);
+
+    const cacheKey = query.trim().toLowerCase().slice(0, 200);
+    const hit = projectKeywordCache.get(cacheKey);
+    if (hit && (Date.now() - hit.fetchedAt) < KEYWORD_CACHE_TTL_MS) return hit.keywords;
+
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), RANKING_TIMEOUT_MS);
+
+      const res = await fetch('https://api.deepseek.com/v1/chat/completions', {
+        signal: controller.signal,
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'authorization': `Bearer ${key}` },
+        body: JSON.stringify({
+          model: 'deepseek-chat', max_tokens: 100, temperature: 0, stream: false,
+          messages: [
+            { role: 'system', content: 'Extract 10–15 precise search keywords from the user query that would help find relevant documentation or code files. Include technical terms, synonyms, and related concepts. Return ONLY a JSON array of strings, e.g. ["authentication","jwt","session","token"].' },
+            { role: 'user', content: query },
+          ],
+        }),
+      });
+      clearTimeout(timeoutId);
+
+      if (!res.ok) return extractKeywords(query);
+      const data = await res.json();
+      const text = data.choices?.[0]?.message?.content?.trim() || '[]';
+      const match = text.match(/\[[\s\S]*?\]/);
+      const keywords = match ? JSON.parse(match[0]).filter(k => typeof k === 'string') : [];
+      if (!keywords.length) return extractKeywords(query);
+
+      projectKeywordCache.set(cacheKey, { keywords, fetchedAt: Date.now() });
+      return keywords;
+    } catch {
+      return extractKeywords(query);
+    }
+  }
+
+  async function rankFilesWithDeepSeek(candidates, query, pid, effectiveMode = (prefs.rankingLlm || 'none')) {
+    const key = appState.apiKeys?.deepseek;
+    if (!key || effectiveMode === 'none' || effectiveMode === 'keywords') return candidates;
+
+    const cacheKey = pid + '::' + query.trim().toLowerCase().slice(0, 100);
+    const hit = projectRankingCache.get(cacheKey);
+    if (hit && (Date.now() - hit.fetchedAt) < RANKING_CACHE_TTL_MS) {
+      return hit.indices.map(i => candidates[i]).filter(Boolean);
+    }
+
+    const fileList = candidates.map((f, i) =>
+      `[${i}] ${f.filename} (${f.relativePath}): ${f.text.slice(0, 200).replace(/\n/g, ' ').trim()}`
+    ).join('\n');
+
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), RANKING_TIMEOUT_MS);
+
+      const res = await fetch('https://api.deepseek.com/v1/chat/completions', {
+        signal: controller.signal,
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'authorization': `Bearer ${key}` },
+        body: JSON.stringify({
+          model: 'deepseek-chat', max_tokens: 150, temperature: 0, stream: false,
+          messages: [
+            { role: 'system', content: 'You are a file relevance ranker. Given a user query and numbered files with snippets, return a JSON array of file indices ranked by relevance (most relevant first). Return ONLY valid JSON like [2,0,4]. Include only relevant files. If none are relevant, return [].' },
+            { role: 'user', content: `Query: "${query}"\n\nFiles:\n${fileList}` },
+          ],
+        }),
+      });
+      clearTimeout(timeoutId);
+
+      if (!res.ok) return candidates;
+      const data = await res.json();
+      const text = data.choices?.[0]?.message?.content?.trim() || '[]';
+      const match = text.match(/\[[\d,\s]*\]/);
+      const indices = match ? JSON.parse(match[0]) : [];
+      if (!Array.isArray(indices) || !indices.length) return candidates;
+
+      projectRankingCache.set(cacheKey, { indices, fetchedAt: Date.now() });
+      return indices.map(i => candidates[i]).filter(Boolean);
+    } catch {
+      return candidates;
+    }
+  }
+
+  async function buildProjectFolderContext(pid, query, rankingMode = 'inherit') {
+    if (!pid || !projects[pid]?.path) return { contextBlock: '', sources: [], mode: 'none' };
+    const scan = await fetchProjectScan(pid);
+    if (!scan) return { contextBlock: '', sources: [], mode: 'none' };
+
+    // Resolve effective mode: inherit from global pref or use thread override
+    const effectiveMode = (rankingMode && rankingMode !== 'inherit') ? rankingMode : (prefs.rankingLlm || 'none');
+
+    const allFiles = (scan.contextFiles || scan.markdownFiles || []).filter(f => f.present && f.text);
+    if (!allFiles.length) return { contextBlock: '', sources: [], mode: effectiveMode };
+
+    // Step ①: generate search keywords (DeepSeek or fallback)
+    const keywords = await generateSearchKeywords(query, effectiveMode);
+
+    // Step ②: keyword pre-filter → top 30 candidates
+    let candidates = keywords.length
+      ? allFiles
+          .map(f => {
+            const haystack = (f.relativePath + ' ' + f.text.slice(0, 500)).toLowerCase();
+            const score = keywords.reduce((n, kw) => n + (haystack.includes(kw.toLowerCase()) ? 1 : 0), 0);
+            return { ...f, score };
+          })
+          .filter(f => f.score > 0)
+          .sort((a, b) => b.score - a.score)
+          .slice(0, 30)
+      : allFiles.slice(0, 30);
+
+    if (!candidates.length) candidates = allFiles.slice(0, 30);
+
+    // Step ③: DeepSeek semantic rerank (or stay in keyword order)
+    const ranked = await rankFilesWithDeepSeek(candidates, query, pid, effectiveMode);
+    const top = ranked.slice(0, PROJECT_FOLDER_MAX_FILES);
+    if (!top.length) return { contextBlock: '', sources: [], mode: effectiveMode };
+
+    const parts = top.map(f => {
+      const body = f.text.length > PROJECT_FOLDER_FILE_CHAR_LIMIT
+        ? f.text.slice(0, PROJECT_FOLDER_FILE_CHAR_LIMIT).trimEnd() + '\n[truncated]'
+        : f.text;
+      return `<project_file path="${esc(f.relativePath)}">\n${body}\n</project_file>`;
+    });
+
+    console.debug('[notlinear:context]', {
+      pid,
+      mode: effectiveMode,
+      query,
+      keywords,
+      candidateCount: candidates.length,
+      ranked: top.map(f => f.filename),
+    });
+
+    return {
+      contextBlock: `Relevant project files (${effectiveMode !== 'none' ? (effectiveMode === 'deepseek' ? 'DeepSeek-ranked' : 'keyword-matched') : 'none'} from linked folder):\n\n${parts.join('\n\n')}`,
+      sources: top.map(f => f.filename),
+      mode: effectiveMode,
+    };
+  }
 
   function projectChatIds(pid){
     return Object.keys(threadState).filter(id => threadState[id]?.projectId === pid);
@@ -4052,13 +4902,23 @@ import { appState } from './core/state.js';
     const list = $('#projects-list');
     if (!list) return;
     list.innerHTML = '';
-    Object.keys(projects).forEach(pid => {
+    Object.keys(projects).forEach((pid, idx) => {
       const p = projects[pid];
       const row = document.createElement('div');
       row.className = 'side-item project-row';
       row.dataset.project = pid;
-      row.innerHTML = `<button type="button" class="project-open"><i class="ti ti-folder"></i><span class="project-name">${esc(p.name || 'Untitled project')}</span></button><button type="button" class="project-settings" title="Project settings" aria-label="Project settings"><i class="ti ti-dots"></i></button>`;
+      const folderFallback = '<i class="ti ti-folder"></i>';
+      const defaultGlyph = cycleGlyphHTML(PROJECT_ICON_CYCLE, idx, folderFallback, 22);
+      const glyph = p.emoji ? glyphHTML(p.emoji, { fallback: defaultGlyph }) : defaultGlyph;
+      row.innerHTML = `<button type="button" class="project-open"><span class="project-emoji${p.emoji ? ' has-emoji' : ''}" role="button" tabindex="0" title="Set emoji">${glyph}</span><span class="project-name">${esc(p.name || 'Untitled project')}</span></button><button type="button" class="project-settings" title="Project settings" aria-label="Project settings"><i class="ti ti-dots"></i></button>`;
       row.querySelector('.project-open').addEventListener('click', () => openProjectPanel(pid));
+      const emojiSpan = row.querySelector('.project-emoji');
+      const openPicker = e => {
+        e.preventDefault(); e.stopPropagation();
+        openEmojiPicker(emojiSpan, (emoji) => { if (projects[pid]){ projects[pid].emoji = emoji; renderProjects(); persistAll(); } });
+      };
+      emojiSpan.addEventListener('click', openPicker);
+      emojiSpan.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') openPicker(e); });
       row.querySelector('.project-settings').addEventListener('click', e => { e.stopPropagation(); openProjectPanel(pid); });
       list.appendChild(row);
     });
@@ -4069,7 +4929,7 @@ import { appState } from './core/state.js';
     const id = 'proj-' + Date.now();
     const name = appState.projectCount === 1 ? 'New project' : `New project ${appState.projectCount}`;
     appState.projectCount += 1;
-    projects[id] = { id, name, rules:'', files:[] };
+    projects[id] = { id, name, rules:'', files:[], path:'' };
     renderProjects();
     persistAll();
     openProjectPanel(id);
@@ -4079,12 +4939,14 @@ import { appState } from './core/state.js';
   function openProjectPanel(pid){
     const p = projects[pid];
     if (!p) return;
+    if (!p.updatedAt) p.updatedAt = Date.now();
     activePanelProjectId = pid;
     $('#project-panel-title').textContent = p.name || 'Project';
     $('#project-name-input').value = p.name || '';
     $('#project-rules-input').value = p.rules || '';
     const ex = $('#project-existing-list'); if (ex) ex.hidden = true;
     renderProjectFiles();
+    renderProjectFolderCard();
     renderProjectChats();
     closePrefs();
     closeCtx();
@@ -4096,6 +4958,76 @@ import { appState } from './core/state.js';
     projectPanel.classList.remove('show');
     activePanelProjectId = null;
   }
+
+  // ---------- projects grid view (notlinear Redesign TASK-RD07) ----------
+  const projectsView = $('#projects-view');
+  let pvSearch = '';
+  let pvSort = 'updated'; // 'updated' | 'name'
+
+  function touchProjectUpdated(pid){
+    const p = projects[pid];
+    if (p) p.updatedAt = Date.now();
+  }
+
+  function timeAgoShort(ts){
+    if (!ts) return '—';
+    const s = (Date.now() - ts) / 1000;
+    if (s < 60) return 'just now';
+    const m = s / 60; if (m < 60) return `${Math.floor(m)}m ago`;
+    const h = m / 60; if (h < 24) return `${Math.floor(h)}h ago`;
+    const d = h / 24; if (d < 30) return `${Math.floor(d)}d ago`;
+    const mo = d / 30; if (mo < 12) return `${Math.floor(mo)}mo ago`;
+    return `${Math.floor(d / 365)}y ago`;
+  }
+
+  function openProjectsView(){
+    pvSearch = '';
+    const search = $('#pv-search'); if (search) search.value = '';
+    renderProjectsGridView();
+    setSidebar(false);
+    projectsView.classList.add('show');
+  }
+  function closeProjectsView(){ projectsView.classList.remove('show'); $('#pv-sort-menu')?.setAttribute('hidden', ''); }
+
+  function renderProjectsGridView(){
+    const grid = $('#pv-grid');
+    if (!grid) return;
+    const q = pvSearch.trim().toLowerCase();
+    let cards = Object.keys(projects)
+      .map((pid, idx) => ({ pid, idx, p: projects[pid] }))
+      .filter(({ p }) => !q || (p.name || '').toLowerCase().includes(q));
+    if (pvSort === 'name') cards.sort((a, b) => (a.p.name || '').localeCompare(b.p.name || ''));
+    else cards.sort((a, b) => (b.p.updatedAt || 0) - (a.p.updatedAt || 0));
+
+    const cardsHtml = cards.map(({ pid, idx, p }) => {
+      const icon = cycleGlyphHTML(PROJECT_ICON_CYCLE, idx, '<i class="ti ti-folder"></i>', 20);
+      const count = Object.values(threadState).filter(t => t.projectId === pid).length;
+      return `<div class="pv-card" data-pid="${esc(pid)}"><div class="pv-card-top"><span class="pv-card-icon">${icon}</span><div class="pv-card-name">${esc(p.name || 'Untitled project')}</div></div><div class="pv-card-meta"><i class="ti ti-messages"></i>${count} thread${count === 1 ? '' : 's'}<span class="pv-card-dot">·</span>Updated ${esc(timeAgoShort(p.updatedAt))}</div></div>`;
+    }).join('');
+    grid.innerHTML = cardsHtml + `<div class="pv-card pv-card-new" id="pv-grid-new"><i class="ti ti-plus"></i><div>New project</div></div>`;
+
+    grid.querySelectorAll('.pv-card[data-pid]').forEach(card => {
+      card.addEventListener('click', () => { closeProjectsView(); openProjectPanel(card.dataset.pid); });
+    });
+    $('#pv-grid-new')?.addEventListener('click', () => { closeProjectsView(); createProject(); });
+  }
+
+  $('#projects-view-open')?.addEventListener('click', (e) => { e.stopPropagation(); openProjectsView(); });
+  $('#projects-view-close')?.addEventListener('click', closeProjectsView);
+  $('#pv-search')?.addEventListener('input', (e) => { pvSearch = e.target.value; renderProjectsGridView(); });
+  $('#pv-new-project')?.addEventListener('click', () => { closeProjectsView(); createProject(); });
+  $('#pv-sort-btn')?.addEventListener('click', (e) => { e.stopPropagation(); $('#pv-sort-menu')?.toggleAttribute('hidden'); });
+  $('#pv-sort-menu')?.querySelectorAll('button[data-v]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      pvSort = btn.dataset.v;
+      $('#pv-sort-label').textContent = pvSort === 'name' ? 'Name' : 'Last updated';
+      $('#pv-sort-menu').setAttribute('hidden', '');
+      renderProjectsGridView();
+    });
+  });
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest('.pv-sort-wrap')) $('#pv-sort-menu')?.setAttribute('hidden', '');
+  });
 
   function renderProjectFiles(){
     const p = projects[activePanelProjectId];
@@ -4189,7 +5121,9 @@ import { appState } from './core/state.js';
     const title = appState.newChatCount === 1 ? 'Untitled chat' : `Untitled chat ${appState.newChatCount}`;
     appState.newChatCount += 1;
     threadState[id] = { kind:'chat', title, stream:'', docContent:blankDocContent(), tokenIn:0, tokenCacheHit:0, tokenOut:0, cost:0, highlights:[], branchSnapshots:{}, branchRecents:{}, projectId: pid };
+    touchProjectUpdated(pid);
     addThreadButton(id, title);
+    refreshThreadGlyph(id);
     syncThreadRowVisibility();
     renderThread(id);
     closeProjectPanel();
@@ -4198,6 +5132,45 @@ import { appState } from './core/state.js';
     toast('New chat in project');
     setTimeout(() => mainInput.focus(), 80);
   }
+
+  function renderProjectFolderCard() {
+    const p = projects[activePanelProjectId];
+    const display = document.getElementById('project-folder-display');
+    const unlinkBtn = document.getElementById('project-unlink-folder');
+    if (!p || !display || !unlinkBtn) return;
+    const hasPath = !!p.path;
+    display.style.display = hasPath ? '' : 'none';
+    display.textContent = hasPath ? p.path : '';
+    unlinkBtn.style.display = hasPath ? '' : 'none';
+  }
+
+  document.getElementById('project-link-folder')?.addEventListener('click', async () => {
+    const pid = activePanelProjectId;
+    const p = projects[pid]; if (!p) return;
+    let res;
+    try {
+      res = await fetch('/__notlinear_pick_folder', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' });
+    } catch { toast('Folder picker needs the local server (run backend/server.py)'); return; }
+    if (res.status === 404 || res.status === 501) { toast('Restart the server — folder picker endpoint missing'); return; }
+    let data; try { data = await res.json(); } catch { data = null; }
+    if (data?.cancelled) return;
+    if (!data?.ok) { toast(data?.error ? `Picker error: ${data.error}` : 'Could not pick folder'); return; }
+    p.path = data.path || '';
+    projectScanCache.delete(pid);
+    renderProjectFolderCard();
+    persistAll();
+    toast('Folder linked');
+  });
+
+  document.getElementById('project-unlink-folder')?.addEventListener('click', () => {
+    const pid = activePanelProjectId;
+    const p = projects[pid]; if (!p) return;
+    p.path = '';
+    projectScanCache.delete(pid);
+    renderProjectFolderCard();
+    persistAll();
+    toast('Folder unlinked');
+  });
 
   function deleteProject(pid){
     if (!projects[pid]) return;
@@ -4220,6 +5193,7 @@ import { appState } from './core/state.js';
   $('#project-name-input')?.addEventListener('input', e => {
     const p = projects[activePanelProjectId]; if (!p) return;
     p.name = e.target.value;
+    touchProjectUpdated(activePanelProjectId);
     $('#project-panel-title').textContent = p.name || 'Project';
     renderProjects();
     persistAll();
@@ -4227,18 +5201,29 @@ import { appState } from './core/state.js';
   $('#project-rules-input')?.addEventListener('input', e => {
     const p = projects[activePanelProjectId]; if (!p) return;
     p.rules = e.target.value;
+    touchProjectUpdated(activePanelProjectId);
     persistAll();
   });
   $('#project-add-file')?.addEventListener('click', () => {
     const pid = activePanelProjectId;
     triggerFilePicker({ onFiles: async (fileObjs) => {
-      const p = projects[pid]; if (!p) return;
-      // Drop base64 — project knowledge is injected as text via the system prompt, so we
-      // only keep extracted text/content. Keeps the persisted state from ballooning.
-      const read = (await readFiles(fileObjs)).map(({ base64, ...rest }) => rest);
-      p.files.push(...read);
-      if (activePanelProjectId === pid) renderProjectFiles();
-      persistAll();
+      try {
+        const p = projects[pid]; if (!p) return;
+        // Drop base64 — project knowledge is injected as text via the system prompt, so we
+        // only keep extracted text/content. Keeps the persisted state from ballooning.
+        const read = (await readFiles(fileObjs)).map(({ base64, ...rest }) => rest);
+        if (!read.length) { toast('No readable files added'); return; }
+        p.files.push(...read);
+        touchProjectUpdated(pid);
+        persistAll();
+        // Re-render whether or not the panel is still open for this project
+        if (activePanelProjectId === pid) renderProjectFiles();
+        else if (!activePanelProjectId) openProjectPanel(pid);
+        toast(`Added ${read.length} file${read.length > 1 ? 's' : ''} to project`);
+      } catch(e) {
+        toast('Could not add files: ' + (e.message || e));
+        console.error('notlinear: add project file error', e);
+      }
     }});
   });
   $('#project-new-chat')?.addEventListener('click', () => { if (activePanelProjectId) newChatInProject(activePanelProjectId); });
@@ -4448,55 +5433,62 @@ import { appState } from './core/state.js';
     if (anchor) anchor.scrollIntoView({ block:'center', behavior:'smooth' });
   }
 
-  function branchTreeRowHTML(row){
+  function branchTreeRowHTML(row, attached){
     const title = titleFromQuote(row.quote || 'Untitled branch');
+    const icon = attached ? 'ti-circle-check-filled' : 'ti-git-branch';
     return `
-      <i class="ti ti-git-branch"></i>
+      <i class="ti ${icon}"></i>
       <span class="ctx-branch-title" title="${esc(row.quote)}">${esc(title)}</span>
       <button type="button" class="ctx-branch-delete" title="Delete branch" aria-label="Delete ${esc(title)}"><i class="ti ti-trash"></i></button>
     `;
   }
 
+  function buildCtxBranchRow(tid, row, marginLeft){
+    const attached = branchPickerActive && pickerTargetFiles().some(f => f.kind === 'branch' && f.branchId === row.id);
+    const brow = document.createElement('div');
+    brow.className = 'ctx-branch' + (row.open ? ' active' : '') + (attached ? ' attached' : '');
+    brow.style.marginLeft = `${marginLeft}px`;
+    brow.innerHTML = branchTreeRowHTML(row, attached);
+    brow.addEventListener('click', e => {
+      if (e.target.closest('.ctx-branch-delete')) return;
+      e.stopPropagation();
+      if (branchPickerActive) { toggleBranchContext(row); return; }
+      openCtxBranch(tid, row);
+    });
+    brow.querySelector('.ctx-branch-delete').addEventListener('click', e => {
+      e.preventDefault();
+      e.stopPropagation();
+      deleteBranch(row.id, tid);
+    });
+    return brow;
+  }
+
   function renderBranchRows(tree, tid, rows, parentBid=null, depth=1){
     const children = rows.filter(row => (row.parentBid || null) === parentBid);
     children.forEach(row => {
-      const brow = document.createElement('div');
-      brow.className = 'ctx-branch' + (row.open ? ' active' : '');
-      brow.style.marginLeft = `${36 + (depth - 1) * 18}px`;
-      brow.innerHTML = branchTreeRowHTML(row);
-      brow.addEventListener('click', e => {
-        if (e.target.closest('.ctx-branch-delete')) return;
-        e.stopPropagation();
-        openCtxBranch(tid, row);
-      });
-      brow.querySelector('.ctx-branch-delete').addEventListener('click', e => {
-        e.preventDefault();
-        e.stopPropagation();
-        deleteBranch(row.id, tid);
-      });
-      tree.appendChild(brow);
+      tree.appendChild(buildCtxBranchRow(tid, row, 36 + (depth - 1) * 18));
       renderBranchRows(tree, tid, rows, row.id, depth + 1);
     });
 
     if (parentBid === null){
       rows.filter(row => row.parentBid && !rows.some(parent => parent.id === row.parentBid)).forEach(row => {
-        const brow = document.createElement('div');
-        brow.className = 'ctx-branch' + (row.open ? ' active' : '');
-        brow.style.marginLeft = `${36 + (Math.max(1, row.depth || 1) - 1) * 18}px`;
-        brow.innerHTML = branchTreeRowHTML(row);
-        brow.addEventListener('click', e => {
-          if (e.target.closest('.ctx-branch-delete')) return;
-          e.stopPropagation();
-          openCtxBranch(tid, row);
-        });
-        brow.querySelector('.ctx-branch-delete').addEventListener('click', e => {
-          e.preventDefault();
-          e.stopPropagation();
-          deleteBranch(row.id, tid);
-        });
-        tree.appendChild(brow);
+        tree.appendChild(buildCtxBranchRow(tid, row, 36 + (Math.max(1, row.depth || 1) - 1) * 18));
       });
     }
+  }
+
+  // Show/hide Context Ranking button if current chat is a project with linked folder
+  function updateCtxRankingButton(){
+    const btn = document.getElementById('ctx-ranking-btn');
+    const activePid = threadState[appState.currentThreadId]?.projectId;
+    const hasLinkedFolder = activePid && projects[activePid]?.path;
+    if (btn) btn.style.display = hasLinkedFolder ? '' : 'none';
+  }
+
+  // Close Context Ranking popover
+  function closeCtxRankingPopover(){
+    const popover = document.getElementById('ctx-ranking-popover');
+    if (popover) popover.style.display = 'none';
   }
 
   function renderCtxPanel(){
@@ -4510,6 +5502,16 @@ import { appState } from './core/state.js';
     folderRow.innerHTML = `<i class="ti ti-folder-open"></i>${esc(prefs.folderName || 'Workspace')}`;
     tree.appendChild(folderRow);
 
+    // project row — show when the current thread belongs to a project
+    const ctxProject = getActiveProject();
+    if (ctxProject) {
+      const projectRow = document.createElement('div');
+      projectRow.className = 'ctx-page';
+      projectRow.innerHTML = `<i class="ti ti-folder" style="font-size:12px;color:var(--text-3)"></i><span class="ctx-page-title">${esc(ctxProject.name || 'Project')}</span>`;
+      projectRow.addEventListener('click', () => { openProjectPanel(ctxProject.id); closeCtx(); });
+      tree.appendChild(projectRow);
+    }
+
     // pages (threads from sidebar) — when inside a thread, show only that thread's branches
     const allThreadBtns = $$('.sidebar [data-thread]');
     const threadBtns = appState.currentThreadId
@@ -4521,6 +5523,7 @@ import { appState } from './core/state.js';
       const branchRows = branchRowsForThread(tid, state);
       const pageRow = document.createElement('div');
       pageRow.className = 'ctx-page' + (tid === appState.currentThreadId ? ' active' : '');
+      if (ctxProject) pageRow.style.marginLeft = '32px';
       pageRow.innerHTML = `<i class="ti ti-file-text" style="font-size:12px;color:var(--text-3)"></i><span class="ctx-page-title">${esc(btn.dataset.title || btn.textContent.trim())}</span>${branchRows.length ? `<span class="ctx-count">${branchRows.length}</span>` : ''}`;
       pageRow.addEventListener('click', () => { renderThread(tid); closeCtx(); });
       tree.appendChild(pageRow);
@@ -4547,6 +5550,8 @@ import { appState } from './core/state.js';
       });
       pf.appendChild(list);
     }
+
+    updateCtxRankingButton();
   }
 
   // ---------- persistence (IndexedDB) — persistAll, loadPersistedState, deletedThreadIds, STATIC_THREAD_IDS live in core/store.js ----------
@@ -4671,22 +5676,32 @@ import { appState } from './core/state.js';
       searchPalette.classList.contains('show') ? closeSearch() : openSearch();
     }
   });
+  document.addEventListener('keydown', e => {
+    if ((e.metaKey || e.ctrlKey) && e.key === 'n'){
+      e.preventDefault();
+      startNewChat();
+    }
+  });
 
   // ---------- esc ----------
   document.addEventListener('keydown', e => {
     if (e.key === 'Escape'){
+      if (branchCanvas.classList.contains('show')){ closeBranchCanvas(); return; }
+      if (storyPlayer.classList.contains('show')){ closeStoryPlayer(); return; }
       if (searchPalette.classList.contains('show')){ closeSearch(); return; }
-      if (pendingDeleteConfirm){ closeDeleteConfirm(false); return; }
+      if (isDeleteConfirmOpen()){ cancelDeleteConfirm(); return; }
       if (projectPanel?.classList.contains('show')){ closeProjectPanel(); return; }
+      if (projectsView?.classList.contains('show')){ closeProjectsView(); return; }
       if (sidebar.classList.contains('open')){ setSidebar(false); return; }
+      if (ctxRankingPopover && ctxRankingPopover.style.display === 'block'){ closeCtxRankingPopover(); return; }
       if (modelMenu?.classList.contains('show')){ closeModelMenu(); return; }
       if (modeMenu?.classList.contains('show')){ closeModeMenu(); return; }
       if (menu.classList.contains('show')){ closeMenu(); return; }
       if (ctxPanel.classList.contains('show')){ closeCtx(); return; }
       if (prefsEl.classList.contains('show')){ closePrefs(); return; }
       hidePop();
-    } else if (e.key === 'Enter' && pendingDeleteConfirm && document.activeElement === deleteConfirmDelete){
-      closeDeleteConfirm(true);
+    } else if (e.key === 'Enter' && isDeleteConfirmOpen() && isDeleteConfirmDeleteFocused()){
+      acceptDeleteConfirm();
     }
   });
   window.addEventListener('beforeunload', saveCurrentThread);
@@ -4734,6 +5749,31 @@ import { appState } from './core/state.js';
     location.reload();
   });
 
+  // ---------- collapsible sidebar sections ----------
+  // Each `.side-section.collapsible` header toggles the sibling container that
+  // immediately follows it. Collapsed keys persist in localStorage. (The coding
+  // projects section manages its own collapse inside that view.)
+  function wireSidebarCollapse(){
+    const KEY = 'nl_side_collapsed_v1';
+    const read = () => { try { return JSON.parse(localStorage.getItem(KEY) || '{}') || {}; } catch { return {}; } };
+    const write = (o) => { try { localStorage.setItem(KEY, JSON.stringify(o)); } catch {} };
+    const state = read();
+    $$('.side-section.collapsible').forEach(head => {
+      const key = head.dataset.section;
+      const body = head.nextElementSibling;
+      if (!key || !body) return;
+      const apply = () => {
+        const collapsed = !!state[key];
+        body.classList.toggle('collapsed', collapsed);
+        head.classList.toggle('is-collapsed', collapsed);
+      };
+      apply();
+      head.querySelector('.side-sec-label')?.addEventListener('click', () => {
+        state[key] = !state[key]; write(state); apply();
+      });
+    });
+  }
+
   // ---------- init ----------
   registerView({
     id: 'chat',
@@ -4743,11 +5783,192 @@ import { appState } from './core/state.js';
     unmount: () => {},
   });
   initCodingProjects();   // registers the coding-projects view + wires its sidebar launcher
+  initNotes();            // registers the notes view + wires the Notes sidebar section
+  initFeedback();         // feedback/bug collector panel (⌘⇧B / ⌘Q)
+  wireSidebarCollapse();  // collapsible Projects / Threads / Recent branches sections
+
+  // ---------- tab strip (notlinear Redesign TASK-RD09) ----------
+  // Scoped to the views the registry already knows about (chat/notes/coding-projects) —
+  // Settings, Product story, Projects grid, and the branch canvas stay outside the tab
+  // system for this phase (see ADR-020). Revised same day (ADR-021) to be
+  // Notion-style: every open THREAD is its own tab (not one generic "Doc" tab),
+  // persisted across reloads in localStorage. Notes/Coding-projects/blank stay
+  // as singleton view-tabs. Nothing is pinned — closing the last tab reopens
+  // the main thread, matching the prototype's "closing the last tab opens a
+  // fresh one" behavior.
+  const TAB_STORAGE_KEY = 'nl_tabs_v1';
+  const NON_THREAD_TAB_META = {
+    notes: { label: 'Notes', icon: 'ti-notebook' },
+    'coding-projects': { label: 'Coding projects', icon: 'ti-folder-code' },
+    blank: { label: 'New tab', icon: 'ti-edit' },
+  };
+  const NOTE_TAB_PREFIX = 'note:';
+  let openTabs = [];              // [{id}] — id is a threadState key or a NON_THREAD_TAB_META key
+  let activeThreadTabId = null;   // which thread tab is active when the chat view is showing
+  let activeNoteTabId = null;     // concrete note tab (`note:<id>`) active when Notes is showing
+  let restoredActiveTabId = null;
+
+  function isNoteTabId(id){ return typeof id === 'string' && id.startsWith(NOTE_TAB_PREFIX); }
+  function noteIdFromTabId(id){ return id.slice(NOTE_TAB_PREFIX.length); }
+  function tabAlreadyOpen(id){ return openTabs.some(t => t.id === id); }
+  function pushTab(id){ if (!tabAlreadyOpen(id)) openTabs.push({ id }); }
+  function tabMeta(id){
+    if (isNoteTabId(id)) return getNoteTabMeta(noteIdFromTabId(id));
+    if (NON_THREAD_TAB_META[id]){
+      const m = NON_THREAD_TAB_META[id];
+      return { label: m.label, iconHtml: `<i class="ti ${m.icon}"></i>` };
+    }
+    const state = threadState[id];
+    const defaultGlyph = cycleGlyphHTML(THREAD_ICON_CYCLE, threadIconIndex(id), '<i class="ti ti-file-text"></i>', 14);
+    const iconHtml = state?.emoji ? glyphHTML(state.emoji, { fallback: defaultGlyph, size: 14 }) : defaultGlyph;
+    return { label: state ? resolveThreadTitle(state, 'Untitled chat') : id, iconHtml };
+  }
+  function currentActiveTabId(){
+    const v = getActiveViewId();
+    if (v === 'notes') return activeNoteTabId || getCurrentNotesTabId();
+    return v === 'chat' ? (activeThreadTabId || appState.currentThreadId) : v;
+  }
+  function saveTabs(){
+    try { localStorage.setItem(TAB_STORAGE_KEY, JSON.stringify({ tabs: openTabs.filter(t => t.id !== 'blank'), active: currentActiveTabId() })); } catch {}
+  }
+  function loadStoredTabs(){
+    try {
+      const raw = JSON.parse(localStorage.getItem(TAB_STORAGE_KEY) || 'null');
+      if (!raw || !Array.isArray(raw.tabs)) return [];
+      restoredActiveTabId = typeof raw.active === 'string' ? raw.active : null;
+      // Only drop tabs for threads explicitly deleted — NOT threads merely
+      // absent from in-memory threadState yet (a thread only gets persisted to
+      // IndexedDB on a real save-triggering event, not on every visit, so
+      // checking threadState[id] here would wrongly drop legitimately-open
+      // tabs for lightly-visited threads). renderThread() already lazily
+      // recreates a threadState entry for any id with a real sidebar row.
+      return raw.tabs.filter(t => t && typeof t.id === 'string' && (NON_THREAD_TAB_META[t.id] || isNoteTabId(t.id) || !deletedThreadIds.has(t.id)));
+    } catch { return []; }
+  }
+
+  // "blank" is a real registry view (singleton, like notes/coding-projects) so
+  // it reuses the exact same open/close/sync machinery — its mount/unmount
+  // just show/hide the doc pane vs. the empty-state picker.
+  registerView({
+    id: 'blank',
+    label: 'New tab',
+    icon: 'ti-edit',
+    mount: () => {
+      const dw = document.querySelector('.doc-wrap');
+      if (dw) dw.style.display = 'none';
+      if (composerWrap) composerWrap.style.display = 'none';
+      const bte = $('#blank-tab-empty'); if (bte) bte.style.display = 'flex';
+    },
+    unmount: () => {
+      const dw = document.querySelector('.doc-wrap');
+      if (dw) dw.style.display = '';
+      if (composerWrap) composerWrap.style.display = '';
+      const bte = $('#blank-tab-empty'); if (bte) bte.style.display = 'none';
+    },
+  });
+
+  function renderTabStrip(){
+    const activeId = currentActiveTabId();
+    const list = $('#tab-strip-list');
+    if (!list) return;
+    list.innerHTML = openTabs.map(t => {
+      const meta = tabMeta(t.id);
+      const active = t.id === activeId;
+      return `<button type="button" class="tab-item${active ? ' active' : ''}" data-tab-id="${esc(t.id)}"><span class="tab-item-icon">${meta.iconHtml}</span><span>${esc(meta.label)}</span><i class="ti ti-x tab-item-close" data-tab-close="${esc(t.id)}"></i></button>`;
+    }).join('');
+    list.querySelectorAll('.tab-item').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        if (e.target.closest('[data-tab-close]')) return;
+        openTab(btn.dataset.tabId);
+      });
+    });
+    list.querySelectorAll('[data-tab-close]').forEach(x => {
+      x.addEventListener('click', (e) => {
+        e.stopPropagation();
+        closeTab(x.dataset.tabClose);
+      });
+    });
+    // Deliberately NOT persisting here — renderTabStrip() also runs for the
+    // pre-restore boot paint (openTabs still []), and saving there would wipe
+    // a real saved list before loadStoredTabs() gets to read it. Persist only
+    // at the actual mutation points instead (syncThreadTab/onViewChange/closeTab).
+  }
+
+  // Called from inside renderThread() (single source of truth for "a thread
+  // became active") so every existing thread-open path — sidebar rows, search
+  // palette, New chat, project chats, breadcrumb nav — stays in sync for free.
+  function syncThreadTab(id){
+    pushTab(id);
+    activeThreadTabId = id;
+    renderTabStrip();
+    saveTabs();
+  }
+
+  function openTab(id){
+    if (isNoteTabId(id)){
+      pushTab(id);
+      activeNoteTabId = id;
+      openNoteInTab(noteIdFromTabId(id));
+      renderTabStrip();
+      saveTabs();
+    }
+    else if (id === 'notes') { pushTab(id); activeNoteTabId = null; openNotesIndex(); }
+    else if (NON_THREAD_TAB_META[id]) { pushTab(id); mountView(id); }
+    else renderThread(id); // syncs the tab itself via syncThreadTab
+  }
+  registerChatOpener(openTab); // lets other feature modules (Notes @-mentions) open a chat as a tab
+  registerNoteOpener(id => openTab(NOTE_TAB_PREFIX + id)); // lets Notes open/focus individual pages as tabs
+  registerTabRefresher(() => { renderTabStrip(); saveTabs(); });
+
+  function closeTab(id){
+    const wasActive = id === currentActiveTabId();
+    openTabs = openTabs.filter(t => t.id !== id);
+    if (!wasActive){ renderTabStrip(); saveTabs(); return; }
+    const next = openTabs[openTabs.length - 1];
+    openTab(next ? next.id : 'doc-main');
+  }
+
+  function removeTabWithoutFallback(id){
+    openTabs = openTabs.filter(t => t.id !== id);
+    renderTabStrip();
+    saveTabs();
+  }
+
+  onViewChange((id) => {
+    if (id === 'chat') return; // handled by syncThreadTab via renderThread itself
+    if (id === 'notes'){
+      const noteTabId = getCurrentNotesTabId();
+      activeNoteTabId = noteTabId === 'notes' ? null : noteTabId;
+      pushTab(noteTabId);
+      renderTabStrip();
+      saveTabs();
+      return;
+    }
+    pushTab(id);
+    renderTabStrip();
+    saveTabs();
+  });
+  // "+" opens a blank tab (matches the prototype: + always adds a blank tab,
+  // which itself offers New chat/Existing chat/Projects/Coding projects/Notes
+  // — not a dropdown menu).
+  $('#tab-strip-add')?.addEventListener('click', () => openTab('blank'));
+  $('#bte-new-chat')?.addEventListener('click', () => { removeTabWithoutFallback('blank'); startNewChat(); });
+  $('#bte-existing-chat')?.addEventListener('click', () => { closeTab('blank'); openSearch(); });
+  $('#bte-projects')?.addEventListener('click', () => { closeTab('blank'); openProjectsView(); });
+  $('#bte-coding-projects')?.addEventListener('click', () => { removeTabWithoutFallback('blank'); mountView('coding-projects'); });
+  $('#bte-notes')?.addEventListener('click', () => { removeTabWithoutFallback('blank'); openTab('notes'); });
+  renderTabStrip();
 
   (async () => {
     await loadPersistedState({ renderPrefsUI, resolveThreadTitle, addThreadButton, updateThreadButtonTitle, refreshThreadUnreadIndicators, renderProjects }); // merge saved state into threadState (async IndexedDB read)
+    refreshAllThreadGlyphs();   // apply any saved per-thread emoji to the sidebar rows
+    loadMindGarden().then(() => { refreshAllThreadGlyphs(); renderProjects(); }).catch(() => {});   // any rows with "icon:" glyphs were just rendered with the default fallback — rerender once SVGs are available
     renderModelUI();
-    renderThread(appState.currentThreadId, true); // render without overwriting with empty DOM
+    openTabs = loadStoredTabs(); // restore previously-open tabs now that threadState is populated
+    await ensureNotesLoadedForTabs();
+    openTabs = openTabs.filter(t => !isNoteTabId(t.id) || noteExists(noteIdFromTabId(t.id)));
+    renderThread(appState.currentThreadId, true); // render without overwriting with empty DOM; also syncs its own tab
+    if (restoredActiveTabId && restoredActiveTabId !== currentActiveTabId() && openTabs.some(t => t.id === restoredActiveTabId)) openTab(restoredActiveTabId);
     renderCtxPanel();
     checkForLocalUpdate();
     setInterval(checkForLocalUpdate, 5000);
@@ -4759,4 +5980,3 @@ import { appState } from './core/state.js';
     }, 400);
     mountView('chat');
   })();
-

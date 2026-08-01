@@ -10,11 +10,17 @@
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.0.0/dist/tabler-icons.min.css">
 <link rel="icon" href="logo.svg">
 <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js" defer></script>
+<!-- Notes v2 (TASK-NT04): syntax highlighting (JS only, no theme CSS — colors come from tokens.css) + LaTeX rendering -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+<script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js" defer></script>
+<script src="https://cdn.jsdelivr.net/npm/@highlightjs/cdn-assets@11.9.0/highlight.min.js" defer></script>
 <script>(function(){var t=localStorage.getItem('nl_theme')||'light';if(t==='light'||t==='grey')document.documentElement.setAttribute('data-theme',t);})();</script>
 <link rel="stylesheet" href="styles/tokens.css">
 <link rel="stylesheet" href="styles/base.css">
 <link rel="stylesheet" href="styles/chat.css">
 <link rel="stylesheet" href="styles/coding-projects.css">
+<link rel="stylesheet" href="styles/notes.css">
+<link rel="stylesheet" href="styles/feedback.css">
 </head>
 <body>
 
@@ -40,23 +46,37 @@
       <button class="ic-btn side-close" id="close-sidebar" title="Close left pane"><i class="ti ti-layout-sidebar-left-collapse"></i></button>
     </div>
 
+    <div class="side-scroll">
     <button class="side-item" id="search-btn"><i class="ti ti-search"></i><span>Search</span><span style="margin-left:auto;font-family:var(--mono);font-size:10px;color:var(--text-3)">⌘K</span></button>
-    <button class="side-item" id="new-chat"><i class="ti ti-edit"></i><span>New chat</span></button>
+    <button class="new-chat-btn" id="new-chat"><span class="new-chat-icon"><i class="ti ti-edit"></i></span><span class="new-chat-label">New chat</span><span class="new-chat-kbd">⌘N</span></button>
 
-    <div class="side-section side-section-row">Projects<button class="side-section-add" id="new-project" type="button" title="New project"><i class="ti ti-plus"></i></button></div>
-    <div id="projects-list"></div>
+    <div class="side-section side-section-row collapsible" data-section="projects"><span class="side-sec-label"><i class="ti ti-chevron-down side-caret"></i>Projects</span><span style="display:flex;gap:2px"><button class="side-section-add" id="projects-view-open" type="button" title="View all projects"><i class="ti ti-layout-grid"></i></button><button class="side-section-add" id="new-project" type="button" title="New project"><i class="ti ti-plus"></i></button></span></div>
+    <div id="projects-list" class="side-collapse-body"></div>
 
     <div class="side-section side-section-row cp-side-toggle" id="cp-side-head"><span><i class="ti ti-chevron-down cp-caret"></i>coding projects</span><button class="side-section-add" id="cp-add-project" type="button" title="Add coding project"><i class="ti ti-plus"></i></button></div>
     <div id="cp-side-list"></div>
 
-    <div class="side-section">Threads</div>
-    <div class="side-item thread-row active" data-thread="doc-main" data-title="Non-linear chat system"><button type="button" class="thread-open"><i class="ti ti-file-text"></i><span class="thread-title">Non-linear chat system</span></button></div>
-    <div class="side-item thread-row" data-thread="pricing" data-title="Pricing research"><button type="button" class="thread-open"><i class="ti ti-file"></i><span class="thread-title">Pricing research</span></button></div>
-    <div class="side-item thread-row" data-thread="onboarding" data-title="Onboarding flow review"><button type="button" class="thread-open"><i class="ti ti-file"></i><span class="thread-title">Onboarding flow review</span></button></div>
-    <div class="side-item thread-row" data-thread="planning" data-title="Q3 planning notes"><button type="button" class="thread-open"><i class="ti ti-file"></i><span class="thread-title">Q3 planning notes</span></button></div>
+    <div class="side-section side-section-row collapsible" data-section="threads"><span class="side-sec-label"><i class="ti ti-chevron-down side-caret"></i>Threads</span></div>
+    <div id="threads-list" class="side-collapse-body">
+      <div class="side-item thread-row active" data-thread="doc-main" data-title="Non-linear chat system" data-icon="ti-file-text"><button type="button" class="thread-open"><span class="thread-emoji" role="button" tabindex="0" title="Set emoji"><i class="ti ti-file-text"></i></span><span class="thread-title">Non-linear chat system</span></button></div>
+      <div class="side-item thread-row" data-thread="pricing" data-title="Pricing research" data-icon="ti-file"><button type="button" class="thread-open"><span class="thread-emoji" role="button" tabindex="0" title="Set emoji"><i class="ti ti-file"></i></span><span class="thread-title">Pricing research</span></button></div>
+      <div class="side-item thread-row" data-thread="onboarding" data-title="Onboarding flow review" data-icon="ti-file"><button type="button" class="thread-open"><span class="thread-emoji" role="button" tabindex="0" title="Set emoji"><i class="ti ti-file"></i></span><span class="thread-title">Onboarding flow review</span></button></div>
+      <div class="side-item thread-row" data-thread="planning" data-title="Q3 planning notes" data-icon="ti-file"><button type="button" class="thread-open"><span class="thread-emoji" role="button" tabindex="0" title="Set emoji"><i class="ti ti-file"></i></span><span class="thread-title">Q3 planning notes</span></button></div>
+    </div>
 
-    <div class="side-section">Recent branches</div>
-    <div class="recent-branches" id="recent-branches"></div>
+    <div class="side-section side-section-row" id="nt-side-head"><span><i class="ti ti-chevron-down nt-caret"></i>Notes</span><div class="nt-side-head-actions"><button class="side-section-add" id="nt-side-clear" type="button" title="Delete all notes" aria-label="Delete all notes"><i class="ti ti-trash"></i></button><button class="side-section-add" id="nt-side-add" type="button" title="New note" aria-label="New note"><i class="ti ti-plus"></i></button></div></div>
+    <div id="nt-side-tree"></div>
+
+    <!-- notlinear Redesign TASK-RD06 follow-up: sidebar entry point for Product
+         story — was reachable only via Settings > Changelog, not discoverable. -->
+    <div class="side-section">Updates</div>
+    <div style="display:flex;flex-direction:column;gap:2px;margin:2px 0 14px">
+      <button type="button" class="side-item" id="updates-story-open"><i class="ti ti-sparkles"></i><span>Product story</span></button>
+    </div>
+
+    <div class="side-section side-section-row collapsible" data-section="recent"><span class="side-sec-label"><i class="ti ti-chevron-down side-caret"></i>Recent branches</span></div>
+    <div class="recent-branches side-collapse-body" id="recent-branches"></div>
+    </div>
 
     <div class="side-foot" id="open-prefs">
       <div class="avatar">A</div>
@@ -66,6 +86,12 @@
   </aside>
 
   <div class="main">
+    <!-- Tab strip (notlinear Redesign TASK-RD09) — Doc is pinned/non-closable;
+         Notes/Coding Projects can be opened as additional closable tabs. -->
+    <div class="tab-strip" id="tab-strip">
+      <div class="tab-strip-list" id="tab-strip-list"></div>
+      <button type="button" class="tab-strip-add" id="tab-strip-add" title="New tab"><i class="ti ti-plus"></i></button>
+    </div>
     <div class="topbar" id="topbar">
       <button class="ic-btn" id="sidebar-toggle" title="Open left pane" aria-label="Open left pane" aria-expanded="false"><i class="ti ti-layout-sidebar-left-expand"></i></button>
       <div class="crumbs">
@@ -73,10 +99,25 @@
       </div>
     </div>
 
+    <!-- Blank-tab empty state (notlinear Redesign TASK-RD09 follow-up) — shown
+         by the "blank" registry view when a new tab is opened via the "+" in
+         the tab strip. -->
+    <div id="blank-tab-empty">
+      <div class="bte-icon"><i class="ti ti-edit"></i></div>
+      <div class="bte-hint">Start typing to begin, or pick an option below</div>
+      <div class="bte-actions">
+        <button type="button" class="bte-btn" id="bte-new-chat"><i class="ti ti-message-circle-plus"></i><span>New chat</span></button>
+        <button type="button" class="bte-btn" id="bte-existing-chat"><i class="ti ti-arrow-forward-up"></i><span>Existing chat</span></button>
+        <button type="button" class="bte-btn" id="bte-projects"><i class="ti ti-folder-plus"></i><span>Projects</span></button>
+        <button type="button" class="bte-btn" id="bte-coding-projects"><i class="ti ti-folder-code"></i><span>Coding projects</span></button>
+        <button type="button" class="bte-btn" id="bte-notes"><i class="ti ti-notebook"></i><span>Notes</span></button>
+      </div>
+    </div>
+
     <div class="doc-wrap">
       <article class="doc" id="doc" contenteditable="true" spellcheck="false">
         <p class="eyebrow" contenteditable="false">Working draft · Updated 2h ago</p>
-        <h1>Non-linear chat <span class="accent">for research</span></h1>
+        <div class="doc-title-row"><span class="doc-title-emoji" id="doc-title-emoji" role="button" tabindex="0" title="Set emoji" contenteditable="false"><i class="ti ti-mood-smile"></i></span><h1 id="doc-h1">Non-linear chat <span class="accent">for research</span></h1></div>
         <div class="meta" contenteditable="false">
           <div id="meta-dynamic">
             <div class="item"><i class="ti ti-user"></i><span>Alex Chen</span></div>
@@ -84,9 +125,12 @@
             <div class="item"><i class="ti ti-git-branch" style="color:var(--accent)"></i><span>2 branches</span></div>
           </div>
           <div class="meta-actions">
+            <button class="ic-btn" id="doc-emoji-btn" title="Insert emoji"><i class="ti ti-mood-smile"></i></button>
             <button class="ic-btn" id="ctx-toggle" title="Context &amp; files"><i class="ti ti-sitemap"></i></button>
             <button class="ic-btn" id="highlight-toggle" title="Highlights"><i class="ti ti-highlight"></i></button>
+            <button class="ic-btn" id="branch-canvas-toggle" title="Branches — canvas view"><i class="ti ti-git-branch"></i></button>
             <button class="ic-btn" id="thread-map-toggle" title="Thread map"><i class="ti ti-map-2"></i></button>
+            <button class="ic-btn" id="ctx-ranking-btn" title="Context ranking" style="display:none"><i class="ti ti-brain"></i></button>
           </div>
         </div>
 
@@ -160,13 +204,19 @@
 <div class="menu" id="attach-menu" style="min-width:160px">
   <button data-act="files"><i class="ti ti-file-plus"></i><span>Add files</span></button>
   <button data-act="folder"><i class="ti ti-folder-plus"></i><span>Add folder</span></button>
+  <button data-act="branch"><i class="ti ti-git-branch"></i><span>Attach branch</span></button>
 </div>
 
 <!-- model picker -->
 <div class="menu" id="model-menu" role="menu" aria-label="Select model" style="min-width:210px">
+  <button data-model="opus" role="menuitem">
+    <i class="ti ti-crown"></i>
+    <span>Opus 4.8<span class="desc">Best reasoning</span></span>
+    <i class="ti ti-check model-check"></i>
+  </button>
   <button data-model="sonnet" role="menuitem">
     <i class="ti ti-sparkles"></i>
-    <span>Sonnet 4.6<span class="desc">Best quality</span></span>
+    <span>Sonnet 4.6<span class="desc">Best balance</span></span>
     <i class="ti ti-check model-check"></i>
   </button>
   <button data-model="haiku" role="menuitem">
@@ -210,13 +260,13 @@
   <div class="menu-sep"></div>
   <div class="menu-thinking-row">
     <span>Extended thinking</span>
-    <label class="thinking-switch" title="Deeper reasoning before answering. Sonnet and DeepSeek R1 only.">
+    <label class="thinking-switch" title="Deeper reasoning before answering. Opus, Sonnet, and DeepSeek R1 only.">
       <input type="checkbox" id="thinking-toggle">
       <span class="sw-track"></span>
       <span class="sw-thumb"></span>
     </label>
   </div>
-  <p class="menu-thinking-note" id="thinking-note">Deeper reasoning. Adds 3–8s. Sonnet only.</p>
+  <p class="menu-thinking-note" id="thinking-note">Deeper reasoning. Adds 3–8s. Opus and Sonnet only.</p>
 </div>
 
 <!-- mode picker -->
@@ -325,7 +375,10 @@
       <div id="ctx-tree"></div>
     </div>
     <div class="ctx-section">
-      <div class="ctx-label">Page files</div>
+      <div class="ctx-label" style="display:flex;align-items:center;justify-content:space-between">
+        <span>Page files</span>
+        <button id="ctx-add-file" class="ctx-add-btn" title="Add files to this page"><i class="ti ti-file-plus"></i></button>
+      </div>
       <div id="ctx-page-files"></div>
     </div>
   </div>
@@ -352,6 +405,25 @@
   </div>
   <div class="tm-body" id="thread-map-body"></div>
 </aside>
+
+<!-- Context Ranking popover -->
+<div class="popover" id="ctx-ranking-popover" style="display:none">
+  <div class="popover-content">
+    <div class="popover-header">
+      <h4>Context Ranking</h4>
+      <button class="ic-btn" id="ctx-ranking-close"><i class="ti ti-x"></i></button>
+    </div>
+    <div class="popover-body">
+      <select class="input" id="ctx-ranking-mode" style="width:100%">
+        <option value="inherit">Global setting</option>
+        <option value="none">Off</option>
+        <option value="keywords">Keywords only</option>
+        <option value="deepseek">DeepSeek (smart)</option>
+      </select>
+      <p class="prefs-help" style="margin-top:8px">Override for this chat only.</p>
+    </div>
+  </div>
+</div>
 
 <!-- Search palette -->
 <div class="search-scrim" id="search-scrim"></div>
@@ -407,7 +479,8 @@
     <div class="prefs-section">
       <div class="prefs-label">Default model</div>
       <div class="seg row2">
-        <button class="on" data-v="sonnet"><span class="t">Sonnet 4.6</span>Best quality.</button>
+        <button data-v="opus"><span class="t">Opus 4.8</span>Best reasoning.</button>
+        <button class="on" data-v="sonnet"><span class="t">Sonnet 4.6</span>Best balance.</button>
         <button data-v="haiku"><span class="t">Haiku 4.5</span>Cheap, fast.</button>
         <button data-v="deepseek"><span class="t">DeepSeek Chat</span>Fast, cheap.</button>
         <button data-v="deepseek-r1"><span class="t">DeepSeek R1</span>Deep thinking.</button>
@@ -422,7 +495,7 @@
       <div id="api-key-list"></div>
       <select class="input" id="api-provider" style="margin-bottom:6px">
         <option value="anthropic">Anthropic (Claude)</option>
-        <option value="deepseek">DeepSeek (branches)</option>
+        <option value="deepseek">DeepSeek (branches + context ranking)</option>
         <option value="serper">Serper (Web Search)</option>
         <option value="firecrawl">Firecrawl (Web Scrape)</option>
         <option value="openai">OpenAI (GPT)</option>
@@ -434,6 +507,14 @@
         <button class="connect-btn" id="api-key-add">Connect</button>
       </div>
       <p class="prefs-help">Stored locally in your browser. Keys are only sent to their respective APIs (Anthropic, Serper, Firecrawl, etc.).</p>
+    </div>
+    <div class="prefs-section">
+      <div class="prefs-label">Context Ranking</div>
+      <select class="input" id="ranking-llm-select">
+        <option value="none">Keywords only (free, instant)</option>
+        <option value="deepseek">DeepSeek — keyword gen + rerank (~$0.0003/query)</option>
+      </select>
+      <p class="prefs-help">Controls how files are selected when chatting in a project with a linked folder. DeepSeek requires a DeepSeek API key.</p>
     </div>
     <div class="prefs-section">
       <div class="prefs-label">Web Search (SearXNG)</div>
@@ -457,6 +538,22 @@
       <p class="prefs-help">Reads from <code>CHANGELOG.md</code> when the app can access the local file.</p>
     </div>
     <div class="prefs-section">
+      <div class="prefs-label">Feedback</div>
+      <button class="prefs-action" id="fb-log-toggle" type="button" aria-expanded="false" aria-controls="fb-log-view">
+        <i class="ti ti-bug"></i>
+        <span class="action-text">View bugs &amp; ideas</span>
+        <i class="ti ti-chevron-down"></i>
+      </button>
+      <div class="changelog-view" id="fb-log-view" hidden>
+        <div class="changelog-toolbar">
+          <span class="changelog-source" id="fb-log-count">Not loaded</span>
+          <button class="changelog-refresh" id="fb-log-refresh" type="button" title="Reload feedback"><i class="ti ti-refresh"></i></button>
+        </div>
+        <div class="fb-log-list" id="fb-log-list"></div>
+      </div>
+      <p class="prefs-help">Logged anywhere with ⌘⇧B. Saved to <code>feedback/FEEDBACK.md</code> for the coding agent.</p>
+    </div>
+    <div class="prefs-section">
       <div class="prefs-label">Runtime logs</div>
       <button class="prefs-action" id="logs-toggle" type="button" aria-expanded="false" aria-controls="logs-view">
         <i class="ti ti-terminal-2"></i>
@@ -477,6 +574,62 @@
   </div>
 </aside>
 
+<!-- Product story — fullscreen player (notlinear Redesign TASK-RD06) -->
+<div id="story-player">
+  <div class="story-player-segs" id="story-player-segs"></div>
+  <div class="story-player-top">
+    <div class="story-player-meta" id="story-player-meta"></div>
+    <button type="button" class="story-player-close" id="story-player-close"><i class="ti ti-x"></i></button>
+  </div>
+  <div class="story-player-body">
+    <button type="button" class="story-player-nav prev" id="story-player-prev"><i class="ti ti-chevron-left"></i></button>
+    <div class="story-player-chapter" id="story-player-chapter"></div>
+    <button type="button" class="story-player-nav next" id="story-player-next"><i class="ti ti-chevron-right"></i></button>
+  </div>
+</div>
+
+<!-- Spatial branch canvas (notlinear Redesign TASK-RD08) — read-only viz over
+     the existing `branches` state; node click re-focuses via openBranch({bid}). -->
+<div id="branch-canvas">
+  <div class="bc-bar">
+    <button class="ic-btn" id="bc-close-left" title="Back" aria-label="Back"><i class="ti ti-arrow-left"></i></button>
+    <div class="bc-divider"></div>
+    <div class="bc-title"><span class="bc-title-ico"><i class="ti ti-git-branch"></i></span><span id="bc-title-text">Branches</span><span class="bc-count" id="bc-count"></span></div>
+    <div style="flex:1"></div>
+    <button class="ic-btn" id="bc-close" title="Close" aria-label="Close"><i class="ti ti-x"></i></button>
+  </div>
+  <div class="bc-viewport" id="bc-viewport">
+    <div class="bc-plane" id="bc-plane">
+      <svg class="bc-edges" id="bc-edges"></svg>
+      <div id="bc-nodes"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Projects — full grid view (notlinear Redesign TASK-RD07), reuses .project-screen -->
+<div class="project-screen" id="projects-view">
+  <div class="project-screen-bar">
+    <button class="ic-btn" id="projects-view-close" title="Back" aria-label="Back"><i class="ti ti-arrow-left"></i></button>
+    <div class="project-screen-crumb"><i class="ti ti-folder"></i><span>Projects</span></div>
+  </div>
+  <div class="project-screen-scroll">
+    <div class="project-screen-inner">
+      <div class="pv-toolbar">
+        <div class="pv-search"><i class="ti ti-search"></i><input id="pv-search" type="text" placeholder="Search projects…" autocomplete="off" /></div>
+        <div class="pv-sort-wrap">
+          <button type="button" class="pv-sort-btn" id="pv-sort-btn">Sort by <span id="pv-sort-label">Last updated</span><i class="ti ti-chevron-down"></i></button>
+          <div class="pv-sort-menu" id="pv-sort-menu" hidden>
+            <button type="button" data-v="updated">Last updated</button>
+            <button type="button" data-v="name">Name</button>
+          </div>
+        </div>
+        <button type="button" class="pv-new-btn" id="pv-new-project"><i class="ti ti-plus"></i>New project</button>
+      </div>
+      <div class="pv-grid" id="pv-grid"></div>
+    </div>
+  </div>
+</div>
+
 <div class="project-screen" id="project-panel">
   <div class="project-screen-bar">
     <button class="ic-btn" id="project-panel-close" title="Back" aria-label="Back"><i class="ti ti-arrow-left"></i></button>
@@ -489,29 +642,39 @@
         <button class="project-primary-btn" id="project-new-chat" type="button"><i class="ti ti-edit"></i> New chat</button>
         <button class="project-ghost-btn" id="project-add-existing" type="button"><i class="ti ti-plus"></i> Add existing chat</button>
       </div>
-      <div class="project-grid">
-        <section class="project-col">
-          <div class="project-col-head">Chats in this project</div>
+      <!-- Three stacked sections (notlinear Redesign TASK-RD07), was a
+           2-column grid. "Linked folder" controls folded into Project files
+           per the prototype's own layout (its Files section header shows the
+           linked-folder path inline) — #project-folder-card wasn't referenced
+           by JS (only its children were), so nothing to repoint. -->
+      <div class="project-sections">
+        <section class="project-card">
+          <div class="project-card-head">Chats in this project</div>
           <div id="project-existing-list" hidden></div>
           <div id="project-chats-list"></div>
         </section>
-        <aside class="project-side">
-          <div class="project-card">
-            <div class="project-card-head">Project rules</div>
-            <textarea class="input textarea" id="project-rules-input" rows="6" placeholder="Custom instructions the AI follows for every chat in this project, e.g. 'Answer in British English. Always cite sources. Prefer TypeScript examples.'"></textarea>
-            <p class="prefs-help">Applied to every chat in this project, across the main thread and branches.</p>
+        <section class="project-card">
+          <div class="project-card-head">Project rules</div>
+          <textarea class="input textarea" id="project-rules-input" rows="6" placeholder="Custom instructions the AI follows for every chat in this project, e.g. 'Answer in British English. Always cite sources. Prefer TypeScript examples.'"></textarea>
+          <p class="prefs-help">Applied to every chat in this project, across the main thread and branches.</p>
+        </section>
+        <section class="project-card">
+          <div class="project-card-head" style="display:flex;align-items:center;gap:8px">
+            <span style="flex:1">Project files</span>
+            <span id="project-folder-display" style="display:none;font-family:var(--mono);font-size:10px;text-transform:none;letter-spacing:normal;color:var(--text-2);word-break:break-all"></span>
           </div>
-          <div class="project-card">
-            <div class="project-card-head">Project files</div>
-            <div class="attach-row" id="project-files-row"></div>
+          <div class="attach-row" id="project-files-row"></div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">
             <button class="connect-btn" id="project-add-file" type="button"><i class="ti ti-file-plus"></i> Add files</button>
-            <p class="prefs-help">Shared knowledge for every chat in this project. Text and PDF contents are sent to the AI as reference material.</p>
+            <button class="connect-btn" id="project-link-folder" type="button"><i class="ti ti-folder-open"></i> Link folder…</button>
+            <button class="connect-btn" id="project-unlink-folder" type="button" style="display:none"><i class="ti ti-unlink"></i> Unlink</button>
           </div>
-          <div class="project-card">
-            <button class="prefs-action project-delete-btn" id="project-delete" type="button"><i class="ti ti-trash"></i><span class="action-text">Delete project</span></button>
-            <p class="prefs-help">The project's chats are kept and moved back to Threads.</p>
-          </div>
-        </aside>
+          <p class="prefs-help">Shared knowledge for every chat in this project — uploaded files, plus an optional linked folder whose matching files are added as context automatically.</p>
+        </section>
+        <section class="project-card">
+          <button class="prefs-action project-delete-btn" id="project-delete" type="button"><i class="ti ti-trash"></i><span class="action-text">Delete project</span></button>
+          <p class="prefs-help">The project's chats are kept and moved back to Threads.</p>
+        </section>
       </div>
     </div>
   </div>
@@ -537,6 +700,73 @@
     <div class="cp-drawer-body" id="cp-drawer-body"></div>
   </aside>
 </div>
+
+<!-- Notes overlay (full-screen, notlinear notebook view) -->
+<div class="nt-screen" id="nt-screen">
+  <div class="nt-topbar" id="nt-topbar">
+    <div class="nt-crumbs" id="nt-crumbs"></div>
+    <button type="button" class="nt-icbtn" id="nt-export-btn" title="Export page + subpages as Markdown" aria-label="Export as Markdown"><i class="ti ti-download"></i></button>
+  </div>
+  <div class="nt-pgwrap"><div class="nt-pg" id="nt-page"></div></div>
+</div>
+
+<!-- Notes slash menu (caret-anchored) -->
+<div id="nt-slash" tabindex="-1"></div>
+
+<!-- Notes @-mention menu (caret-anchored) -->
+<div id="nt-mention" tabindex="-1"></div>
+
+<!-- Notes floating format toolbar -->
+<div id="nt-ftoolbar" role="toolbar">
+  <button data-cmd="bold" title="Bold (⌘B)"><b>B</b></button>
+  <button data-cmd="italic" title="Italic (⌘I)"><i>I</i></button>
+  <button data-cmd="underline" title="Underline (⌘U)"><u>U</u></button>
+  <button data-cmd="strike" title="Strikethrough"><s>S</s></button>
+  <button data-cmd="code" title="Code"><i class="ti ti-code"></i></button>
+  <button data-cmd="eq" title="Inline equation">Σ</button>
+  <div class="sep"></div>
+  <div class="picker-wrap">
+    <button data-cmd="color" title="Color"><span style="color:var(--tx-blue);font-weight:700">A</span><i class="ti ti-chevron-down" style="font-size:11px"></i></button>
+    <div class="picker" id="nt-picker-color">
+      <div class="section-lab">Color</div>
+      <div class="row" data-color=""><div class="sw">A</div><span>Default</span></div>
+      <div class="row" data-color="red"><div class="sw" style="color:var(--tx-red)">A</div><span>Red</span></div>
+      <div class="row" data-color="orange"><div class="sw" style="color:var(--tx-orange)">A</div><span>Orange</span></div>
+      <div class="row" data-color="green"><div class="sw" style="color:var(--tx-green)">A</div><span>Green</span></div>
+      <div class="row" data-color="blue"><div class="sw" style="color:var(--tx-blue)">A</div><span>Blue</span></div>
+      <div class="row" data-color="purple"><div class="sw" style="color:var(--tx-purple)">A</div><span>Purple</span></div>
+      <div class="section-lab">Highlight</div>
+      <div class="row" data-hl=""><div class="sw">⌀</div><span>None</span></div>
+      <div class="row" data-hl="yellow"><div class="sw" style="background:var(--hl-yellow)"></div><span>Yellow</span></div>
+      <div class="row" data-hl="blue"><div class="sw" style="background:var(--hl-blue)"></div><span>Blue</span></div>
+      <div class="row" data-hl="green"><div class="sw" style="background:var(--hl-green)"></div><span>Green</span></div>
+      <div class="row" data-hl="pink"><div class="sw" style="background:var(--hl-pink)"></div><span>Pink</span></div>
+      <div class="row" data-hl="gray"><div class="sw" style="background:var(--hl-gray)"></div><span>Gray</span></div>
+    </div>
+  </div>
+  <div class="picker-wrap">
+    <button data-cmd="turn" title="Turn into"><i class="ti ti-transform"></i><span style="font-size:11px">Turn</span></button>
+    <div class="picker" id="nt-picker-turn">
+      <div class="section-lab">Turn into</div>
+      <div class="row" data-turn="text"><div class="sw"><i class="ti ti-typography"></i></div><span>Text</span></div>
+      <div class="row" data-turn="h1"><div class="sw"><b>H1</b></div><span>Heading 1</span></div>
+      <div class="row" data-turn="h2"><div class="sw"><b>H2</b></div><span>Heading 2</span></div>
+      <div class="row" data-turn="h3"><div class="sw"><b>H3</b></div><span>Heading 3</span></div>
+      <div class="row" data-turn="bullet"><div class="sw"><i class="ti ti-list"></i></div><span>Bulleted</span></div>
+      <div class="row" data-turn="numbered"><div class="sw"><i class="ti ti-list-numbers"></i></div><span>Numbered</span></div>
+      <div class="row" data-turn="todo"><div class="sw"><i class="ti ti-square-check"></i></div><span>To-do</span></div>
+      <div class="row" data-turn="toggle"><div class="sw"><i class="ti ti-triangle-inverted-filled" style="font-size:8px"></i></div><span>Toggle</span></div>
+      <div class="row" data-turn="quote"><div class="sw"><i class="ti ti-quote"></i></div><span>Quote</span></div>
+      <div class="row" data-turn="callout"><div class="sw"><i class="ti ti-bulb"></i></div><span>Callout</span></div>
+    </div>
+  </div>
+  <div class="sep"></div>
+  <button data-cmd="link" title="Link"><i class="ti ti-link"></i></button>
+  <button data-cmd="branch" title="Branch"><i class="ti ti-git-branch"></i></button>
+</div>
+
+<!-- Notes branch panel (floating right-side, replaces inline comments) -->
+<div id="nt-branch-panel"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/dexie@4/dist/dexie.min.js"></script>
 <script type="module" src="./app.js"></script>

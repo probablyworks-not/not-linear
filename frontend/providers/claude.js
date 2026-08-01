@@ -10,6 +10,34 @@ import {
 } from '../core/api-client.js';
 import { executeTool, toolResultFallbackMarkdown, modelLabelFromId } from './tools.js';
 
+function modelIdForClaude(pref){
+  if (pref === 'opus') return 'claude-opus-4-8';
+  if (pref === 'haiku') return 'claude-haiku-4-5-20251001';
+  return 'claude-sonnet-4-6';
+}
+
+function cleanMessages(messages){
+  return messages.map(msg => {
+    const { attachments, ...cleaned } = msg;
+    return cleaned;
+  });
+}
+
+// Session-scoped cache for fetch_url results to avoid redundant Jina calls
+const _fetchUrlCache = new Map();
+
+// Wrapper around executeTool that caches fetch_url results by URL
+async function executeToolCached(name, input, signal){
+  if (name === 'fetch_url' && input.url) {
+    const cached = _fetchUrlCache.get(input.url);
+    if (cached) return cached;
+    const result = await executeTool(name, input, signal);
+    _fetchUrlCache.set(input.url, result);
+    return result;
+  }
+  return executeTool(name, input, signal);
+}
+
 export async function callClaude({ messages, systemPrompt, tools, onDelta, onThinking, onDone, onError, onStatus, onAbort, onController }){
   const controller = new AbortController();
   appState._activeController = controller;
@@ -24,8 +52,9 @@ export async function callClaude({ messages, systemPrompt, tools, onDelta, onThi
     if (onAbort) onAbort();
   };
 
-  const model = appState.prefs.model === 'haiku' ? 'claude-haiku-4-5-20251001' : 'claude-sonnet-4-6';
-  const useThinking = appState.prefs.thinking && appState.prefs.model !== 'haiku';
+  const model = modelIdForClaude(appState.prefs.model);
+  const supportsThinking = appState.prefs.model === 'opus' || appState.prefs.model === 'sonnet';
+  const useThinking = appState.prefs.thinking && supportsThinking;
   const thinkingBudget = 8000;
   const llmTrace = beginBackendTrace('llm', {
     provider:'anthropic',
@@ -34,7 +63,7 @@ export async function callClaude({ messages, systemPrompt, tools, onDelta, onThi
     tools: tools.map(t => t.name),
     thinking: useThinking,
   });
-  let currentMessages = [...messages];
+  let currentMessages = cleanMessages(messages);
   let totalIn = 0, totalOut = 0, fullText = '';
   let requestCount = 0;
   const finishLlm = (phase, meta = {}) => endBackendTrace(llmTrace, phase, {
@@ -184,25 +213,43 @@ export async function callClaude({ messages, systemPrompt, tools, onDelta, onThi
 
     if (signal.aborted){ reportAbort(); return; }
     currentMessages = [...currentMessages, { role:'assistant', content: assistantContent }];
-    const toolResults = [];
-    for (const b of assistantContent){
-      if (b.type !== 'tool_use') continue;
-      if (signal.aborted){ reportAbort(); return; }
-      const label = b.name === 'wikipedia_search' ? `Searching Wikipedia for "${b.input.query}"…`
-        : b.name === 'serper_search' ? `Searching Google for "${b.input.query}"…`
-        : b.name === 'web_search' ? `Searching for "${b.input.query}"…`
-        : b.name === 'firecrawl_scrape' ? `Scraping ${b.input.url}…`
-        : `Reading ${b.input.url}…`;
-      if (onStatus) onStatus(label);
-      let result;
-      try { result = await executeTool(b.name, b.input, signal); }
-      catch(e){
-        if (e.name === 'AbortError'){ reportAbort(); return; }
-        if (e.isToolFatal){ if (onStatus) onStatus(null); failLlm(e.message, { requestCount, tool:b.name, outputChars:fullText.length }); return; }
-        result = `Tool error (${b.name}): ${e.message}`;
+    const toolUses = assistantContent.filter(b => b.type === 'tool_use');
+    if (!toolUses.length) continue; // shouldn't happen if stopReason===tool_use, but guard
+
+    if (onStatus) {
+      if (toolUses.length === 1) {
+        const b = toolUses[0];
+        const label = b.name === 'wikipedia_search' ? `Searching Wikipedia for "${b.input.query}"…`
+          : b.name === 'serper_search' ? `Searching Google for "${b.input.query}"…`
+          : b.name === 'web_search' ? `Searching for "${b.input.query}"…`
+          : b.name === 'firecrawl_scrape' ? `Scraping ${b.input.url}…`
+          : `Reading ${b.input.url}…`;
+        onStatus(label);
+      } else {
+        onStatus(`Running ${toolUses.length} searches in parallel…`);
       }
-      toolResults.push({ type:'tool_result', tool_use_id: b.id, content: result });
     }
+
+    let fatalError = null;
+    const settled = await Promise.allSettled(toolUses.map(async b => {
+      if (signal.aborted) throw Object.assign(new Error('abort'), { name: 'AbortError' });
+      try {
+        const content = await executeToolCached(b.name, b.input, signal);
+        return { type:'tool_result', tool_use_id: b.id, content };
+      } catch(e) {
+        if (e.name === 'AbortError') throw e;
+        if (e.isToolFatal) { fatalError = e; throw e; }
+        return { type:'tool_result', tool_use_id: b.id, content: `Tool error (${b.name}): ${e.message}` };
+      }
+    }));
+
+    if (signal.aborted){ reportAbort(); return; }
+    if (fatalError){ if (onStatus) onStatus(null); failLlm(fatalError.message, { requestCount, outputChars:fullText.length }); return; }
+
+    const toolResults = settled
+      .filter(r => r.status === 'fulfilled' && r.value)
+      .map(r => r.value);
+
     currentMessages = [...currentMessages, { role:'user', content: toolResults }];
     if (onStatus) onStatus('Thinking…');
   }

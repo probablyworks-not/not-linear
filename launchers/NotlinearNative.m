@@ -146,6 +146,21 @@ static const long long kMaxTextBytes =  2 * 1024 * 1024;
 @end
 
 // ---------------------------------------------------------------------------
+// WKWebView subclass that accepts the very first click as a real click.
+// Without this, the first mouse click after the window becomes key is
+// consumed by window activation and never reaches the page — so a button
+// can appear "unresponsive" until the user clicks a second time.
+// ---------------------------------------------------------------------------
+@interface NLWebView : WKWebView
+@end
+
+@implementation NLWebView
+- (BOOL)acceptsFirstMouse:(NSEvent *)event {
+    return YES;
+}
+@end
+
+// ---------------------------------------------------------------------------
 // App delegate
 // ---------------------------------------------------------------------------
 @interface NotlinearAppDelegate : NSObject <NSApplicationDelegate, WKUIDelegate>
@@ -160,7 +175,26 @@ static const long long kMaxTextBytes =  2 * 1024 * 1024;
     [self createMenu];
     [self startServerIfNeeded];
     [self createWindow];
-    [self loadNotlinear];
+
+    // The dev server always serves fresh (Cache-Control: no-store), but this
+    // WKWebView uses the persistent default data store so real app data
+    // (IndexedDB/localStorage) survives relaunches. That same persistence
+    // means WebKit's on-disk HTTP/module cache can keep a stale copy of a JS
+    // file forever, immune to no-store, if it was ever cached before that
+    // header existed. Purge only cache-type data (never IndexedDB/localStorage)
+    // on every launch so edited files always show up.
+    NSSet *cacheTypes = [NSSet setWithArray:@[
+        WKWebsiteDataTypeDiskCache,
+        WKWebsiteDataTypeMemoryCache,
+        WKWebsiteDataTypeOfflineWebApplicationCache,
+    ]];
+    [[WKWebsiteDataStore defaultDataStore] removeDataOfTypes:cacheTypes
+                                                modifiedSince:[NSDate distantPast]
+                                            completionHandler:^{
+        dispatch_async(dispatch_get_main_queue(), ^{
+            [self loadNotlinear];
+        });
+    }];
 }
 
 - (BOOL)applicationShouldTerminateAfterLastWindowClosed:(NSApplication *)sender {
@@ -244,7 +278,36 @@ static const long long kMaxTextBytes =  2 * 1024 * 1024;
     [editMenu addItemWithTitle:@"Select All" action:@selector(selectAll:) keyEquivalent:@"a"];
     editMenuItem.submenu = editMenu;
 
+    NSMenuItem *viewMenuItem = [[NSMenuItem alloc] initWithTitle:@"" action:nil keyEquivalent:@""];
+    [mainMenu addItem:viewMenuItem];
+    NSMenu *viewMenu = [[NSMenu alloc] initWithTitle:@"View"];
+    [viewMenu addItemWithTitle:@"Zoom In" action:@selector(zoomIn:) keyEquivalent:@"="];
+    NSMenuItem *zoomInAlt = [viewMenu addItemWithTitle:@"Zoom In" action:@selector(zoomIn:) keyEquivalent:@"+"];
+    zoomInAlt.keyEquivalentModifierMask = NSEventModifierFlagCommand | NSEventModifierFlagShift;
+    zoomInAlt.hidden = YES;
+    [viewMenu addItemWithTitle:@"Zoom Out" action:@selector(zoomOut:) keyEquivalent:@"-"];
+    [viewMenu addItemWithTitle:@"Actual Size" action:@selector(actualSizeZoom:) keyEquivalent:@"0"];
+    viewMenuItem.submenu = viewMenu;
+
     NSApp.mainMenu = mainMenu;
+}
+
+- (void)zoomIn:(id)sender {
+    if (@available(macOS 14.0, *)) {
+        self.webView.pageZoom = MIN(self.webView.pageZoom + 0.1, 3.0);
+    }
+}
+
+- (void)zoomOut:(id)sender {
+    if (@available(macOS 14.0, *)) {
+        self.webView.pageZoom = MAX(self.webView.pageZoom - 0.1, 0.25);
+    }
+}
+
+- (void)actualSizeZoom:(id)sender {
+    if (@available(macOS 14.0, *)) {
+        self.webView.pageZoom = 1.0;
+    }
 }
 
 - (void)createWindow {
@@ -255,8 +318,11 @@ static const long long kMaxTextBytes =  2 * 1024 * 1024;
     NotlinearPickFileHandler *fileHandler = [[NotlinearPickFileHandler alloc] init];
     [configuration.userContentController addScriptMessageHandler:fileHandler name:@"notlinear"];
 
-    self.webView = [[WKWebView alloc] initWithFrame:NSZeroRect configuration:configuration];
+    self.webView = [[NLWebView alloc] initWithFrame:NSZeroRect configuration:configuration];
     self.webView.UIDelegate = self;
+    if (@available(macOS 13.3, *)) {
+        self.webView.inspectable = YES;
+    }
 
     NSRect frame = NSMakeRect(0, 0, 1280, 860);
     self.window = [[NSWindow alloc] initWithContentRect:frame

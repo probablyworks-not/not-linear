@@ -35,6 +35,7 @@ export function persistAll(){
       searxngUrl: appState.prefs.searxngUrl,
       thinking: appState.prefs.thinking,
       theme: appState.prefs.theme,
+      rankingLlm: appState.prefs.rankingLlm,
     },
   }}).catch(e => console.warn('notlinear: save failed —', e.message));
 }
@@ -88,11 +89,13 @@ export async function loadPersistedState({ renderPrefsUI, resolveThreadTitle, ad
         updateThreadButtonTitle(btn.dataset.thread, title);
       });
     if (saved.chatCount) appState.newChatCount = saved.chatCount;
-    // Restore projects (additive [SCHEMA] field — absent in older saved state).
+    // Restore projects (additive [SCHEMA] fields — absent in older saved state).
+    // updatedAt added for notlinear Redesign TASK-RD07 (projects-grid "Last
+    // updated" sort); defaults to 0 for pre-existing saves with no field.
     if (saved.projects && typeof saved.projects === 'object'){
       Object.keys(saved.projects).forEach(pid => {
         const sp = saved.projects[pid];
-        if (sp && sp.id) appState.projects[pid] = { id: sp.id, name: sp.name || 'Untitled project', rules: sp.rules || '', files: Array.isArray(sp.files) ? sp.files : [] };
+        if (sp && sp.id) appState.projects[pid] = { id: sp.id, name: sp.name || 'Untitled project', rules: sp.rules || '', files: Array.isArray(sp.files) ? sp.files : [], path: sp.path || '', updatedAt: sp.updatedAt || 0 };
       });
     }
     if (saved.projectCount) appState.projectCount = saved.projectCount;

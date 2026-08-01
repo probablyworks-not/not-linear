@@ -9,7 +9,22 @@ import { registerView, mountView } from '../core/registry.js';
 import { appState } from '../core/state.js';
 import { loggedFetch, readResponseBody } from '../core/api-client.js';
 import { esc, renderMarkdown } from '../core/markdown.js';
-import { toast } from '../core/ui.js';
+import { toast, wireTabInsertsTab } from '../core/ui.js';
+import { openEmojiPicker } from '../core/emoji.js';
+import { loadMindGarden, renderIconSvg, parseIconToken } from '../core/mind-garden.js';
+
+// Render a stored project glyph: an emoji char, a Mind Garden token
+// (`"icon:<id>"` or `"icon:<id>:<hex>"`), or the Tabler-folder fallback.
+function emojiHTML(value, size = 22){
+  const fallback = '<i class="ti ti-folder"></i>';
+  if (!value) return fallback;
+  const parsed = parseIconToken(value);
+  if (parsed){
+    const svg = renderIconSvg(parsed.id, { size, color: parsed.color });
+    return svg || fallback;
+  }
+  return esc(value);
+}
 
 const $ = (s, r = document) => r.querySelector(s);
 
@@ -103,6 +118,7 @@ function wireComposer(textarea, sendBtn, id, afterPost){
   textarea.addEventListener('keydown', (e) => {
     if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)){ e.preventDefault(); post(); }
   });
+  wireTabInsertsTab(textarea);
 }
 
 // Keep the list-row chip count and the page block header count in sync.
@@ -123,7 +139,6 @@ function addProject(path, name, emoji){
   return id;
 }
 
-const CURATED_EMOJIS = ['🦆','🐠','🧪','📊','🚀','🧭','🎯','⚙️','🐮','🪐','🌱','🎭'];
 
 // ---------- scan ----------
 async function scanProject(path){
@@ -143,6 +158,10 @@ function countOpen(text){
 }
 function maxMtime(files){
   return Object.values(files || {}).reduce((mx, f) => Math.max(mx, (f && f.mtime) || 0), 0);
+}
+function maxMarkdownMtime(markdownFiles){
+  return (Array.isArray(markdownFiles) ? markdownFiles : [])
+    .reduce((mx, f) => Math.max(mx, (f && f.mtime) || 0), 0);
 }
 function missingCount(files){
   return ['readme', 'changelog', 'bugs', 'tasks'].filter(k => !(files?.[k]?.present)).length;
@@ -213,7 +232,7 @@ async function llmStatus(scan){
 function deriveMeta(scan){
   const files = scan.files || {};
   const bugs = countOpen(files.bugs?.text);
-  const mtime = maxMtime(files);
+  const mtime = Math.max(maxMtime(files), maxMarkdownMtime(scan.markdownFiles));
   const miss = missingCount(files);
   const stale = daysSince(mtime) > 14;
   const attn = !files.bugs?.present || (bugs > 0 && stale) || miss > 1;
@@ -233,7 +252,7 @@ function rowHtml(p, scan, meta){
   const commentChip = `<button class="cp-comments" data-comments="${p.id}" title="comments">💬${cc ? ' ' + cc : ''}</button>`;
   return `
     <div class="cp-row${galleryMode ? ' card' : ''}" data-id="${p.id}" role="button" tabindex="0">
-      <button class="cp-emoji" data-emoji="${p.id}" title="emoji">${esc(p.emoji || '📁')}</button>
+      <button class="cp-emoji" data-emoji="${p.id}" title="emoji">${emojiHTML(p.emoji)}</button>
       <div class="cp-namecol">
         <div class="cp-name">${esc(p.name || p.path)}${meta.attn ? '<span class="cp-attn" title="needs attention">•</span>' : ''}</div>
         <div class="cp-path">${esc(p.path)}</div>
@@ -362,20 +381,38 @@ function docsPresentCount(files){
   return ['readme', 'changelog', 'bugs', 'tasks'].filter(k => files?.[k]?.present).length;
 }
 
-function fileCellHtml(files, key, label){
-  const f = files?.[key];
-  if (f?.present){
-    return `<button class="cp-file-cell" data-file="${key}"><i class="ti ti-file-text"></i><span class="cp-file-name">${esc(f.filename || (key + '.md'))}</span><span class="cp-file-size">${(f.size/1024).toFixed(1)}kb</span></button>`;
-  }
-  return `<div class="cp-file-cell missing"><i class="ti ti-file-off"></i><span class="cp-file-name">${esc(label)}</span><span class="cp-file-size">not present</span></div>`;
+function formatSize(bytes){
+  const n = Number(bytes);
+  if (!Number.isFinite(n) || n < 0) return '—';
+  if (n < 1024) return `${n}b`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)}kb`;
+  return `${(n / (1024 * 1024)).toFixed(1)}mb`;
 }
 
-function blockHtml(icon, label, count, bodyHtml, missingFile){
-  const head = `<div class="cp-block-head"><i class="ti ti-${icon}"></i><span>${esc(label)}</span>${count != null ? `<span class="cp-block-count${count > 0 ? ' attn' : ''}">${count} open</span>` : ''}</div>`;
-  if (missingFile){
-    return `<section class="cp-block">${head}<div class="cp-missing">no ${esc(missingFile)} yet<button class="cp-btn cp-create" data-create="${esc(missingFile)}">create</button></div></section>`;
+function markdownFilesForScan(scan, files){
+  const scanned = Array.isArray(scan?.markdownFiles) ? scan.markdownFiles : [];
+  if (scanned.length) return scanned;
+  // Backward-compatible fallback for a stale server that predates markdownFiles.
+  return ['readme', 'changelog', 'bugs', 'tasks']
+    .map(k => files?.[k]?.present ? { ...files[k], relativePath: files[k].filename || `${k}.md` } : null)
+    .filter(Boolean);
+}
+
+function markdownFileCellHtml(file, index){
+  const rel = file.relativePath || file.filename || 'untitled.md';
+  const size = file.tooBig ? 'too large' : formatSize(file.size);
+  return `<button class="cp-file-cell" data-file="md:${index}" title="${esc(rel)}"><i class="ti ti-file-text"></i><span class="cp-file-name">${esc(rel)}</span><span class="cp-file-size">${esc(size)}</span></button>`;
+}
+
+function markdownFilesHtml(filesList, truncated){
+  if (!filesList.length){
+    return `<div class="cp-file-empty"><i class="ti ti-file-off"></i><span>no markdown files found</span></div>`;
   }
-  return `<section class="cp-block">${head}<div class="cp-block-body">${bodyHtml}</div></section>`;
+  const cells = filesList.map(markdownFileCellHtml).join('');
+  const note = truncated
+    ? `<div class="cp-file-note">showing first 200 markdown files</div>`
+    : '';
+  return cells + note;
 }
 
 function renderProjectPage(id){
@@ -385,12 +422,13 @@ function renderProjectPage(id){
   const scan = scanCache.get(id);
   const files = (scan && scan.ok && scan.files) || {};
   const meta = deriveMeta(scan && scan.ok ? scan : { files: {} });
+  const markdownFiles = markdownFilesForScan(scan, files);
 
-  const metaStrip = `${docsPresentCount(files)}/4 docs · ${meta.bugs} open bugs · updated ${relTime(meta.mtime)} · manual`;
+  const metaStrip = `${markdownFiles.length} md files · ${docsPresentCount(files)}/4 convention docs · ${meta.bugs} open bugs · updated ${relTime(meta.mtime)} · manual`;
 
   inner.innerHTML = `
     <div class="cp-page-head">
-      <button class="cp-emoji lg" id="cp-page-emoji" title="emoji">${esc(p.emoji || '📁')}</button>
+      <button class="cp-emoji lg" id="cp-page-emoji" title="emoji">${emojiHTML(p.emoji)}</button>
       <div class="cp-page-titlecol">
         <input class="cp-page-title" id="cp-page-title" value="${esc(p.name || '')}" placeholder="project name" />
         <div class="cp-page-path"><i class="ti ti-folder"></i>${esc(p.path)}</div>
@@ -401,25 +439,9 @@ function renderProjectPage(id){
     <section class="cp-block">
       <div class="cp-block-head"><i class="ti ti-files"></i><span>files</span></div>
       <div class="cp-files-grid">
-        ${fileCellHtml(files, 'readme', 'readme.md')}
-        ${fileCellHtml(files, 'changelog', 'changelog.md')}
-        ${fileCellHtml(files, 'bugs', 'bugs.md')}
-        ${fileCellHtml(files, 'tasks', 'tasks.md')}
+        ${markdownFilesHtml(markdownFiles, !!scan?.markdownFilesTruncated)}
       </div>
     </section>
-
-    ${files.bugs?.present
-      ? blockHtml('bug', 'bugs', countOpen(files.bugs.text), renderMarkdown(files.bugs.text || ''))
-      : blockHtml('bug', 'bugs', null, '', 'bugs.md')}
-    ${files.tasks?.present
-      ? blockHtml('checklist', 'tasks', countOpen(files.tasks.text), renderMarkdown(files.tasks.text || ''))
-      : blockHtml('checklist', 'tasks', null, '', 'tasks.md')}
-    ${files.changelog?.present
-      ? blockHtml('history', 'changelog', null, renderMarkdown(files.changelog.text || ''))
-      : blockHtml('history', 'changelog', null, '', 'changelog.md — every release is a small story')}
-    ${files.readme?.present
-      ? blockHtml('book', 'overview', null, renderMarkdown(files.readme.text || ''))
-      : blockHtml('book', 'overview', null, '', 'readme.md')}
 
     <section class="cp-block" id="cp-comments-block">
       <div class="cp-block-head"><i class="ti ti-message-dots"></i><span>notes &amp; comments</span><span class="cp-block-count" id="cp-comments-count">${commentCount(id)}</span></div>
@@ -449,12 +471,9 @@ function wireProjectPage(id, scan){
   titleEl?.addEventListener('keydown', (e) => { if (e.key === 'Enter'){ e.preventDefault(); titleEl.blur(); } });
 
   $('#cp-page-emoji')?.addEventListener('click', (e) =>
-    pickEmojiFor(id, e.currentTarget, () => { const el = $('#cp-page-emoji'); if (el) el.textContent = loadProjects().find(x => x.id === id)?.emoji || '📁'; }));
+    pickEmojiFor(id, e.currentTarget, () => { const el = $('#cp-page-emoji'); if (el) el.innerHTML = emojiHTML(loadProjects().find(x => x.id === id)?.emoji); }));
   document.querySelectorAll('#cp-inner .cp-file-cell[data-file]').forEach(cell => {
     cell.addEventListener('click', () => openDrawer(id, cell.dataset.file));
-  });
-  document.querySelectorAll('#cp-inner .cp-create').forEach(btn => {
-    btn.addEventListener('click', () => toast('creating files lands later — the drawer is read-only for now'));
   });
 
   // Comments thread (newest → oldest on the page).
@@ -537,7 +556,7 @@ function openCommentsPopover(projectId, anchorEl){
   const pop = document.createElement('div');
   pop.className = 'cp-pop';
   pop.innerHTML = `
-    <div class="cp-pop-head"><span class="cp-pop-emoji">${esc(p.emoji || '📁')}</span><span class="cp-pop-name">${esc(p.name || p.path)}</span><span class="cp-pop-count" id="cp-pop-count">${commentCount(projectId)}</span></div>
+    <div class="cp-pop-head"><span class="cp-pop-emoji">${emojiHTML(p.emoji)}</span><span class="cp-pop-name">${esc(p.name || p.path)}</span><span class="cp-pop-count" id="cp-pop-count">${commentCount(projectId)}</span></div>
     <div class="cp-pop-list" id="cp-pop-list"></div>
     <div class="cp-composer">
       <textarea class="cp-composer-input" id="cp-pop-input" rows="1" placeholder="add a comment…"></textarea>
@@ -555,23 +574,7 @@ function openCommentsPopover(projectId, anchorEl){
   pop.querySelector('#cp-pop-input').focus();
 }
 
-// ---------- emoji picker (CP07) ----------
-function openEmojiPicker(anchorEl, onPick){
-  closeFloater();
-  const pop = document.createElement('div');
-  pop.className = 'cp-pop cp-emoji-pop';
-  pop.innerHTML =
-    `<div class="cp-emoji-grid">${CURATED_EMOJIS.map(e => `<button class="cp-emoji-opt" type="button">${e}</button>`).join('')}</div>` +
-    `<input class="cp-emoji-more" placeholder="or paste any emoji…" maxlength="8">`;
-  attachFloater(pop, anchorEl, 232, 150);
-  pop.querySelectorAll('.cp-emoji-opt').forEach(b =>
-    b.addEventListener('click', () => { onPick(b.textContent); closeFloater(); }));
-  const more = pop.querySelector('.cp-emoji-more');
-  more.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter' && more.value.trim()){ onPick(more.value.trim()); closeFloater(); }
-  });
-}
-
+// ---------- emoji picker (CP07; shared picker lives in core/emoji.js) ----------
 function pickEmojiFor(projectId, anchorEl, rerender){
   openEmojiPicker(anchorEl, (emoji) => {
     updateProject(projectId, { emoji });
@@ -597,10 +600,10 @@ function openAddPopover(anchorEl){
       <label class="cp-add-label">display name <span class="cp-add-opt">optional</span></label>
       <input class="cp-add-input" id="cp-add-name" placeholder="defaults to folder name" autocomplete="off">
       <label class="cp-add-label">icon</label>
-      <div class="cp-add-emoji" id="cp-add-emoji">${CURATED_EMOJIS.map((e, i) => `<button class="cp-emoji-opt${i === 0 ? ' on' : ''}" type="button">${e}</button>`).join('')}</div>
+      <button class="cp-add-icon-btn" id="cp-add-icon-btn" type="button" title="pick an icon"><span class="cp-add-icon-glyph"><i class="ti ti-folder"></i></span><span class="cp-add-icon-label">pick icon</span></button>
     </div>
     <div class="cp-add-foot">
-      <button class="cp-btn ghost" id="cp-add-cancel">cancel</button>
+      <button class="cp-btn" id="cp-add-cancel">cancel</button>
       <button class="cp-btn primary" id="cp-add-submit" disabled>add project</button>
     </div>`;
   attachFloater(pop, anchorEl, 320, 360);
@@ -608,16 +611,23 @@ function openAddPopover(anchorEl){
   const pathEl = pop.querySelector('#cp-add-path');
   const nameEl = pop.querySelector('#cp-add-name');
   const submit = pop.querySelector('#cp-add-submit');
-  let chosenEmoji = CURATED_EMOJIS[0];
+  let chosenEmoji = '';   // empty until the user picks one; row renders the ti-folder fallback
 
   const syncEnabled = () => { submit.disabled = !pathEl.value.trim(); };
   pathEl.addEventListener('input', syncEnabled);
 
-  pop.querySelectorAll('#cp-add-emoji .cp-emoji-opt').forEach(b =>
-    b.addEventListener('click', () => {
-      pop.querySelectorAll('#cp-add-emoji .cp-emoji-opt').forEach(x => x.classList.remove('on'));
-      b.classList.add('on'); chosenEmoji = b.textContent;
-    }));
+  const iconBtn = pop.querySelector('#cp-add-icon-btn');
+  iconBtn?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    openEmojiPicker(iconBtn, (token) => {
+      chosenEmoji = token;
+      const glyph = iconBtn.querySelector('.cp-add-icon-glyph');
+      const label = iconBtn.querySelector('.cp-add-icon-label');
+      if (glyph) glyph.innerHTML = emojiHTML(token);
+      if (label) label.textContent = 'change icon';
+      iconBtn.classList.add('on');
+    });
+  });
 
   pop.querySelector('#cp-add-browse').addEventListener('click', async () => {
     const path = await pickFolderPath();
@@ -650,12 +660,20 @@ function drawerOpen(){ return $('#cp-screen')?.classList.contains('drawer-open')
 function openDrawer(projectId, fileKey){
   const p = loadProjects().find(x => x.id === projectId);
   const scan = scanCache.get(projectId);
-  const f = scan?.files?.[fileKey];
+  let f = null;
+  if (fileKey?.startsWith('md:')){
+    const markdownFiles = markdownFilesForScan(scan, (scan && scan.ok && scan.files) || {});
+    const idx = Number(fileKey.slice(3));
+    f = Number.isInteger(idx) ? markdownFiles[idx] : null;
+  } else {
+    f = scan?.files?.[fileKey];
+  }
   if (!p || !f?.present) return;
   drawerFileKey = fileKey;
-  const fullPath = `${p.path.replace(/\/+$/, '')}/${f.filename || (fileKey + '.md')}`;
+  const relPath = f.relativePath || f.filename || `${fileKey}.md`;
+  const fullPath = `${p.path.replace(/\/+$/, '')}/${relPath}`;
   $('#cp-drawer-path').textContent = fullPath;
-  $('#cp-drawer-size').textContent = `${(f.size / 1024).toFixed(1)}kb`;
+  $('#cp-drawer-size').textContent = f.tooBig ? 'too large' : formatSize(f.size);
   $('#cp-drawer-body').innerHTML = f.tooBig
     ? '<p>file too large to preview</p>'
     : renderMarkdown(f.text || '');
@@ -702,7 +720,7 @@ function renderSidebarList(){
   if (!host) return;
   const projects = loadProjects();
   host.innerHTML = projects.map(p =>
-    `<button class="side-item cp-side-item" data-id="${p.id}"><span class="cp-side-emoji">${esc(p.emoji || '📁')}</span><span>${esc(p.name || p.path)}</span></button>`
+    `<button class="side-item cp-side-item" data-id="${p.id}"><span class="cp-side-emoji">${emojiHTML(p.emoji)}</span><span>${esc(p.name || p.path)}</span></button>`
   ).join('');
   host.querySelectorAll('.cp-side-item').forEach(btn => {
     btn.addEventListener('click', () => { mountView('coding-projects'); openProject(btn.dataset.id); });
@@ -721,6 +739,9 @@ function wireSidebar(){
   addBtn?.addEventListener('click', (e) => { e.stopPropagation(); openList(); setTimeout(() => openAddPopover($('#cp-add') || addBtn), 0); });
   applyCollapse();
   renderSidebarList();
+  // Any rows with `"icon:..."` glyphs rendered with the 📁 fallback on first
+  // paint; rerender once the Mind Garden SVGs are available.
+  loadMindGarden().then(() => renderSidebarList()).catch(() => {});
 }
 
 export function initCodingProjects(){

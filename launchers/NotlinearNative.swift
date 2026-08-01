@@ -64,6 +64,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         let config = WKWebViewConfiguration()
         config.websiteDataStore = .default()
 
+        // Let JS know it's running inside the desktop app so file-picker logic
+        // skips osascript and uses WKUIDelegate (runOpenPanelWith) directly.
+        let desktopFlag = WKUserScript(
+            source: "window.__notlinearDesktop = true;",
+            injectionTime: .atDocumentStart,
+            forMainFrameOnly: true
+        )
+        config.userContentController.addUserScript(desktopFlag)
+
         webView = WKWebView(frame: .zero, configuration: config)
         webView.navigationDelegate = self
         webView.uiDelegate = self

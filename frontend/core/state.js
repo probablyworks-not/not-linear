@@ -21,7 +21,7 @@ export const appState = {
   prefs: {
     name: 'Alex', tone: 'concise', context: '', model: 'sonnet',
     mode: 'general', folderName: 'Workspace', searxngUrl: '',
-    thinking: false, theme: 'dark',
+    thinking: false, theme: 'dark', rankingLlm: 'none',
   },
 
   // ---- Projects ----
