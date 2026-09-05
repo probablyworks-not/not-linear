@@ -434,48 +434,15 @@ html[data-theme="light"] .nt-bento-item:hover{ filter:brightness(0.98); }
 .nt-screen .b .nt-brbadge:hover{ filter:brightness(1.1); }
 .nt-screen .b .nt-brbadge i{ font-size:11px; }
 
-/* branch panel — full-height right-side drawer */
-#nt-branch-panel{ position:fixed; top:0; right:0; width:min(400px,50vw); height:100vh; z-index:240; background:var(--bg); border-left:1px solid var(--rule-2); box-shadow:var(--shadow-lg); display:none; flex-direction:column; font-family:var(--font); color:var(--text); }
-#nt-branch-panel.show{ display:flex; }
-
-.nbp-hdr{ display:flex; align-items:center; padding:12px 14px 10px; gap:8px; border-bottom:1px solid var(--rule); flex:0 0 auto; }
-.nbp-lbl{ display:flex; align-items:center; gap:7px; font-size:12.5px; font-weight:600; color:var(--text-2); flex:1; min-width:0; }
-.nbp-lbl i{ font-size:13px; color:var(--branch); }
-.nbp-hdr-acts{ display:flex; gap:2px; flex:0 0 auto; }
-.nbp-del,.nbp-close{ width:26px; height:26px; display:grid; place-items:center; border-radius:6px; border:none; background:none; cursor:pointer; font-size:13px; color:var(--text-3); }
-.nbp-del:hover{ color:var(--tx-red); background:var(--bg-2); }
-.nbp-close:hover{ color:var(--text); background:var(--bg-2); }
-
-.nbp-quote{ padding:10px 14px; background:var(--bg-2); border-bottom:1px solid var(--rule); flex:0 0 auto; }
-.nbp-from{ font-family:var(--mono); font-size:9px; letter-spacing:0.12em; text-transform:uppercase; color:var(--branch); margin-bottom:5px; }
-.nbp-qt-text{ font-size:12.5px; color:var(--text-2); border-left:2.5px solid var(--branch); padding-left:9px; line-height:1.5; display:-webkit-box; -webkit-line-clamp:4; -webkit-box-orient:vertical; overflow:hidden; }
-
-.nbp-body{ flex:1; min-height:0; overflow-y:auto; padding:14px; display:flex; flex-direction:column; gap:12px; }
-.nbp-empty{ color:var(--text-3); font-style:italic; font-size:13px; padding:32px 0; text-align:center; }
-.nbp-msg.user{ display:flex; justify-content:flex-end; }
-.nbp-bub{ background:var(--branch-soft); border:1px solid var(--branch); border-radius:12px 12px 3px 12px; padding:8px 12px; font-size:13.5px; line-height:1.55; max-width:85%; white-space:pre-wrap; word-wrap:break-word; color:var(--text); }
-.nbp-msg.ai{ font-size:13.5px; line-height:1.65; color:var(--text); }
-.nbp-msg.ai p{ margin:0 0 8px; }
-.nbp-msg.ai p:last-child{ margin-bottom:0; }
-.nbp-msg.ai code{ font-family:var(--mono); font-size:0.88em; background:var(--bg-2); padding:1px 5px; border-radius:3px; color:var(--branch); }
-.nbp-msg.ai pre{ background:var(--bg-2); border-radius:8px; padding:12px 14px; overflow-x:auto; margin:8px 0; font-size:13px; }
-.nbp-msg.ai pre code{ background:none; padding:0; }
-.nbp-msg.ai strong{ font-weight:600; }
-.nbp-msg.ai ul,.nbp-msg.ai ol{ padding-left:20px; margin:6px 0; }
-.nbp-msg.ai li{ margin-bottom:3px; }
+/* branch panels — floating, reuse chat's .branch/.branch-stack/.menu chrome
+   (see chat.css); only the width var and stacking context are Notes-local so
+   resizing here never touches chat's --drawer-w. */
+#nt-branch-stack{ width:var(--nt-drawer-w); z-index:240; }
+#nt-branch-menu{ z-index:241; }
+.nbp-model-chip{ pointer-events:none; }
 .nbp-thinking{ color:var(--text-3); font-style:italic; animation:nbp-pulse 1.2s ease-in-out infinite; }
 @keyframes nbp-pulse{ 0%,100%{opacity:1} 50%{opacity:0.35} }
 .nbp-err{ color:var(--tx-red); font-size:12.5px; }
-
-.nbp-comp{ border-top:1px solid var(--rule); padding:10px 12px 12px; display:flex; flex-direction:column; gap:6px; flex:0 0 auto; }
-.nbp-comp-row{ display:flex; gap:6px; align-items:flex-end; }
-.nbp-input{ flex:1; min-width:0; resize:none; background:var(--bg-2); border:1px solid var(--rule-2); border-radius:8px; padding:8px 10px; font:inherit; font-size:13px; line-height:1.45; color:var(--text); outline:none; max-height:120px; min-height:36px; }
-.nbp-input:focus{ border-color:var(--branch); }
-.nbp-input:disabled{ opacity:0.55; cursor:not-allowed; }
-.nbp-send{ flex:0 0 32px; width:32px; height:32px; display:grid; place-items:center; border-radius:8px; background:var(--branch); border:none; color:#fff; font-size:15px; cursor:pointer; }
-.nbp-send:hover{ filter:brightness(1.1); }
-.nbp-model-label{ font-family:var(--mono); font-size:10px; color:var(--text-3); display:flex; align-items:center; gap:5px; }
-.nbp-model-label i{ font-size:11px; color:var(--branch); }
 
 /* bottom CTA — "Ask AI about this note" */
 .nt-branch-cta{ display:flex; align-items:center; gap:10px; margin-top:28px; padding:10px 14px; border:1px solid var(--rule-2); border-radius:10px; background:var(--surface); cursor:text; transition:border-color 120ms; }

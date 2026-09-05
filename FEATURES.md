@@ -238,15 +238,17 @@ Appears on any non-collapsed text selection: **Bold, Italic, Underline, Striketh
 
 ### Inline comments — "Ask AI" branches
 
-The actual comment/thread system is AI-chat branches, not plain comments:
-- **Anchored**: select text in a branchable block (text/h1-4/bullet/numbered/todo/toggle/quote/callout) → toolbar "Branch" wraps it in a `data-bid` span and opens a thread panel.
+The actual comment/thread system is AI-chat branches, not plain comments. The panel UI/interaction model is shared with chat's branch panels (`.branch`/`.branch-stack`/`.branch-menu` in `chat.css`) — same floating card, resize, reader mode, and collapse behavior — while the data, persistence, and backend call stay entirely separate from chat (own `note.branches[]`, `notlinear-notes` db, no nesting). See ADR-028.
+- **Anchored**: select text in a branchable block (text/h1-4/bullet/numbered/todo/toggle/quote/callout) → toolbar "Branch" wraps it in a `data-bid` span (`.nt-br-anchor`) and opens a floating panel.
 - **Note-wide**: bottom-of-page "Ask AI about this note…" CTA creates an unanchored branch (`quote:null, blockId:null`).
-- **Thread panel** (right drawer, 400px/50vw): quoted-passage header for anchored branches, scrolling message list (user right-aligned, AI rendered via the shared markdown renderer), auto-grow composer (Enter to send, Shift+Enter newline, Escape to close).
-- **Backend**: Claude (`claude-sonnet-4-6`) or DeepSeek depending on which key exists; model label shown ("Claude"/"DeepSeek"/"No API key"); send button doubles as stop/abort while streaming.
+- **Panel** (floating, right side, `#nt-branch-stack`): pinned near its anchor's on-screen position (auto-repositions on scroll/resize, same rail/declutter algorithm as chat's branches minus the ancestor-chain logic — Notes branches don't nest). Quoted-passage header for anchored branches, scrolling message list (user right-aligned, AI rendered via the shared markdown renderer), auto-grow composer (Enter to send, Shift+Enter newline).
+- **Panel controls**: Expand/reader toggle (min 620×480, only one branch reader at a time), Collapse chevron (header click), manual resize (drag handles on all edges/corners, clamped to viewport, marks it "user-sized" so auto-layout stops repositioning it), "…" menu (Copy as quote / Close / Delete — no "make main thread", Notes has no main-thread concept), Close (×). Opening a branch closes any other open note branch (flat, one active panel at a time, matching chat's behavior for non-nested branches).
+- **Backend**: Claude (`claude-sonnet-4-6`) or DeepSeek depending on which key exists; model label shown ("Claude"/"DeepSeek"/"No API key"); send button doubles as stop/abort while streaming. Unchanged — only the panel chrome moved, not the model/attachment feature set (no per-branch model picker or attachments, unlike chat).
 - **System prompt**: the note's breadcrumb path + up to 3000 chars of stripped page text, plus the quoted passage if anchored.
 - **Reopen**: click the highlighted anchor span, or the per-block branch-count badge (opens the most recent).
 - **Delete**: unwraps the anchor span back to plain text, removes the branch record, closes the panel.
-- **Anchor pruning**: runs on every render — if the anchor text was deleted directly from the block, the orphaned branch is silently dropped so stale anchors never linger.
+- **Anchor pruning**: runs on every render — if the anchor text was deleted directly from the block, the orphaned branch is silently dropped (and its open panel, if any, closes) so stale anchors never linger.
+- **Geometry persistence**: collapsed/reader/width/height/top are saved onto the branch record (`notlinear-notes`, additive fields) and restored next time the panel opens; panels close automatically when navigating to a different note, the notes index, or out of the Notes view entirely.
 
 ### Keyboard shortcuts
 
@@ -501,4 +503,4 @@ Worth tracking separately since these look clickable but currently do nothing (o
 
 ---
 
-*Last compiled 2026-08-01 by direct codebase inspection (`frontend/app.js`, `frontend/views/notes.js`, `frontend/views/coding-projects.js`, `frontend/core/*.js`, `frontend/providers/*.js`, `backend/server.py`, `index.html`, `redesign_product.md`, `BUGS.md`, `AGENTS.md`). If you land a feature and don't see it here, add it in the same session — see the update rule at the top of this file.*
+*Last compiled 2026-08-02 by direct codebase inspection (`frontend/app.js`, `frontend/views/notes.js`, `frontend/views/coding-projects.js`, `frontend/core/*.js`, `frontend/providers/*.js`, `backend/server.py`, `index.html`, `redesign_product.md`, `BUGS.md`, `AGENTS.md`). If you land a feature and don't see it here, add it in the same session — see the update rule at the top of this file.*

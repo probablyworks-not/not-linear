@@ -32,6 +32,7 @@
   --mono:'Space Mono',ui-monospace,Menlo,monospace;
   --sidebar-w:264px;
   --drawer-w:420px;
+  --nt-drawer-w:420px;
   --drawer-gap:16px;
 }
 html[data-theme="grey"]{

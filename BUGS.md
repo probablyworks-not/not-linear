@@ -21,6 +21,50 @@ Areas that have broken two or more times. If your task touches any of these, you
 
 None currently tracked.
 
+### #047 — Model picker menu could render outside the viewport once the option count grew, with no way to scroll to the missing entries
+- Date discovered: 2026-08-07
+- Date fixed: 2026-08-07
+- Agent: Claude Sonnet 5
+- Symptom: After adding five extra legacy model tiers to `#model-menu` (14 entries total, up from 9), automated (Playwright) clicks on the newly-added lower entries failed with "Element is outside of the viewport," even after scrolling into view. The underlying cause reproduces for a real user too: on a normal-height viewport, `openModelMenu()` could position the menu so its bottom edge extended below the visible window, with no scrollbar to reach the cut-off items.
+- Root cause: two compounding gaps. (1) `.menu` in `frontend/styles/base.css` had no `max-height`/`overflow-y`, so the menu always rendered at full content height regardless of viewport size. (2) `openModelMenu()` (`frontend/app.js`) picked "open above the anchor" or "open below the anchor" based only on whether there was room *above*, then never checked whether the menu actually fit in whichever direction it picked — so a menu taller than the remaining space below the anchor (common near the bottom composer bar) rendered partially off-screen with nothing to correct it.
+- Fix: Added `max-height:calc(100vh - 40px);overflow-y:auto` to `.menu` so any menu this size or larger becomes internally scrollable instead of overflowing. Added a final clamp in `openModelMenu()` — `top = Math.max(8, Math.min(top, window.innerHeight - modelMenu.offsetHeight - 8))` — after the existing above/below branch, so the menu's bottom edge can never exceed the viewport regardless of anchor position or item count.
+- Files touched: `frontend/styles/base.css`, `frontend/app.js`, `BUGS.md`, `CHANGELOG.md`, `docs/project-notes/{CHANGES,RUNS}.md`.
+- Test case: headless Playwright at 1280×800 — open the model picker from the main composer (anchor near the bottom of the viewport); confirm the menu's bounding rect stays fully within `[0, window.innerHeight]`; click every one of the 14 entries and confirm each is reachable and sets the model chip label correctly.
+- Prevention: any future growth of `#model-menu` (or reuse of `.menu` for another long list) is now covered by the CSS max-height/scroll and the positioning clamp — no per-menu fix needed.
+- Related: #046 (found in the same session while expanding the model picker).
+
+### #046 — Settings → "Default model" panel: 5 of 9 buttons were dead (Opus, GPT-4o, GPT-4o Mini, Gemini Flash, Gemini Pro did nothing on click)
+- Date discovered: 2026-08-07
+- Date fixed: 2026-08-07
+- Agent: Claude Sonnet 5
+- Symptom: Found while expanding the model picker for a model-upgrade task, not user-reported. The Settings panel's "Default model" segmented control (`#prefs [data-v=...]`) renders a button for all 9 model preferences, but its click handler in `frontend/app.js` only recognized `['sonnet','haiku','deepseek','deepseek-r1']` — clicking Opus, GPT-4o, GPT-4o Mini, Gemini 2.0 Flash, or Gemini 2.5 Pro in Settings silently did nothing (no error, no state change), while the same options worked fine from the main composer's model-menu dropdown, which uses a separate, complete handler.
+- Root cause: the Settings click handler's model-preference branch used a hardcoded array literal instead of the already-existing `MODEL_OPTIONS` lookup object, and that array was never updated as new providers (OpenAI, Gemini) were added to `MODEL_OPTIONS` and the HTML.
+- Fix: Changed the condition from `['sonnet','haiku','deepseek','deepseek-r1'].includes(v)` to `MODEL_OPTIONS[v]`, so it automatically covers every registered model preference, present and future.
+- Files touched: `frontend/app.js`, `BUGS.md`, `CHANGELOG.md`, `docs/project-notes/{CHANGES,RUNS}.md`.
+- Test case: headless Playwright — open Settings, click the GPT-5.6 Luna (and separately Opus 4.5) button in "Default model," confirm the `.on` class moves to the clicked button.
+- Related: #047.
+
+### #045 — Opus was mislabeled as "Sonnet 4.6" in the model chip, and the Extended Thinking toggle was disabled for Opus even though the Claude provider supported it
+- Date discovered: 2026-08-07
+- Date fixed: 2026-08-07
+- Agent: Claude Sonnet 5
+- Symptom: Found while auditing the model-switching UI, not user-reported. Two related gaps: (1) `MODEL_OPTIONS` in `frontend/app.js` had no `opus` entry, so `modelLabel()`'s fallback (`MODEL_OPTIONS[value] || MODEL_OPTIONS.sonnet`) silently displayed the Sonnet label whenever Opus was selected. (2) `providers/tools.js`'s `modelLabelFromId()` had no `opus` branch either, so Opus's `claude-opus-*` model ID fell through every check and would display as a raw model-ID string in message metadata. (3) `renderModelUI()`'s `thinkingSupported` check only allowed `'sonnet'` (plus `'deepseek-r1'`), even though `providers/claude.js`'s own `supportsThinking` check already covered both `'opus'` and `'sonnet'` — so the Extended Thinking toggle was greyed out and forced off for Opus, even though a real Opus request would have honored it.
+- Fix: Added `opus` to `MODEL_OPTIONS`; added an `opus`-matching branch to `modelLabelFromId()`; extended `thinkingSupported` (both the `renderModelUI()` copy and the `#thinking-toggle` change-handler copy) to include Opus, matching what `providers/claude.js` already supports.
+- Files touched: `frontend/app.js`, `frontend/providers/tools.js`, `BUGS.md`, `CHANGELOG.md`, `docs/project-notes/{CHANGES,RUNS}.md`.
+- Test case: headless Playwright — select Opus from the model picker, reopen the picker, confirm the chip reads "Opus 5" (not "Sonnet …") and the Extended Thinking toggle is enabled (no `disabled` attribute).
+- Related: #044.
+
+### #044 — DeepSeek chat calls were about to break (or already broken): the app hardcoded the `deepseek-chat`/`deepseek-reasoner` model names DeepSeek retired on 2026-07-24
+- Date discovered: 2026-08-07
+- Date fixed: 2026-08-07
+- Agent: Claude Sonnet 5
+- Symptom: Found while auditing model versions across providers, not user-reported — but since DeepSeek's stated retirement date (2026-07-24) had already passed at the time of discovery (2026-08-07), every DeepSeek call path in the app (main chat, inline/branch chat, Notes AI fallback, Coding Projects status line, search-keyword extraction, file ranking, thread summarization) was likely already returning errors in production.
+- Root cause: six call sites across `frontend/providers/deepseek.js`, `frontend/app.js`, `frontend/views/notes.js`, and `frontend/views/coding-projects.js` hardcoded the literal strings `'deepseek-chat'` and `'deepseek-reasoner'`, which DeepSeek retired in favor of a single model (`deepseek-v4-flash`) with reasoning controlled by a `thinking` request parameter instead of a separate model name.
+- Fix: Migrated every call site to `model:'deepseek-v4-flash'`, with `thinking:{type:'enabled'},reasoning_effort:'high'` for what used to be `deepseek-reasoner` and `thinking:{type:'disabled'}` for what used to be `deepseek-chat` (explicit either way, since omitting `thinking` reportedly defaults to enabled on this model — leaving it implicit would have silently turned on reasoning, and its extra latency/cost, for fast utility calls like keyword extraction and file ranking that need to stay cheap). `providers/deepseek.js`'s tool-availability gate (previously `model !== 'deepseek-reasoner'`) now checks the `thinking` flag instead, since both variants now share one model string.
+- Files touched: `frontend/providers/deepseek.js`, `frontend/app.js`, `frontend/views/notes.js`, `frontend/views/coding-projects.js`, `BUGS.md`, `CHANGELOG.md`, `docs/project-notes/{CHANGES,RUNS}.md`.
+- Test case: `node --check` on all four files; headless Playwright confirmed the picker's "DeepSeek Flash" and "DeepSeek Thinking" entries select correctly and set the expected chip label. **Not verified against a live DeepSeek API key** — no key was available in this session — so the exact request-parameter shape (`thinking:{type:...}`, `reasoning_effort`) is inferred from DeepSeek's own reasoning-mode documentation, not confirmed by a real response. Recommend a human smoke test sending one real DeepSeek Flash message and one DeepSeek Thinking message before relying on this.
+- Related: #045.
+
 ### #043 — Notes pages still shared one singleton tab, so opening a second note replaced the first
 - Date discovered: 2026-08-01
 - Date fixed: 2026-08-01

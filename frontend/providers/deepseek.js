@@ -75,7 +75,7 @@ function deepSeekSynthesisOnlyMessages(messages){
 }
 
 // ---------- callDeepSeek ----------
-export async function callDeepSeek({ messages, systemPrompt, tools, onDelta, onThinking, onDone, onError, onStatus, onAbort, onController, model = 'deepseek-chat' }){
+export async function callDeepSeek({ messages, systemPrompt, tools, onDelta, onThinking, onDone, onError, onStatus, onAbort, onController, model = 'deepseek-v4-flash', thinking = false }){
   const controller = new AbortController();
   appState._activeController = controller;
   if (onController) onController(controller);
@@ -140,7 +140,7 @@ export async function callDeepSeek({ messages, systemPrompt, tools, onDelta, onT
       outputTokens: totalOut,
       provider:'deepseek',
       model,
-      modelLabel:modelLabelFromId(model),
+      modelLabel:modelLabelFromId(model, thinking),
       requestCount,
       toolRoundCount,
       finishReason:reason,
@@ -158,12 +158,15 @@ export async function callDeepSeek({ messages, systemPrompt, tools, onDelta, onT
     let res;
     try {
       requestCount += 1;
-      const canUseTools = tools.length && model !== 'deepseek-reasoner' && toolRoundCount < DEEPSEEK_MAX_TOOL_ROUNDS;
+      const canUseTools = tools.length && !thinking && toolRoundCount < DEEPSEEK_MAX_TOOL_ROUNDS;
       if (!canUseTools && tools.length && lastToolResults.length && onStatus) onStatus('Synthesizing answer from retrieved sources…');
       const requestMessages = canUseTools ? currentMessages : deepSeekSynthesisOnlyMessages(currentMessages);
+      const thinkingParams = thinking
+        ? { thinking: { type:'enabled' }, reasoning_effort:'high' }
+        : { thinking: { type:'disabled' } };
       const requestBody = canUseTools
-        ? { model, max_tokens:8192, stream:true, messages: requestMessages, tools, tool_choice:'auto' }
-        : { model, max_tokens:8192, stream:true, messages: requestMessages };
+        ? { model, max_tokens:8192, stream:true, messages: requestMessages, tools, tool_choice:'auto', ...thinkingParams }
+        : { model, max_tokens:8192, stream:true, messages: requestMessages, ...thinkingParams };
       res = await loggedFetch('https://api.deepseek.com/v1/chat/completions', {
         method: 'POST',
         headers: { 'content-type':'application/json', 'Authorization':`Bearer ${key}` },
@@ -262,7 +265,7 @@ export async function callDeepSeek({ messages, systemPrompt, tools, onDelta, onT
             outputTokens: totalOut,
             provider:'deepseek',
             model,
-            modelLabel:modelLabelFromId(model),
+            modelLabel:modelLabelFromId(model, thinking),
             requestCount,
             toolRoundCount,
             finishReason:'tool_synthesis_timeout',
@@ -307,7 +310,7 @@ export async function callDeepSeek({ messages, systemPrompt, tools, onDelta, onT
         outputTokens: totalOut,
         provider:'deepseek',
         model,
-        modelLabel:modelLabelFromId(model),
+        modelLabel:modelLabelFromId(model, thinking),
         requestCount,
         toolRoundCount,
         finishReason,

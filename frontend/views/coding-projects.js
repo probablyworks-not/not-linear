@@ -215,9 +215,10 @@ async function llmStatus(scan){
       method: 'POST',
       headers: { 'content-type': 'application/json', 'Authorization': `Bearer ${key}` },
       body: JSON.stringify({
-        model: 'deepseek-chat',
+        model: 'deepseek-v4-flash',
         max_tokens: 80,
         stream: false,
+        thinking: { type: 'disabled' },
         messages: [{ role: 'user', content: prompt }],
       }),
     }, { kind: 'cp_status' });

@@ -37,6 +37,8 @@ function glyphHTML(value, fallback = '📄', size = 22){
 
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+const clamp = (n, min, max) => Math.min(Math.max(n, min), max);
+const truncate = (s, n = 70) => (s || '').length > n ? (s || '').slice(0, n - 1).trim() + '…' : (s || '');
 
 // ---------- persistence (Dexie, separate db so we don't touch chat schema) ----------
 // eslint-disable-next-line no-undef
@@ -243,6 +245,7 @@ function collectNoteIds(noteId){
 }
 
 async function deleteNoteIds(ids, message){
+  closeAllNoteBranches();
   const idSet = new Set(ids);
   state.notes = state.notes.filter(n => !idSet.has(n.id));
   state.openIds = new Set([...state.openIds].filter(id => !idSet.has(id) && state.notes.some(n => n.id === id)));
@@ -289,7 +292,7 @@ async function confirmDeleteAllNotes(){
 }
 
 function selectNote(id){
-  closeNoteBranch();
+  closeAllNoteBranches();
   state.selectedId = id; state.showIndex = false; save();
   renderSidebar(); renderPage();
 }
@@ -303,6 +306,7 @@ function openPageTab(id){
 
 // Show the Notes index (overview of all pages) instead of a single page.
 function openIndex(){
+  closeAllNoteBranches();
   state.showIndex = true;
   renderSidebar(); renderIndex();
 }
@@ -2090,8 +2094,11 @@ function afterFormat(){
 
 const BRANCHABLE = new Set(['text','h1','h2','h3','h4','bullet','numbered','todo','toggle','quote','callout']);
 let activeBranchId = null;
-let branchStreaming = false;
-let branchController = null;
+// Open floating panels, keyed by bid: { el, collapsed, reader, width, height,
+// top, streaming, controller }. Mirrors chat's `branches` object (app.js).
+const noteBranches = {};
+let noteBranchLayoutRaf = 0;
+let noteBranchMenuTarget = null;
 
 function blockEditorEl(id){
   const wrap = $('#nt-page')?.querySelector('[data-bid="' + id + '"]');
@@ -2106,7 +2113,13 @@ function pruneAnchors(note){
   function collectTexts(blocks){ blocks.forEach(b => { if (b.text) texts.push(b.text); if (b.children) collectTexts(b.children); if (b.cols) b.cols.forEach(c => collectTexts(c)); }); }
   collectTexts(note.blocks);
   const combined = texts.join('');
-  note.branches = note.branches.filter(br => !br.blockId || combined.includes('data-bid="' + br.bid + '"'));
+  const kept = [];
+  note.branches.forEach(br => {
+    const alive = !br.blockId || combined.includes('data-bid="' + br.bid + '"');
+    if (alive) kept.push(br);
+    else if (noteBranches[br.bid]) closeNoteBranch(br.bid);
+  });
+  note.branches = kept;
   if (!note.branches.length) delete note.branches;
 }
 
@@ -2168,96 +2181,422 @@ function startBranch(){
   setTimeout(() => openNoteBranch(bid), 20);
 }
 
+function noteBranchStackEl(){ return $('#nt-branch-stack'); }
+function noteBranchMenuEl(){ return $('#nt-branch-menu'); }
+
+function noteModelLabel(){
+  const keys = JSON.parse(localStorage.getItem('nl_api_keys') || '{}');
+  return keys.anthropic || keys.claude ? 'Claude' : keys.deepseek ? 'DeepSeek' : 'No API key';
+}
+
+function titleFromNoteQuote(q){ return truncate(q || 'Untitled branch', 36); }
+
+function flashNoteBranch(el){
+  el.style.boxShadow = '0 0 0 2px rgba(217,119,87,0.4), ' + getComputedStyle(el).boxShadow;
+  setTimeout(() => { el.style.boxShadow = ''; }, 700);
+}
+
 function openNoteBranch(bid){
-  activeBranchId = bid;
-  const panel = $('#nt-branch-panel'); if (!panel) return;
-  panel.classList.add('show');
-  renderBranchPanel(bid);
-  setTimeout(() => panel.querySelector('.nbp-input')?.focus(), 0);
-}
+  const note = getNote(state.selectedId); if (!note) return;
+  const br = getNoteBranch(note, bid); if (!br) return;
 
-function closeNoteBranch(){
-  if (branchStreaming && branchController){ branchController.abort(); branchStreaming = false; branchController = null; }
-  activeBranchId = null;
-  $('#nt-branch-panel')?.classList.remove('show');
-}
-
-function renderBranchPanel(bid){
-  const panel = $('#nt-branch-panel'); if (!panel) return;
-  const note = getNote(state.selectedId);
-  const br = note && getNoteBranch(note, bid);
-  if (!br){ closeNoteBranch(); return; }
-
-  panel.innerHTML = '';
-
-  // header
-  const hdr = document.createElement('div'); hdr.className = 'nbp-hdr';
-  const lbl = document.createElement('div'); lbl.className = 'nbp-lbl';
-  lbl.innerHTML = '<i class="ti ti-git-branch"></i><span>Branch</span>';
-  const acts = document.createElement('div'); acts.className = 'nbp-hdr-acts';
-  const delBtn = document.createElement('button'); delBtn.className = 'nbp-del'; delBtn.title = 'Delete branch';
-  delBtn.innerHTML = '<i class="ti ti-trash"></i>';
-  delBtn.addEventListener('click', () => deleteNoteBranch(bid));
-  const closeBtn = document.createElement('button'); closeBtn.className = 'nbp-close'; closeBtn.title = 'Close';
-  closeBtn.innerHTML = '<i class="ti ti-x"></i>';
-  closeBtn.addEventListener('click', closeNoteBranch);
-  acts.appendChild(delBtn); acts.appendChild(closeBtn); hdr.appendChild(lbl); hdr.appendChild(acts);
-  panel.appendChild(hdr);
-
-  // quote (text-anchored branches only)
-  if (br.quote){
-    const qsec = document.createElement('div'); qsec.className = 'nbp-quote';
-    const qfrom = document.createElement('div'); qfrom.className = 'nbp-from'; qfrom.textContent = 'BRANCHED FROM NOTE';
-    const qtext = document.createElement('div'); qtext.className = 'nbp-qt-text';
-    qtext.textContent = '“' + br.quote + '”';
-    qsec.appendChild(qfrom); qsec.appendChild(qtext); panel.appendChild(qsec);
+  if (noteBranches[bid]){
+    const nb = noteBranches[bid];
+    if (nb.collapsed) toggleNoteCollapse(bid);
+    activeBranchId = bid;
+    rebalanceNotes();
+    flashNoteBranch(nb.el);
+    setTimeout(() => nb.el.querySelector('textarea')?.focus(), 0);
+    return;
   }
 
-  // messages
-  const body = document.createElement('div'); body.className = 'nbp-body';
-  if (!br.messages.length){
-    const empty = document.createElement('div'); empty.className = 'nbp-empty';
-    empty.textContent = br.quote ? 'Ask about this passage…' : 'Ask anything about this note…';
-    body.appendChild(empty);
-  } else {
-    br.messages.forEach(msg => {
-      const el = document.createElement('div'); el.className = 'nbp-msg ' + msg.role;
-      if (msg.role === 'user') el.innerHTML = '<div class="nbp-bub">' + escapeHtml(msg.content) + '</div>';
-      else el.innerHTML = renderMarkdown(msg.content);
-      body.appendChild(el);
-    });
-  }
-  body.scrollTop = 999999;
-  panel.appendChild(body);
+  closeAllNoteBranches();
+  const stack = noteBranchStackEl(); if (!stack) return;
 
-  // composer
-  const comp = document.createElement('div'); comp.className = 'nbp-comp';
-  const compRow = document.createElement('div'); compRow.className = 'nbp-comp-row';
-  const ta = document.createElement('textarea'); ta.className = 'nbp-input'; ta.rows = 1; ta.disabled = branchStreaming;
-  ta.placeholder = br.quote ? 'Ask about this passage…' : 'Ask about this note…';
-  const grow = () => { ta.style.height='auto'; ta.style.height=Math.min(120,ta.scrollHeight)+'px'; };
-  ta.addEventListener('input', grow);
-  const doSend = () => {
-    if (branchStreaming){ branchController?.abort(); return; }
-    const v = ta.value.trim(); if (!v) return;
-    ta.value = ''; ta.style.height = '';
-    sendNoteMsg(bid, v);
+  const el = document.createElement('div');
+  el.className = `branch entering ${br.collapsed ? 'collapsed' : 'expanded'}${br.messages.length ? '' : ' empty'}`;
+  if (br.userSized) el.classList.add('user-sized');
+  if (br.reader) el.classList.add('reader');
+  el.style.top = '72px';
+  el.dataset.bid = bid;
+  el.innerHTML = `
+    <div class="branch-head">
+      <div class="ico"><i class="ti ti-git-branch"></i></div>
+      <div class="title"><span class="ttl">${escapeHtml(titleFromNoteQuote(br.quote))}</span></div>
+      <div class="actions">
+        <button data-h="reader" title="Expand branch" aria-label="Expand branch"><i class="ti ti-arrows-maximize"></i></button>
+        <button data-h="collapse" title="Collapse/expand"><i class="ti ti-chevron-up"></i></button>
+        <button data-h="menu" title="Branch actions"><i class="ti ti-dots"></i></button>
+        <button data-h="close" title="Close branch"><i class="ti ti-x"></i></button>
+      </div>
+    </div>
+    ${br.quote ? `<div class="branch-quote"><span class="lab">Branched from note</span>"${escapeHtml(truncate(br.quote, 140))}"</div>` : ''}
+    <div class="branch-body"></div>
+    <div class="branch-compose">
+      <div class="composer">
+        <textarea rows="1" placeholder="${br.quote ? 'Ask about this passage…' : 'Ask about this note…'}"></textarea>
+        <div class="compose-row">
+          <div class="left"><span class="chip nbp-model-chip"><i class="ti ti-sparkles"></i>${escapeHtml(noteModelLabel())}</span></div>
+          <button class="send-btn" disabled><i class="ti ti-arrow-up"></i></button>
+        </div>
+      </div>
+    </div>
+    <div class="branch-resize" data-edge="top" title="Resize upward" aria-hidden="true"></div>
+    <div class="branch-resize" data-edge="bottom" title="Resize downward" aria-hidden="true"></div>
+    <div class="branch-resize" data-edge="left" title="Resize sideways" aria-hidden="true"></div>
+    <div class="branch-resize" data-edge="top-left" title="Resize upward and sideways" aria-hidden="true"></div>
+    <div class="branch-resize" data-edge="bottom-left" title="Resize downward and sideways" aria-hidden="true"></div>
+  `;
+  if (br.width) el.style.width = Math.round(br.width) + 'px';
+  if (br.userSized && Number.isFinite(br.height)) el.style.height = Math.round(br.height) + 'px';
+  if (br.userSized && Number.isFinite(br.top)) el.style.top = Math.round(br.top) + 'px';
+  stack.appendChild(el);
+  requestAnimationFrame(() => el.classList.remove('entering'));
+
+  noteBranches[bid] = {
+    el,
+    collapsed: !!br.collapsed,
+    reader: !!br.reader,
+    width: br.width || null,
+    height: br.height || null,
+    top: Number.isFinite(br.top) ? br.top : null,
+    streaming: false,
+    controller: null,
   };
+  activeBranchId = bid;
+  syncNoteReaderButton(bid);
+  renderNoteBranchBody(bid);
+
+  el.querySelector('[data-h="reader"]').addEventListener('click', () => toggleNoteReader(bid));
+  el.querySelector('[data-h="collapse"]').addEventListener('click', () => toggleNoteCollapse(bid));
+  el.querySelector('[data-h="menu"]').addEventListener('click', e => openNoteBranchMenu(e.currentTarget, bid));
+  el.querySelector('[data-h="close"]').addEventListener('click', () => closeNoteBranch(bid));
+  el.querySelector('.branch-head .actions').addEventListener('click', e => e.stopPropagation());
+  el.querySelector('.branch-head').addEventListener('click', e => { if (e.target.closest('.actions')) return; toggleNoteCollapse(bid); });
+  wireNoteBranchResize(el, bid);
+
+  const ta = el.querySelector('textarea');
+  const sb = el.querySelector('.send-btn');
+  const grow = () => { ta.style.height = 'auto'; ta.style.height = Math.min(120, ta.scrollHeight) + 'px'; };
+  ta.addEventListener('input', () => { grow(); updateNoteBranchSendState(bid); });
   ta.addEventListener('keydown', e => {
-    if (e.key==='Enter' && !e.shiftKey){ e.preventDefault(); doSend(); }
-    if (e.key==='Escape'){ e.preventDefault(); closeNoteBranch(); }
+    if (e.key === 'Enter' && !e.shiftKey){ e.preventDefault(); if (!noteBranches[bid]?.streaming) doSendFromComposer(bid); }
   });
   wireTabInsertsTab(ta);
-  const sendBtn = document.createElement('button'); sendBtn.className = 'nbp-send';
-  sendBtn.innerHTML = branchStreaming ? '<i class="ti ti-square-filled" style="font-size:9px"></i>' : '<i class="ti ti-arrow-up"></i>';
-  sendBtn.addEventListener('click', doSend);
-  const keys = JSON.parse(localStorage.getItem('nl_api_keys') || '{}');
-  const modelName = keys.anthropic || keys.claude ? 'Claude' : keys.deepseek ? 'DeepSeek' : 'No API key';
-  const modLab = document.createElement('div'); modLab.className = 'nbp-model-label';
-  modLab.innerHTML = '<i class="ti ti-sparkles"></i> ' + modelName;
-  compRow.appendChild(ta); compRow.appendChild(sendBtn);
-  comp.appendChild(compRow); comp.appendChild(modLab);
-  panel.appendChild(comp);
+  sb.addEventListener('click', () => {
+    const nb = noteBranches[bid]; if (!nb) return;
+    if (nb.streaming){ nb.controller?.abort(); return; }
+    doSendFromComposer(bid);
+  });
+  el.querySelector('.branch-body').addEventListener('scroll', scheduleNoteBranchLayout, { passive:true });
+
+  setTimeout(() => ta.focus(), 280);
+  rebalanceNotes();
+}
+
+function doSendFromComposer(bid){
+  const nb = noteBranches[bid]; if (!nb) return;
+  const ta = nb.el.querySelector('textarea'); if (!ta) return;
+  const v = ta.value.trim(); if (!v) return;
+  ta.value = ''; ta.style.height = '';
+  sendNoteMsg(bid, v);
+}
+
+function renderNoteBranchBody(bid){
+  const nb = noteBranches[bid]; if (!nb) return;
+  const note = getNote(state.selectedId);
+  const br = note && getNoteBranch(note, bid);
+  if (!br) return;
+  const body = nb.el.querySelector('.branch-body'); if (!body) return;
+  body.innerHTML = '';
+  br.messages.forEach(msg => {
+    const el = document.createElement('div'); el.className = 'msg ' + msg.role;
+    if (msg.role === 'user') el.innerHTML = '<div class="bub">' + escapeHtml(msg.content) + '</div>';
+    else el.innerHTML = renderMarkdown(msg.content);
+    body.appendChild(el);
+  });
+  body.scrollTop = body.scrollHeight;
+  nb.el.classList.toggle('empty', !br.messages.length);
+}
+
+function updateNoteBranchSendState(bid){
+  const nb = noteBranches[bid]; if (!nb || nb.streaming) return;
+  const ta = nb.el.querySelector('textarea');
+  const sb = nb.el.querySelector('.send-btn');
+  if (!ta || !sb) return;
+  sb.disabled = !ta.value.trim();
+}
+
+function persistNoteBranchGeometry(bid){
+  const nb = noteBranches[bid]; if (!nb) return;
+  const note = getNote(state.selectedId);
+  const br = note && getNoteBranch(note, bid);
+  if (!br) return;
+  br.collapsed = nb.collapsed;
+  br.reader = nb.reader;
+  if (nb.el.classList.contains('user-sized')){
+    br.userSized = true;
+    if (Number.isFinite(nb.width)) br.width = nb.width;
+    if (Number.isFinite(nb.height)) br.height = nb.height;
+    if (Number.isFinite(nb.top)) br.top = nb.top;
+  }
+  save();
+}
+
+function closeNoteBranch(bid){
+  const nb = noteBranches[bid]; if (!nb) return;
+  if (nb.streaming && nb.controller) nb.controller.abort();
+  persistNoteBranchGeometry(bid);
+  nb.el.style.transition = 'opacity 180ms, transform 180ms';
+  nb.el.style.opacity = '0'; nb.el.style.transform = 'translateX(20px)';
+  setTimeout(() => {
+    nb.el.remove();
+    delete noteBranches[bid];
+    if (activeBranchId === bid) activeBranchId = null;
+    rebalanceNotes();
+  }, 180);
+}
+
+function closeAllNoteBranches(){
+  Object.keys(noteBranches).forEach(closeNoteBranch);
+}
+
+function syncNoteReaderButton(bid){
+  const nb = noteBranches[bid]; if (!nb) return;
+  const btn = nb.el.querySelector('[data-h="reader"]'); if (!btn) return;
+  const expanded = !!nb.reader;
+  const label = expanded ? 'Shrink branch' : 'Expand branch';
+  btn.title = label; btn.setAttribute('aria-label', label);
+  btn.innerHTML = `<i class="ti ${expanded ? 'ti-arrows-minimize' : 'ti-arrows-maximize'}"></i>`;
+}
+
+function setNoteBranchExpanded(nb){
+  nb.collapsed = false;
+  nb.el.classList.remove('collapsed');
+  nb.el.classList.add('expanded');
+  if (nb.height){ nb.el.style.height = Math.round(nb.height) + 'px'; nb.el.classList.add('user-sized'); }
+}
+
+function toggleNoteCollapse(bid){
+  const nb = noteBranches[bid]; if (!nb) return;
+  nb.collapsed = !nb.collapsed;
+  nb.el.classList.toggle('collapsed', nb.collapsed);
+  nb.el.classList.toggle('expanded', !nb.collapsed);
+  if (nb.collapsed) nb.el.style.height = '';
+  else if (nb.height) nb.el.style.height = Math.round(nb.height) + 'px';
+  if (nb.collapsed && nb.reader){ nb.reader = false; nb.el.classList.remove('reader'); syncNoteReaderButton(bid); }
+  persistNoteBranchGeometry(bid);
+  rebalanceNotes();
+}
+
+function toggleNoteReader(bid){
+  const nb = noteBranches[bid]; if (!nb) return;
+  const next = !nb.reader;
+  nb.reader = next;
+  nb.el.classList.toggle('reader', next);
+  if (next) setNoteBranchExpanded(nb);
+  if (next && !nb.height){
+    const r = nb.el.getBoundingClientRect();
+    setNoteBranchSize(nb, Math.max(r.width, 620), Math.max(r.height, 480));
+  }
+  syncNoteReaderButton(bid);
+  activeBranchId = bid;
+  persistNoteBranchGeometry(bid);
+  rebalanceNotes();
+}
+
+function noteBranchRail(){
+  const topbar = $('#nt-topbar');
+  const top = Math.max(70, (topbar?.getBoundingClientRect().bottom || 54) + 12);
+  const bottom = Math.max(top + 140, window.innerHeight - 92);
+  return { top, bottom };
+}
+
+function noteBranchMaxWidth(){
+  const gap = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--drawer-gap')) || 16;
+  return Math.max(340, Math.min(900, window.innerWidth - gap * 2));
+}
+
+function noteBranchResizeBounds(){
+  const rail = noteBranchRail();
+  return { minTop:rail.top, maxBottom:window.innerHeight - 24, minWidth:340, maxWidth:noteBranchMaxWidth(), minHeight:220 };
+}
+
+function setNoteBranchSize(nb, width, height, top = null){
+  if (!nb?.el) return;
+  const bounds = noteBranchResizeBounds();
+  const savedTop = nb.top ?? parseFloat(nb.el.style.top);
+  let nextTop = Number.isFinite(top) ? top : (Number.isFinite(savedTop) ? savedTop : nb.el.getBoundingClientRect().top);
+  if (Number.isFinite(width)){
+    nb.width = clamp(width, bounds.minWidth, bounds.maxWidth);
+    document.documentElement.style.setProperty('--nt-drawer-w', Math.round(nb.width) + 'px');
+    nb.el.style.width = Math.round(nb.width) + 'px';
+  }
+  if (Number.isFinite(height)){
+    nextTop = clamp(nextTop, bounds.minTop, bounds.maxBottom - bounds.minHeight);
+    nb.height = clamp(height, bounds.minHeight, bounds.maxBottom - nextTop);
+    if (!nb.collapsed) nb.el.style.height = Math.round(nb.height) + 'px';
+  }
+  if (Number.isFinite(top)){
+    nb.top = clamp(nextTop, bounds.minTop, bounds.maxBottom - (nb.height || bounds.minHeight));
+    nb.el.style.top = Math.round(nb.top) + 'px';
+  } else if (nb.top == null) {
+    nb.top = parseFloat(nb.el.style.top) || nb.el.getBoundingClientRect().top;
+  }
+  nb.el.classList.add('user-sized');
+  scheduleNoteBranchLayout();
+}
+
+function wireNoteBranchResize(el, bid){
+  const handles = $$('.branch-resize', el);
+  if (!handles.length) return;
+  let drag = null;
+  const finish = (e) => {
+    if (!drag) return;
+    try { drag.handle.releasePointerCapture(e.pointerId); } catch(_){}
+    drag = null;
+    document.body.classList.remove('resizing-branch','resize-x','resize-y','resize-ne-sw','resize-nw-se');
+    persistNoteBranchGeometry(bid);
+  };
+  handles.forEach(handle => handle.addEventListener('pointerdown', e => {
+    if (e.button !== 0) return;
+    const nb = noteBranches[bid]; if (!nb) return;
+    e.preventDefault(); e.stopPropagation();
+    setNoteBranchExpanded(nb);
+    const r = nb.el.getBoundingClientRect();
+    const edge = handle.dataset.edge || 'bottom-left';
+    drag = { handle, edge, startX:e.clientX, startY:e.clientY, startW:r.width, startH:r.height, startTop:r.top, startBottom:r.bottom };
+    handle.setPointerCapture(e.pointerId);
+    document.body.classList.add('resizing-branch');
+    document.body.classList.toggle('resize-x', edge === 'left');
+    document.body.classList.toggle('resize-y', edge === 'top' || edge === 'bottom');
+    document.body.classList.toggle('resize-ne-sw', edge === 'bottom-left');
+    document.body.classList.toggle('resize-nw-se', edge === 'top-left');
+  }));
+  handles.forEach(handle => handle.addEventListener('pointermove', e => {
+    if (!drag) return;
+    const nb = noteBranches[bid]; if (!nb) return;
+    const dx = e.clientX - drag.startX;
+    const dy = e.clientY - drag.startY;
+    const changesWidth = drag.edge.includes('left');
+    const changesTop = drag.edge.includes('top');
+    const changesBottom = drag.edge.includes('bottom');
+    const nextWidth = changesWidth ? drag.startW - dx : NaN;
+    let nextHeight = NaN;
+    let nextTop = null;
+    if (changesTop){
+      const bounds = noteBranchResizeBounds();
+      nextTop = clamp(drag.startTop + dy, bounds.minTop, drag.startBottom - bounds.minHeight);
+      nextHeight = drag.startBottom - nextTop;
+    } else if (changesBottom){
+      nextHeight = drag.startH + dy;
+    }
+    setNoteBranchSize(nb, nextWidth, nextHeight, nextTop);
+  }));
+  handles.forEach(handle => handle.addEventListener('pointerup', finish));
+  handles.forEach(handle => handle.addEventListener('pointercancel', finish));
+}
+
+function rebalanceNotes(){
+  const ids = Object.keys(noteBranches);
+  ids.forEach(id => {
+    const nb = noteBranches[id];
+    nb.el.style.zIndex = id === activeBranchId ? (nb.reader ? '60' : '3') : '1';
+  });
+  noteBranchStackEl()?.classList.toggle('has-active', ids.length > 0);
+  scheduleNoteBranchLayout();
+}
+
+function scheduleNoteBranchLayout(){
+  if (noteBranchLayoutRaf) return;
+  noteBranchLayoutRaf = requestAnimationFrame(() => {
+    noteBranchLayoutRaf = 0;
+    layoutNoteBranches();
+  });
+}
+
+function noteBranchAnchorEl(bid){
+  const escaped = window.CSS?.escape ? CSS.escape(bid) : String(bid).replace(/"/g, '\\"');
+  return $(`#nt-page .nt-br-anchor[data-bid="${escaped}"]`);
+}
+
+function noteSourceIsVisible(rect, rail){
+  return rect.bottom >= rail.top && rect.top <= rail.bottom;
+}
+
+function layoutNoteBranches(){
+  const ids = Object.keys(noteBranches);
+  if (!ids.length) return;
+  const rail = noteBranchRail();
+
+  const placements = ids.filter(id => !noteBranches[id].reader).map((id, index) => {
+    const nb = noteBranches[id];
+    const anchor = noteBranchAnchorEl(id);
+    const anchorRect = anchor?.getBoundingClientRect();
+    const sourceOut = anchorRect && !noteSourceIsVisible(anchorRect, rail);
+    nb.el.classList.toggle('source-out', !!sourceOut);
+    if (sourceOut) return null;
+
+    const height = nb.el.offsetHeight || (nb.collapsed ? 46 : 360);
+    const headerOffset = nb.collapsed ? height / 2 : 22;
+    const anchorY = anchorRect ? anchorRect.top + anchorRect.height / 2 : rail.top + index * 56;
+    const maxTop = rail.bottom - height;
+    const hasManualTop = nb.el.classList.contains('user-sized') && Number.isFinite(nb.top);
+    const desired = hasManualTop ? clamp(nb.top, rail.top, Math.max(rail.top, maxTop)) : clamp(anchorY - headerOffset, rail.top, Math.max(rail.top, maxTop));
+    return { id, el:nb.el, height, desired, top:desired };
+  }).filter(Boolean).sort((a, b) => a.desired - b.desired);
+
+  if (!placements.length) return;
+
+  let cursor = rail.top;
+  placements.forEach(p => { p.top = Math.max(p.desired, cursor); cursor = p.top + p.height + 10; });
+
+  const overflow = cursor - 10 - rail.bottom;
+  if (overflow > 0){
+    const availableShift = Math.max(0, placements[0].top - rail.top);
+    const shift = Math.min(overflow, availableShift);
+    placements.forEach(p => { p.top -= shift; });
+  }
+
+  placements.forEach(p => {
+    p.el.style.top = Math.round(p.top) + 'px';
+    if (noteBranches[p.id]?.el.classList.contains('user-sized')) noteBranches[p.id].top = p.top;
+  });
+}
+
+function openNoteBranchMenu(anchor, bid){
+  noteBranchMenuTarget = bid;
+  const menu = noteBranchMenuEl(); if (!menu) return;
+  const r = anchor.getBoundingClientRect();
+  menu.classList.add('show');
+  menu.style.left = (r.right - menu.offsetWidth) + 'px';
+  menu.style.top = (r.bottom + 6) + 'px';
+}
+
+function closeNoteBranchMenu(){ noteBranchMenuEl()?.classList.remove('show'); noteBranchMenuTarget = null; }
+
+function wireNoteBranchMenu(){
+  const menu = noteBranchMenuEl(); if (!menu || menu.dataset.wired) return;
+  menu.dataset.wired = '1';
+  document.addEventListener('mousedown', e => {
+    if (menu.classList.contains('show') && !menu.contains(e.target)) closeNoteBranchMenu();
+  });
+  menu.addEventListener('click', e => {
+    const btn = e.target.closest('button'); if (!btn || !noteBranchMenuTarget) return;
+    const bid = noteBranchMenuTarget;
+    const act = btn.dataset.act;
+    if (act === 'copy'){
+      const note = getNote(state.selectedId);
+      const br = note && getNoteBranch(note, bid);
+      navigator.clipboard?.writeText(br?.quote || '').catch(() => {});
+      toast('Copied source quote');
+    } else if (act === 'close'){
+      closeNoteBranch(bid);
+    } else if (act === 'delete'){
+      deleteNoteBranch(bid);
+    }
+    closeNoteBranchMenu();
+  });
 }
 
 function buildNoteSystemPrompt(note, quote){
@@ -2282,7 +2621,7 @@ async function streamNoteAI(messages, systemPrompt, signal, onDelta, onDone, onE
       const resp = await fetch('https://api.anthropic.com/v1/messages', {
         method:'POST',
         headers:{ 'x-api-key':claudeKey, 'anthropic-version':'2023-06-01', 'content-type':'application/json' },
-        body:JSON.stringify({ model:'claude-sonnet-4-6', max_tokens:2000, stream:true, system:systemPrompt, messages }),
+        body:JSON.stringify({ model:'claude-sonnet-5', max_tokens:2000, stream:true, system:systemPrompt, messages }),
         signal,
       });
       if (!resp.ok){ const t=await resp.text(); onError('Claude ' + resp.status + ': ' + t.slice(0,200)); return; }
@@ -2304,7 +2643,7 @@ async function streamNoteAI(messages, systemPrompt, signal, onDelta, onDone, onE
       const resp = await fetch('https://api.deepseek.com/v1/chat/completions', {
         method:'POST',
         headers:{ 'Authorization':'Bearer '+deepseekKey, 'Content-Type':'application/json' },
-        body:JSON.stringify({ model:'deepseek-chat', max_tokens:2000, stream:true, messages:[{role:'system',content:systemPrompt},...messages] }),
+        body:JSON.stringify({ model:'deepseek-v4-flash', max_tokens:2000, stream:true, thinking:{ type:'disabled' }, messages:[{role:'system',content:systemPrompt},...messages] }),
         signal,
       });
       if (!resp.ok){ const t=await resp.text(); onError('DeepSeek ' + resp.status + ': ' + t.slice(0,200)); return; }
@@ -2327,30 +2666,29 @@ async function streamNoteAI(messages, systemPrompt, signal, onDelta, onDone, onE
 }
 
 function sendNoteMsg(bid, text){
-  if (branchStreaming || !text.trim()) return;
+  const nb = noteBranches[bid]; if (!nb || nb.streaming || !text.trim()) return;
   const note = getNote(state.selectedId); if (!note) return;
   const br = getNoteBranch(note, bid); if (!br) return;
 
   br.messages.push({ role:'user', content:text }); br.touchedAt = Date.now(); note.updatedAt = Date.now(); save();
 
-  const panel = $('#nt-branch-panel'); if (!panel) return;
-  const body = panel.querySelector('.nbp-body'); if (!body) return;
-  body.querySelector('.nbp-empty')?.remove();
+  const body = nb.el.querySelector('.branch-body'); if (!body) return;
+  nb.el.classList.remove('empty');
 
-  const userEl = document.createElement('div'); userEl.className = 'nbp-msg user';
-  userEl.innerHTML = '<div class="nbp-bub">' + escapeHtml(text) + '</div>';
+  const userEl = document.createElement('div'); userEl.className = 'msg user';
+  userEl.innerHTML = '<div class="bub">' + escapeHtml(text) + '</div>';
   body.appendChild(userEl);
 
-  const aiEl = document.createElement('div'); aiEl.className = 'nbp-msg ai streaming';
+  const aiEl = document.createElement('div'); aiEl.className = 'msg ai streaming';
   aiEl.innerHTML = '<span class="nbp-thinking">…</span>';
-  body.appendChild(aiEl); body.scrollTop = 999999;
+  body.appendChild(aiEl); body.scrollTop = body.scrollHeight;
 
-  const sendBtn = panel.querySelector('.nbp-send');
-  const inp = panel.querySelector('.nbp-input');
-  if (sendBtn) sendBtn.innerHTML = '<i class="ti ti-square-filled" style="font-size:9px"></i>';
+  const sendBtn = nb.el.querySelector('.send-btn');
+  const inp = nb.el.querySelector('textarea');
+  if (sendBtn) sendBtn.innerHTML = '<i class="ti ti-player-stop"></i>';
   if (inp) inp.disabled = true;
 
-  branchStreaming = true; branchController = new AbortController();
+  nb.streaming = true; nb.controller = new AbortController();
 
   const systemPrompt = buildNoteSystemPrompt(note, br.quote);
   const apiMsgs = br.messages.map(m => ({ role:m.role, content:m.content }));
@@ -2359,22 +2697,23 @@ function sendNoteMsg(bid, text){
   }
 
   let fullContent = '';
-  streamNoteAI(apiMsgs, systemPrompt, branchController.signal,
+  streamNoteAI(apiMsgs, systemPrompt, nb.controller.signal,
     (delta) => {
       if (aiEl.querySelector('.nbp-thinking')) aiEl.innerHTML = '';
       fullContent += delta;
       aiEl.innerHTML = renderMarkdown(fullContent);
-      body.scrollTop = 999999;
+      body.scrollTop = body.scrollHeight;
     },
     () => {
-      branchStreaming = false; branchController = null;
+      nb.streaming = false; nb.controller = null;
       aiEl.classList.remove('streaming');
       br.messages.push({ role:'assistant', content:fullContent }); br.touchedAt = Date.now(); note.updatedAt = Date.now(); save();
       if (sendBtn) sendBtn.innerHTML = '<i class="ti ti-arrow-up"></i>';
       if (inp){ inp.disabled = false; setTimeout(() => inp.focus(), 0); }
+      updateNoteBranchSendState(bid);
     },
     (err) => {
-      branchStreaming = false; branchController = null;
+      nb.streaming = false; nb.controller = null;
       aiEl.classList.remove('streaming');
       aiEl.innerHTML = '<span class="nbp-err">Error: ' + escapeHtml(err) + '</span>';
       br.messages.pop(); save();
@@ -2399,7 +2738,9 @@ function deleteNoteBranch(bid){
   }
   note.branches = (note.branches||[]).filter(b => b.bid !== bid);
   if (!note.branches.length) delete note.branches;
-  note.updatedAt = Date.now(); save(); closeNoteBranch(); renderPage();
+  note.updatedAt = Date.now(); save();
+  if (noteBranches[bid]) closeNoteBranch(bid); else if (activeBranchId === bid) activeBranchId = null;
+  renderPage();
 }
 
 // ---------- once-only DOM wiring ----------
@@ -2469,7 +2810,6 @@ function wireGlobalListeners(){
     }
     if (!e.target.closest('#nt-slash') && !e.target.closest('.nt-screen .b .editor')) hideSlash();
     if (!e.target.closest('#nt-mention') && !e.target.closest('.nt-screen .b .editor')) hideMention();
-    if (!e.target.closest('#nt-branch-panel') && !e.target.closest('.nt-br-anchor') && !e.target.closest('.nt-brbadge') && !e.target.closest('.nt-branch-cta')) closeNoteBranch();
   });
   const screen = $('#nt-screen');
   screen?.addEventListener('scroll', () => { $('#nt-topbar')?.classList.toggle('scrolled', screen.scrollTop > 4); });
@@ -2497,7 +2837,7 @@ async function showOverlay(){
   if (state.showIndex || !getNote(state.selectedId)) renderIndex();
   else renderPage();
 }
-function hideOverlay(){ $('#nt-screen')?.classList.remove('show'); hideSlash(); hideMention(); hideToolbar(); closeEmojiPop(); closeNoteBranch(); }
+function hideOverlay(){ $('#nt-screen')?.classList.remove('show'); hideSlash(); hideMention(); hideToolbar(); closeEmojiPop(); closeAllNoteBranches(); }
 
 // ---------- sidebar wiring (in the persistent app sidebar) ----------
 function wireSidebar(){
@@ -2536,6 +2876,7 @@ function wireSidebar(){
 // across sessions) — used by any entry point whose intent is "start fresh in
 // Notes," not "reopen where I left off."
 export function openNotesIndex(){
+  closeAllNoteBranches();
   state.showIndex = true;
   mountView('notes');
 }
@@ -2566,7 +2907,7 @@ export function openNoteInTab(id){
       mountView('notes');
       return;
     }
-    closeNoteBranch();
+    closeAllNoteBranches();
     state.selectedId = id;
     state.showIndex = false;
     save();
@@ -2587,4 +2928,5 @@ export function initNotes(){
   });
   wireSidebar();
   wireGlobalListeners();
+  wireNoteBranchMenu();
 }

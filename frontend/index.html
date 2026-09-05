@@ -188,7 +188,7 @@
       <div class="left">
         <button class="chip" id="main-attach-btn" title="Add files or folder"><i class="ti ti-plus"></i></button>
         <button class="chip" title="Tools"><i class="ti ti-tool"></i></button>
-        <button class="chip model-chip" id="main-model-btn" title="Select model" aria-haspopup="menu" aria-expanded="false"><i class="ti ti-sparkles"></i><span class="model-label">Sonnet 4.6</span><i class="ti ti-chevron-down" style="font-size:11px"></i></button>
+        <button class="chip model-chip" id="main-model-btn" title="Select model" aria-haspopup="menu" aria-expanded="false"><i class="ti ti-sparkles"></i><span class="model-label">Sonnet 5</span><i class="ti ti-chevron-down" style="font-size:11px"></i></button>
         <button class="chip mode-chip" id="main-mode-btn" title="Conversation mode" aria-haspopup="menu" aria-expanded="false"><i class="ti ti-message-2"></i><span class="mode-label">General</span><i class="ti ti-chevron-down" style="font-size:11px"></i></button>
       </div>
       <button class="send-btn" id="main-send" disabled><i class="ti ti-arrow-up"></i></button>
@@ -211,12 +211,32 @@
 <div class="menu" id="model-menu" role="menu" aria-label="Select model" style="min-width:210px">
   <button data-model="opus" role="menuitem">
     <i class="ti ti-crown"></i>
-    <span>Opus 4.8<span class="desc">Best reasoning</span></span>
+    <span>Opus 5<span class="desc">Best reasoning</span></span>
+    <i class="ti ti-check model-check"></i>
+  </button>
+  <button data-model="opus-4-8" role="menuitem">
+    <i class="ti ti-crown"></i>
+    <span>Opus 4.8<span class="desc">Previous gen</span></span>
+    <i class="ti ti-check model-check"></i>
+  </button>
+  <button data-model="opus-4-5" role="menuitem">
+    <i class="ti ti-crown"></i>
+    <span>Opus 4.5<span class="desc">Older gen</span></span>
     <i class="ti ti-check model-check"></i>
   </button>
   <button data-model="sonnet" role="menuitem">
     <i class="ti ti-sparkles"></i>
-    <span>Sonnet 4.6<span class="desc">Best balance</span></span>
+    <span>Sonnet 5<span class="desc">Best balance</span></span>
+    <i class="ti ti-check model-check"></i>
+  </button>
+  <button data-model="sonnet-4-6" role="menuitem">
+    <i class="ti ti-sparkles"></i>
+    <span>Sonnet 4.6<span class="desc">Previous gen</span></span>
+    <i class="ti ti-check model-check"></i>
+  </button>
+  <button data-model="sonnet-4-5" role="menuitem">
+    <i class="ti ti-sparkles"></i>
+    <span>Sonnet 4.5<span class="desc">Older gen</span></span>
     <i class="ti ti-check model-check"></i>
   </button>
   <button data-model="haiku" role="menuitem">
@@ -227,23 +247,28 @@
   <div class="menu-sep"></div>
   <button data-model="deepseek" role="menuitem">
     <i class="ti ti-brand-open-source"></i>
-    <span>DeepSeek Chat<span class="desc">Fast, cheap</span></span>
+    <span>DeepSeek Flash<span class="desc">Fast, cheap</span></span>
     <i class="ti ti-check model-check"></i>
   </button>
   <button data-model="deepseek-r1" role="menuitem">
     <i class="ti ti-brain"></i>
-    <span>DeepSeek R1<span class="desc">Deep thinking</span></span>
+    <span>DeepSeek Thinking<span class="desc">Deep thinking</span></span>
     <i class="ti ti-check model-check"></i>
   </button>
   <div class="menu-sep"></div>
   <button data-model="gpt-4o" role="menuitem">
     <i class="ti ti-brand-openai"></i>
-    <span>GPT-4o<span class="desc">OpenAI flagship</span></span>
+    <span>GPT-5.6 Terra<span class="desc">Balanced, general use</span></span>
     <i class="ti ti-check model-check"></i>
   </button>
   <button data-model="gpt-4o-mini" role="menuitem">
     <i class="ti ti-brand-openai"></i>
-    <span>GPT-4o Mini<span class="desc">Fast and cheap</span></span>
+    <span>GPT-5.6 Luna<span class="desc">Fast and cheap</span></span>
+    <i class="ti ti-check model-check"></i>
+  </button>
+  <button data-model="gpt-5" role="menuitem">
+    <i class="ti ti-brand-openai"></i>
+    <span>GPT-5<span class="desc">Legacy, retires Dec 2026</span></span>
     <i class="ti ti-check model-check"></i>
   </button>
   <div class="menu-sep"></div>
@@ -260,7 +285,7 @@
   <div class="menu-sep"></div>
   <div class="menu-thinking-row">
     <span>Extended thinking</span>
-    <label class="thinking-switch" title="Deeper reasoning before answering. Opus, Sonnet, and DeepSeek R1 only.">
+    <label class="thinking-switch" title="Deeper reasoning before answering. Opus, Sonnet, and DeepSeek Thinking only.">
       <input type="checkbox" id="thinking-toggle">
       <span class="sw-track"></span>
       <span class="sw-thumb"></span>
@@ -479,13 +504,18 @@
     <div class="prefs-section">
       <div class="prefs-label">Default model</div>
       <div class="seg row2">
-        <button data-v="opus"><span class="t">Opus 4.8</span>Best reasoning.</button>
-        <button class="on" data-v="sonnet"><span class="t">Sonnet 4.6</span>Best balance.</button>
+        <button data-v="opus"><span class="t">Opus 5</span>Best reasoning.</button>
+        <button data-v="opus-4-8"><span class="t">Opus 4.8</span>Previous gen.</button>
+        <button data-v="opus-4-5"><span class="t">Opus 4.5</span>Older gen.</button>
+        <button class="on" data-v="sonnet"><span class="t">Sonnet 5</span>Best balance.</button>
+        <button data-v="sonnet-4-6"><span class="t">Sonnet 4.6</span>Previous gen.</button>
+        <button data-v="sonnet-4-5"><span class="t">Sonnet 4.5</span>Older gen.</button>
         <button data-v="haiku"><span class="t">Haiku 4.5</span>Cheap, fast.</button>
-        <button data-v="deepseek"><span class="t">DeepSeek Chat</span>Fast, cheap.</button>
-        <button data-v="deepseek-r1"><span class="t">DeepSeek R1</span>Deep thinking.</button>
-        <button data-v="gpt-4o"><span class="t">GPT-4o</span>OpenAI flagship.</button>
-        <button data-v="gpt-4o-mini"><span class="t">GPT-4o Mini</span>Fast &amp; cheap.</button>
+        <button data-v="deepseek"><span class="t">DeepSeek Flash</span>Fast, cheap.</button>
+        <button data-v="deepseek-r1"><span class="t">DeepSeek Thinking</span>Deep thinking.</button>
+        <button data-v="gpt-4o"><span class="t">GPT-5.6 Terra</span>Balanced, general use.</button>
+        <button data-v="gpt-4o-mini"><span class="t">GPT-5.6 Luna</span>Fast &amp; cheap.</button>
+        <button data-v="gpt-5"><span class="t">GPT-5</span>Legacy, retires Dec 2026.</button>
         <button data-v="gemini-flash"><span class="t">Gemini 2.0 Flash</span>Fast, multimodal.</button>
         <button data-v="gemini-pro"><span class="t">Gemini 2.5 Pro</span>Best reasoning.</button>
       </div>
@@ -765,8 +795,23 @@
   <button data-cmd="branch" title="Branch"><i class="ti ti-git-branch"></i></button>
 </div>
 
-<!-- Notes branch panel (floating right-side, replaces inline comments) -->
-<div id="nt-branch-panel"></div>
+<!-- Notes branch stack (floating right, mirrors #branch-stack) -->
+<div class="branch-stack" id="nt-branch-stack"></div>
+<div class="menu branch-menu" id="nt-branch-menu">
+  <button data-act="copy">
+    <i class="ti ti-copy"></i>
+    <span>Copy as quote</span>
+  </button>
+  <div class="div"></div>
+  <button data-act="close">
+    <i class="ti ti-x"></i>
+    <span>Close branch</span>
+  </button>
+  <button data-act="delete" class="danger">
+    <i class="ti ti-trash"></i>
+    <span>Delete branch<span class="desc">Remove it from this note</span></span>
+  </button>
+</div>
 
 <script src="https://cdn.jsdelivr.net/npm/dexie@4/dist/dexie.min.js"></script>
 <script type="module" src="./app.js"></script>

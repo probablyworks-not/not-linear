@@ -813,12 +813,18 @@ import { appState } from './core/state.js';
   const mainModelBtn = $('#main-model-btn');
   const modelMenu = $('#model-menu');
   const MODEL_OPTIONS = {
-    sonnet: { label:'Sonnet 4.6' },
+    opus: { label:'Opus 5' },
+    'opus-4-8': { label:'Opus 4.8' },
+    'opus-4-5': { label:'Opus 4.5' },
+    sonnet: { label:'Sonnet 5' },
+    'sonnet-4-6': { label:'Sonnet 4.6' },
+    'sonnet-4-5': { label:'Sonnet 4.5' },
     haiku: { label:'Haiku 4.5' },
-    deepseek: { label:'DeepSeek Chat' },
-    'deepseek-r1': { label:'DeepSeek R1' },
-    'gpt-4o': { label:'GPT-4o' },
-    'gpt-4o-mini': { label:'GPT-4o Mini' },
+    deepseek: { label:'DeepSeek Flash' },
+    'deepseek-r1': { label:'DeepSeek Thinking' },
+    'gpt-4o': { label:'GPT-5.6 Terra' },
+    'gpt-4o-mini': { label:'GPT-5.6 Luna' },
+    'gpt-5': { label:'GPT-5' },
     'gemini-flash': { label:'Gemini 2.0 Flash' },
     'gemini-pro': { label:'Gemini 2.5 Pro' },
   };
@@ -842,7 +848,7 @@ import { appState } from './core/state.js';
       $$('[data-model]', modelMenu).forEach(btn => btn.classList.toggle('on', btn.dataset.model === prefs.model));
       const thinkingToggleEl = $('#thinking-toggle');
       const thinkingNote = $('#thinking-note');
-      const thinkingSupported = prefs.model === 'sonnet' || prefs.model === 'deepseek-r1';
+      const thinkingSupported = ['opus', 'sonnet', 'opus-4-8', 'sonnet-4-6', 'deepseek-r1'].includes(prefs.model);
       if (thinkingToggleEl){
         thinkingToggleEl.checked = !!(prefs.thinking && thinkingSupported);
         thinkingToggleEl.disabled = !thinkingSupported;
@@ -851,8 +857,8 @@ import { appState } from './core/state.js';
       }
       if (thinkingNote){
         thinkingNote.textContent = prefs.model === 'deepseek-r1'
-          ? 'DeepSeek R1 always reasons — toggle shows/hides it.'
-          : 'Deeper reasoning. Adds 3–8s. Sonnet only.';
+          ? 'DeepSeek Thinking always reasons — toggle shows/hides it.'
+          : 'Deeper reasoning. Adds 3–8s. Opus and Sonnet only.';
       }
     }
     $$('.branch-model-chip').forEach(btn => {
@@ -885,6 +891,7 @@ import { appState } from './core/state.js';
     const left = Math.min(Math.max(8, r.left), window.innerWidth - modelMenu.offsetWidth - 8);
     let top = r.top - modelMenu.offsetHeight - 6;
     if (top < 8) top = r.bottom + 6;
+    top = Math.max(8, Math.min(top, window.innerHeight - modelMenu.offsetHeight - 8));
     modelMenu.style.left = left + 'px';
     modelMenu.style.top = top + 'px';
     mainModelBtn?.setAttribute('aria-expanded', 'true');
@@ -907,7 +914,7 @@ import { appState } from './core/state.js';
   });
 
   $('#thinking-toggle')?.addEventListener('change', e => {
-    const thinkingSupported = prefs.model === 'sonnet' || prefs.model === 'deepseek-r1';
+    const thinkingSupported = ['opus', 'sonnet', 'opus-4-8', 'sonnet-4-6', 'deepseek-r1'].includes(prefs.model);
     if (!thinkingSupported){ e.target.checked = false; return; }
     prefs.thinking = e.target.checked;
     persistPrefs();
@@ -1484,34 +1491,41 @@ import { appState } from './core/state.js';
 
   function providerForPref(value = prefs.model){
     if (value === 'deepseek' || value === 'deepseek-r1') return 'deepseek';
-    if (value === 'gpt-4o' || value === 'gpt-4o-mini') return 'openai';
+    if (value === 'gpt-4o' || value === 'gpt-4o-mini' || value === 'gpt-5') return 'openai';
     if (value === 'gemini-flash' || value === 'gemini-pro') return 'gemini';
     return 'anthropic';
   }
 
   function modelIdForPref(value = prefs.model){
-    if (value === 'opus') return 'claude-opus-4-8';
+    if (value === 'opus') return 'claude-opus-5';
+    if (value === 'opus-4-8') return 'claude-opus-4-8';
+    if (value === 'opus-4-5') return 'claude-opus-4-5';
+    if (value === 'sonnet-4-6') return 'claude-sonnet-4-6';
+    if (value === 'sonnet-4-5') return 'claude-sonnet-4-5';
     if (value === 'haiku') return 'claude-haiku-4-5-20251001';
-    if (value === 'deepseek') return 'deepseek-chat';
-    if (value === 'deepseek-r1') return 'deepseek-reasoner';
-    if (value === 'gpt-4o') return 'gpt-4o';
-    if (value === 'gpt-4o-mini') return 'gpt-4o-mini';
+    if (value === 'deepseek') return 'deepseek-v4-flash';
+    if (value === 'deepseek-r1') return 'deepseek-v4-flash';
+    if (value === 'gpt-4o') return 'gpt-5.6-terra';
+    if (value === 'gpt-4o-mini') return 'gpt-5.6-luna';
+    if (value === 'gpt-5') return 'gpt-5-2025-08-07';
     if (value === 'gemini-flash') return 'gemini-2.0-flash';
     if (value === 'gemini-pro') return 'gemini-2.5-pro-preview-05-06';
-    return 'claude-sonnet-4-6';
+    return 'claude-sonnet-5';
   }
 
   // modelLabelFromId is imported from providers/tools.js
 
   function modelPricing(model = modelIdForPref()){
     if (String(model).includes('haiku')) return { in: 1 / 1e6, out: 5 / 1e6 };
-    if (String(model).includes('opus')) return { in: 15 / 1e6, out: 75 / 1e6 };
+    if (String(model).includes('opus')) return { in: 5 / 1e6, out: 25 / 1e6 };
     return { in: 3 / 1e6, out: 15 / 1e6 };
   }
 
-  // deepseek-chat and deepseek-reasoner map to DeepSeek V4 Flash aliases.
+  // 'deepseek' and 'deepseek-r1' prefs both resolve to deepseek-v4-flash (see modelIdForPref),
+  // distinguished by the thinking flag passed in getLLMAdapter — same billing rate either way.
   const deepseekPricing = { inMiss: 0.14 / 1e6, inHit: 0.0028 / 1e6, out: 0.28 / 1e6 };
-  const openaiPricing = { 'gpt-4o': { in: 2.5/1e6, out: 10/1e6 }, 'gpt-4o-mini': { in: 0.15/1e6, out: 0.6/1e6 } };
+  // gpt-5-2025-08-07 is deprecated by OpenAI (shuts down 2026-12-11) — kept as an opt-in legacy tier.
+  const openaiPricing = { 'gpt-5.6-terra': { in: 2.5/1e6, out: 15/1e6 }, 'gpt-5.6-luna': { in: 1/1e6, out: 6/1e6 }, 'gpt-5.6-sol': { in: 5/1e6, out: 30/1e6 }, 'gpt-5-2025-08-07': { in: 0.625/1e6, out: 5/1e6 } };
   const geminiPricing = { 'gemini-2.0-flash': { in: 0.1/1e6, out: 0.4/1e6 }, default: { in: 1.25/1e6, out: 10/1e6 } };
 
   // Returns { callFn, buildUserContent, callArgs } for the given model preference.
@@ -1520,9 +1534,9 @@ import { appState } from './core/state.js';
     const systemPrompt = buildSystemPrompt({ extraContext });
     if (modelPref === 'deepseek' || modelPref === 'deepseek-r1'){
       return { callFn: callDeepSeek, buildUserContent: buildPlainUserContent,
-        callArgs: { model: modelPref === 'deepseek-r1' ? 'deepseek-reasoner' : 'deepseek-chat', systemPrompt, tools: buildDeepSeekTools() } };
+        callArgs: { model: 'deepseek-v4-flash', thinking: modelPref === 'deepseek-r1', systemPrompt, tools: buildDeepSeekTools() } };
     }
-    if (modelPref === 'gpt-4o' || modelPref === 'gpt-4o-mini'){
+    if (modelPref === 'gpt-4o' || modelPref === 'gpt-4o-mini' || modelPref === 'gpt-5'){
       return { callFn: callOpenAI, buildUserContent: buildPlainUserContent,
         callArgs: { model: modelIdForPref(modelPref), systemPrompt, tools: buildDeepSeekTools() } };
     }
@@ -1557,7 +1571,7 @@ import { appState } from './core/state.js';
       return tMiss * deepseekPricing.inMiss + tHit * deepseekPricing.inHit + tOut * deepseekPricing.out;
     }
     if (usage.provider === 'openai'){
-      const p = openaiPricing[usage.model] || { in: 2.5/1e6, out: 10/1e6 };
+      const p = openaiPricing[usage.model] || openaiPricing['gpt-5.6-terra'];
       return tIn * p.in + tOut * p.out;
     }
     if (usage.provider === 'gemini'){
@@ -2512,7 +2526,7 @@ import { appState } from './core/state.js';
       const res = await fetch('https://api.deepseek.com/v1/chat/completions', {
         method: 'POST',
         headers: { 'content-type': 'application/json', 'Authorization': `Bearer ${key}` },
-        body: JSON.stringify({ model: 'deepseek-chat', max_tokens: 400, stream: true, messages: summaryMessages }),
+        body: JSON.stringify({ model: 'deepseek-v4-flash', max_tokens: 400, stream: true, thinking: { type:'disabled' }, messages: summaryMessages }),
       });
       if (!res.ok){
         const err = await res.json().catch(() => ({}));
@@ -2859,7 +2873,7 @@ import { appState } from './core/state.js';
         saveTurn({ markUnread: threadId !== appState.currentThreadId });
       },
     };
-    if (isDeepSeekModel) callFn({ ...callArgs, model: prefs.model === 'deepseek-r1' ? 'deepseek-reasoner' : 'deepseek-chat', systemPrompt: inlineSystemPrompt, tools: inlineTools });
+    if (isDeepSeekModel) callFn({ ...callArgs, model: 'deepseek-v4-flash', thinking: prefs.model === 'deepseek-r1', systemPrompt: inlineSystemPrompt, tools: inlineTools });
     else callFn({ ...callArgs, systemPrompt: inlineSystemPrompt, tools: inlineTools });
   }
 
@@ -3933,7 +3947,7 @@ import { appState } from './core/state.js';
     if (['concise','friendly','formal','technical','socratic'].includes(v)){
       prefs.tone = v;
       persistPrefs();
-    } else if (['sonnet','haiku','deepseek','deepseek-r1'].includes(v)){
+    } else if (MODEL_OPTIONS[v]){
       setModelPreference(v);
     } else if (['dark','grey','light'].includes(v)){
       prefs.theme = v;
@@ -4760,7 +4774,7 @@ import { appState } from './core/state.js';
         method: 'POST',
         headers: { 'content-type': 'application/json', 'authorization': `Bearer ${key}` },
         body: JSON.stringify({
-          model: 'deepseek-chat', max_tokens: 100, temperature: 0, stream: false,
+          model: 'deepseek-v4-flash', max_tokens: 100, temperature: 0, stream: false, thinking: { type:'disabled' },
           messages: [
             { role: 'system', content: 'Extract 10–15 precise search keywords from the user query that would help find relevant documentation or code files. Include technical terms, synonyms, and related concepts. Return ONLY a JSON array of strings, e.g. ["authentication","jwt","session","token"].' },
             { role: 'user', content: query },
@@ -4806,7 +4820,7 @@ import { appState } from './core/state.js';
         method: 'POST',
         headers: { 'content-type': 'application/json', 'authorization': `Bearer ${key}` },
         body: JSON.stringify({
-          model: 'deepseek-chat', max_tokens: 150, temperature: 0, stream: false,
+          model: 'deepseek-v4-flash', max_tokens: 150, temperature: 0, stream: false, thinking: { type:'disabled' },
           messages: [
             { role: 'system', content: 'You are a file relevance ranker. Given a user query and numbered files with snippets, return a JSON array of file indices ranked by relevance (most relevant first). Return ONLY valid JSON like [2,0,4]. Include only relevant files. If none are relevant, return [].' },
             { role: 'user', content: `Query: "${query}"\n\nFiles:\n${fileList}` },

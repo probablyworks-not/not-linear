@@ -11,9 +11,13 @@ import {
 import { executeTool, toolResultFallbackMarkdown, modelLabelFromId } from './tools.js';
 
 function modelIdForClaude(pref){
-  if (pref === 'opus') return 'claude-opus-4-8';
+  if (pref === 'opus') return 'claude-opus-5';
+  if (pref === 'opus-4-8') return 'claude-opus-4-8';
+  if (pref === 'opus-4-5') return 'claude-opus-4-5';
+  if (pref === 'sonnet-4-6') return 'claude-sonnet-4-6';
+  if (pref === 'sonnet-4-5') return 'claude-sonnet-4-5';
   if (pref === 'haiku') return 'claude-haiku-4-5-20251001';
-  return 'claude-sonnet-4-6';
+  return 'claude-sonnet-5';
 }
 
 function cleanMessages(messages){
@@ -53,9 +57,8 @@ export async function callClaude({ messages, systemPrompt, tools, onDelta, onThi
   };
 
   const model = modelIdForClaude(appState.prefs.model);
-  const supportsThinking = appState.prefs.model === 'opus' || appState.prefs.model === 'sonnet';
+  const supportsThinking = ['opus', 'sonnet', 'opus-4-8', 'sonnet-4-6'].includes(appState.prefs.model);
   const useThinking = appState.prefs.thinking && supportsThinking;
-  const thinkingBudget = 8000;
   const llmTrace = beginBackendTrace('llm', {
     provider:'anthropic',
     model,
@@ -101,7 +104,7 @@ export async function callClaude({ messages, systemPrompt, tools, onDelta, onThi
         },
         body: JSON.stringify(Object.assign(
           { model, max_tokens: useThinking ? 16000 : 8192, stream: true, system: systemPrompt, messages: currentMessages, tools },
-          useThinking ? { thinking: { type:'enabled', budget_tokens: thinkingBudget } } : {}
+          useThinking ? { thinking: { type:'adaptive' } } : {}
         )),
       }, { provider:'anthropic', label:`messages:${model}`, timeoutMs:MODEL_CONNECT_TIMEOUT_MS });
     } catch(e){

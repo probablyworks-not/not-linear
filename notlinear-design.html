@@ -1,0 +1,918 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>notlinear — design</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.0.0/dist/tabler-icons.min.css">
+<style>
+/* ============================================================
+   tokens.css
+   ============================================================ */
+:root{
+  --bg:#0A0A0A;
+  --bg-2:#111111;
+  --bg-3:#191919;
+  --surface:#0E0E0E;
+  --surface-2:#141414;
+  --rule:#222222;
+  --rule-2:#2E2E2E;
+  --text:#D8D8D8;
+  --text-2:#787878;
+  --text-3:#444444;
+  --accent:#A0A0A0;
+  --accent-2:#C8C8C8;
+  --accent-soft:rgba(160,160,160,0.12);
+  --branch:#58A6FF;
+  --branch-soft:rgba(88,166,255,0.16);
+  --branch-strong:rgba(88,166,255,0.28);
+  --highlight:#F4B83B;
+  --highlight-soft:rgba(244,184,59,0.28);
+  --highlight-strong:rgba(244,184,59,0.42);
+  --user-bub:#1A1A1A;
+  --shadow-md:0 4px 20px rgba(0,0,0,0.60);
+  --shadow-lg:0 12px 48px rgba(0,0,0,0.80);
+  --scrollbar-thumb:rgba(255,255,255,0.08);
+  --kbd-bg:rgba(255,255,255,0.10);
+  --kbd-color:rgba(255,255,255,0.60);
+  --surface-tint:rgba(255,255,255,0.015);
+  --th-tint:rgba(255,255,255,0.025);
+  --font:'Space Grotesk',-apple-system,system-ui,sans-serif;
+  --mono:'Space Mono',ui-monospace,Menlo,monospace;
+  --sidebar-w:264px;
+  --drawer-w:420px;
+  --drawer-gap:16px;
+}
+html[data-theme="grey"]{
+  --bg:#1C1C1C; --bg-2:#232323; --bg-3:#2B2B2B; --surface:#202020; --surface-2:#272727;
+  --rule:#363636; --rule-2:#424242; --text:#CACACA; --text-2:#888888; --text-3:#525252;
+  --accent:#989898; --accent-2:#BABABA; --accent-soft:rgba(152,152,152,0.12); --user-bub:#282828;
+  --shadow-md:0 4px 20px rgba(0,0,0,0.45); --shadow-lg:0 12px 48px rgba(0,0,0,0.65);
+  --scrollbar-thumb:rgba(255,255,255,0.09); --kbd-bg:rgba(255,255,255,0.10); --kbd-color:rgba(255,255,255,0.60);
+  --surface-tint:rgba(255,255,255,0.018); --th-tint:rgba(255,255,255,0.028);
+}
+html[data-theme="light"]{
+  --bg:#F8F8F8; --bg-2:#F0F0F0; --bg-3:#E6E6E6; --surface:#FFFFFF; --surface-2:#F4F4F4;
+  --rule:#E0E0E0; --rule-2:#CCCCCC; --text:#1A1A1A; --text-2:#666666; --text-3:#AAAAAA;
+  --accent:#555555; --accent-2:#333333; --accent-soft:rgba(80,80,80,0.08); --user-bub:#EFEFEF;
+  --shadow-md:0 4px 20px rgba(0,0,0,0.08); --shadow-lg:0 12px 48px rgba(0,0,0,0.14);
+  --scrollbar-thumb:rgba(0,0,0,0.12); --kbd-bg:rgba(0,0,0,0.08); --kbd-color:rgba(0,0,0,0.55);
+  --surface-tint:rgba(0,0,0,0.025); --th-tint:rgba(0,0,0,0.035);
+}
+
+/* ============================================================
+   base.css
+   ============================================================ */
+*{box-sizing:border-box}
+html,body{margin:0;padding:0;background:var(--bg);color:var(--text);font-family:var(--font);font-size:15px;line-height:1.65;-webkit-font-smoothing:antialiased}
+::selection{background:var(--accent-soft);color:var(--text)}
+button{font-family:inherit;cursor:pointer;border:none;background:none;color:inherit}
+textarea,input{font-family:inherit}
+::-webkit-scrollbar{width:8px;height:8px}
+::-webkit-scrollbar-thumb{background:transparent;border-radius:4px}
+*:hover::-webkit-scrollbar-thumb{background:var(--scrollbar-thumb)}
+
+.app{display:block;min-height:100vh}
+.sidebar{position:fixed;top:0;bottom:0;left:0;width:var(--sidebar-w);background:var(--surface-2);border-right:1px solid var(--rule);padding:14px 10px;display:flex;flex-direction:column;z-index:80;transform:translateX(calc(-100% - 1px));transition:transform 220ms cubic-bezier(.2,.7,.2,1);box-shadow:var(--shadow-lg)}
+.sidebar.open{transform:translateX(0)}
+.side-scroll{flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;margin:0 -10px;padding:0 10px;display:flex;flex-direction:column}
+.brand{display:flex;align-items:center;gap:9px;padding:6px 8px;margin-bottom:14px}
+.brand-name{font-size:15px;font-weight:600;letter-spacing:-0.01em}
+.brand-name .accent{color:var(--accent)}
+.brand .side-close{margin-left:auto;width:28px;height:28px}
+.side-item{position:relative;display:flex;align-items:center;gap:9px;padding:6px 8px;border-radius:6px;color:var(--text-2);font-size:13.5px;cursor:pointer;line-height:1.3;width:100%;text-align:left}
+.side-item:hover{background:var(--bg-2);color:var(--text)}
+.side-item.active{background:var(--bg-2);color:var(--text)}
+.side-item .ti{font-size:15px;width:16px;text-align:center}
+.side-item span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.side-item.has-unread::after{content:'';width:6px;height:6px;border-radius:50%;background:var(--accent-2);box-shadow:0 0 0 3px rgba(200,200,200,0.08);margin-left:auto;flex-shrink:0}
+.side-item.thread-row{padding:0;gap:0}
+.thread-open{min-width:0;flex:1;display:flex;align-items:center;gap:9px;padding:6px 8px;border-radius:6px;text-align:left;color:inherit}
+.side-item .thread-title{flex:1}
+.side-item .thread-delete{width:24px;height:24px;margin:0 4px 0 auto;border-radius:5px;display:grid;place-items:center;color:var(--text-3);opacity:0;flex:0 0 auto}
+.side-item:hover .thread-delete,.side-item .thread-delete:focus-visible{opacity:1}
+.side-item .thread-delete:hover{background:var(--bg-3);color:var(--text)}
+.new-chat-btn{display:flex;align-items:center;gap:9px;width:100%;padding:9px 12px;border-radius:10px;background:linear-gradient(160deg,#2E2E2E,#1A1A1A);border:1px solid #0F0F0F;color:#FFFFFF;font-size:13.5px;font-weight:500;text-align:left;box-shadow:0 1px 2px rgba(0,0,0,0.25),inset 0 1px 0 rgba(255,255,255,0.08);transition:box-shadow 160ms,transform 160ms}
+.new-chat-btn:hover{box-shadow:0 4px 14px rgba(0,0,0,0.28),inset 0 1px 0 rgba(255,255,255,0.1);transform:translateY(-1px)}
+.new-chat-icon{width:20px;height:20px;border-radius:6px;background:rgba(255,255,255,0.14);display:grid;place-items:center;flex:0 0 auto}
+.new-chat-icon .ti{font-size:12.5px;width:auto}
+.new-chat-label{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.new-chat-kbd{font-family:var(--mono);font-size:9.5px;color:rgba(255,255,255,0.5);background:rgba(255,255,255,0.12);padding:2px 6px;border-radius:5px;flex:0 0 auto}
+.side-section{margin:14px 8px 4px;font-family:var(--mono);font-size:10px;letter-spacing:0.1em;color:var(--text-3);text-transform:uppercase}
+.side-section.side-section-row{display:flex;align-items:center;justify-content:space-between}
+.side-section-add{width:18px;height:18px;border-radius:4px;display:grid;place-items:center;color:var(--text-3)}
+.side-section-add:hover{background:var(--bg-3);color:var(--text)}
+.side-section-add .ti{font-size:13px}
+.side-section.collapsible .side-sec-label{display:inline-flex;align-items:center;cursor:pointer;flex:1;user-select:none}
+.side-section.collapsible .side-sec-label:hover{color:var(--text-2)}
+.side-caret{font-size:11px;margin-right:4px;transition:transform 140ms ease}
+.side-section.is-collapsed .side-caret{transform:rotate(-90deg)}
+.side-collapse-body.collapsed{display:none}
+.thread-emoji,.project-emoji{flex:0 0 auto;width:26px;height:26px;display:grid;place-items:center;font-size:20px;line-height:1;border-radius:6px;cursor:pointer;margin:-3px 0}
+.thread-emoji:hover,.project-emoji:hover{background:var(--bg-3)}
+.thread-emoji .ti{font-size:20px}
+.project-emoji .ti{font-size:20px;color:var(--accent)}
+.side-item.project-row{padding:0;gap:0}
+.project-open{min-width:0;flex:1;display:flex;align-items:center;gap:9px;padding:6px 8px;border-radius:6px;text-align:left;color:inherit}
+.project-open .project-name{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.project-open .ti{color:var(--accent)}
+.recent-branches{display:flex;flex-direction:column;gap:1px}
+.recent-branch-row{padding:0;gap:0}
+.recent-branch-open{min-width:0;flex:1;display:flex;align-items:center;gap:9px;padding:6px 8px;border-radius:6px;text-align:left;color:inherit}
+.recent-branch-row .ti{color:var(--branch)}
+.recent-branch-page{margin-left:auto;max-width:72px;flex-shrink:0;font-family:var(--mono);font-size:9.5px;color:var(--text-3)}
+.recent-branch-empty{padding:6px 8px;color:var(--text-3);font-size:13px;line-height:1.35}
+.side-foot{margin-top:auto;display:flex;align-items:center;gap:8px;padding:8px;border-radius:6px;cursor:pointer}
+.side-foot:hover{background:var(--bg-2)}
+.avatar{width:24px;height:24px;border-radius:50%;background:linear-gradient(135deg,#D97757,#B5563A);color:#fff;display:grid;place-items:center;font-size:11px;font-weight:600}
+.side-foot .name{font-size:13px;color:var(--text);font-weight:500;flex:1}
+.side-foot .ti{color:var(--text-3);font-size:14px}
+.pane-scrim{position:fixed;inset:0;background:rgba(0,0,0,0.35);opacity:0;pointer-events:none;transition:opacity 200ms;z-index:75}
+.pane-scrim.show{opacity:1;pointer-events:auto}
+
+.main{position:relative;display:flex;flex-direction:column;min-height:100vh;transition:margin-left 220ms cubic-bezier(.2,.7,.2,1),margin-right 240ms cubic-bezier(.2,.7,.2,1)}
+.main.nav-open{margin-left:var(--sidebar-w)}
+.topbar{position:sticky;top:0;z-index:20;background:var(--bg);padding:14px 28px;display:flex;align-items:center;gap:12px;border-bottom:1px solid transparent;transition:border-color 120ms}
+.topbar.scrolled{border-bottom-color:var(--rule)}
+.crumbs{flex:1;display:flex;align-items:center;gap:8px;font-size:13.5px;color:var(--text-2)}
+#crumb-trail{display:flex;align-items:center;gap:8px}
+.crumbs .sep{color:var(--text-3)}
+.crumbs .here{color:var(--text)}
+.ic-btn{width:32px;height:32px;border-radius:7px;color:var(--text-2);display:grid;place-items:center;font-size:16px}
+.ic-btn:hover{background:var(--bg-2);color:var(--text)}
+.ic-btn.active{color:var(--text);background:var(--bg-3)}
+
+.doc-wrap{flex:1;padding:32px 0 200px;display:flex;justify-content:center}
+.doc{width:100%;max-width:780px;padding:0 32px}
+.doc h1{font-size:36px;font-weight:600;letter-spacing:-0.025em;line-height:1.1;margin:8px 0 14px}
+.doc h1 .accent{color:var(--accent);font-weight:500}
+.doc-title-row{display:flex;align-items:center;gap:12px;margin:8px 0 14px}
+.doc-title-row h1{margin:0;flex:1;min-width:0}
+.doc-title-emoji{flex:0 0 auto;width:44px;height:44px;display:grid;place-items:center;border-radius:9px;cursor:pointer;color:var(--text-3);font-size:36px;line-height:1;user-select:none}
+.doc-title-emoji:hover{background:var(--bg-2);color:var(--text)}
+.doc-title-emoji .ti{font-size:34px}
+.doc .eyebrow{font-family:var(--mono);font-size:10.5px;letter-spacing:0.14em;text-transform:uppercase;color:var(--text-3);margin:0 0 12px}
+.doc .meta{display:flex;align-items:center;gap:18px;color:var(--text-3);font-size:12.5px;margin:0 0 30px;padding-bottom:16px;border-bottom:1px solid var(--rule)}
+#meta-dynamic{display:flex;align-items:center;gap:18px;flex:1}
+.doc .meta .item{display:flex;align-items:center;gap:6px}
+.doc .meta .ti{font-size:14px}
+.meta-actions{display:flex;align-items:center;gap:2px;margin-left:auto}
+.meta-actions .ic-btn{width:26px;height:26px;font-size:14px}
+.doc h2{font-size:22px;font-weight:600;letter-spacing:-0.015em;margin:34px 0 8px}
+.doc h3{font-size:17px;font-weight:600;margin:24px 0 6px}
+.doc p{font-size:15px;line-height:1.7;color:var(--text);margin:0 0 12px}
+.doc ul{padding-left:22px;margin:8px 0 14px}
+.doc li{font-size:15px;line-height:1.7;color:var(--text);margin:0 0 6px}
+.doc strong{font-weight:600}
+.doc em{font-style:italic;color:var(--text-2)}
+.doc code{font-family:var(--mono);font-size:13px;background:var(--bg-3);padding:1px 5px;border-radius:3px;color:var(--text-2)}
+.doc .callout{display:flex;gap:12px;background:var(--bg-2);border-radius:10px;padding:14px 16px;margin:16px 0;border:1px solid var(--rule)}
+.doc .callout .ico{font-size:18px;flex-shrink:0;line-height:1.6}
+.doc .callout .body{font-size:14px;color:var(--text-2);line-height:1.65}
+.doc .callout strong{color:var(--text)}
+#doc[contenteditable]{outline:none;caret-color:var(--text-2)}
+
+/* Selection popover */
+.pop{position:fixed;background:var(--surface-2);color:var(--text);border-radius:8px;padding:5px;display:none;align-items:center;gap:1px;box-shadow:var(--shadow-lg);z-index:200;border:1px solid var(--rule-2)}
+.pop.show{display:inline-flex}
+.pop button{padding:7px 11px;border-radius:5px;font-size:13px;display:inline-flex;align-items:center;gap:6px;color:var(--text)}
+.pop button:hover{background:var(--bg-3)}
+.pop .primary{background:var(--accent);color:#fff;font-weight:500}
+.pop .primary:hover{background:var(--accent-2)}
+.pop .div{width:1px;height:18px;background:var(--rule-2);margin:0 2px}
+.pop .ti{font-size:14px}
+.pop .kbd{font-family:var(--mono);font-size:10.5px;color:var(--kbd-color);background:var(--kbd-bg);padding:1px 5px;border-radius:3px;margin-left:4px}
+.pop .primary .kbd{background:rgba(255,255,255,0.18);color:rgba(255,255,255,0.85)}
+
+/* Search palette */
+.search-scrim{position:fixed;inset:0;background:rgba(0,0,0,0.45);opacity:0;pointer-events:none;transition:opacity 160ms;z-index:200}
+.search-scrim.show{opacity:1;pointer-events:auto}
+.search-palette{position:fixed;top:18vh;left:50%;transform:translateX(-50%) translateY(-8px);width:min(560px,92vw);background:var(--bg);border:1px solid var(--rule);border-radius:12px;box-shadow:var(--shadow-lg);overflow:hidden;opacity:0;pointer-events:none;transition:opacity 160ms,transform 160ms;z-index:201}
+.search-palette.show{opacity:1;pointer-events:auto;transform:translateX(-50%) translateY(0)}
+.search-palette-input-row{display:flex;align-items:center;gap:10px;padding:12px 14px;border-bottom:1px solid var(--rule)}
+.search-palette-input-row .ti{color:var(--text-3);font-size:16px;flex-shrink:0}
+.search-palette-input{flex:1;background:none;border:none;outline:none;font-family:var(--font);font-size:14px;color:var(--text);line-height:1.4}
+.search-palette-input::placeholder{color:var(--text-3)}
+.search-results{max-height:min(360px,55vh);overflow-y:auto}
+.search-empty{padding:20px 16px;text-align:center;color:var(--text-3);font-size:13px}
+
+/* Personalization drawer */
+.scrim{position:fixed;inset:0;background:rgba(0,0,0,0.4);opacity:0;pointer-events:none;transition:opacity 200ms;z-index:90}
+.scrim.show{opacity:1;pointer-events:auto}
+.prefs{position:fixed;top:50%;left:50%;width:min(640px,92vw);max-height:82vh;background:var(--surface);box-shadow:var(--shadow-lg);border-radius:14px;border:1px solid var(--rule);opacity:0;transform:translate(-50%,-50%) scale(0.97);transition:transform 220ms cubic-bezier(.2,.7,.2,1),opacity 200ms;pointer-events:none;z-index:100;display:flex;flex-direction:column;overflow:hidden}
+.prefs.show{opacity:1;transform:translate(-50%,-50%) scale(1);pointer-events:auto}
+.prefs-top{padding:16px 18px;border-bottom:1px solid var(--rule);display:flex;align-items:center;gap:10px}
+.prefs-top h3{flex:1;margin:0;font-size:16px;font-weight:600}
+.prefs-body{flex:1;overflow-y:auto;padding:18px}
+.prefs-section{margin-bottom:22px}
+.prefs-label{font-family:var(--mono);font-size:10px;letter-spacing:0.12em;text-transform:uppercase;color:var(--text-3);margin-bottom:8px}
+.prefs-help{font-size:12px;color:var(--text-3);line-height:1.5;margin-top:6px}
+.input{width:100%;padding:9px 11px;border:1px solid var(--rule-2);border-radius:7px;background:var(--surface);font-size:13.5px;color:var(--text);outline:none}
+.input:focus{border-color:var(--text-2)}
+.textarea{min-height:90px;resize:vertical;line-height:1.5}
+.seg{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+.seg button{padding:9px 8px;border:1px solid var(--rule-2);background:var(--surface);border-radius:7px;font-size:12px;color:var(--text-2);text-align:left;line-height:1.3}
+.seg button .t{display:block;font-weight:500;color:var(--text);margin-bottom:2px;font-size:13px}
+.seg button.on{border-color:var(--accent);background:var(--accent-soft)}
+.seg button.on .t{color:var(--accent)}
+.seg.row2{grid-template-columns:repeat(2,1fr)}
+.connect-btn{padding:9px 14px;border-radius:7px;background:var(--surface);border:1px solid var(--rule-2);font-size:13px;color:var(--text-2);white-space:nowrap;flex-shrink:0}
+.connect-btn:hover{border-color:var(--text-2);color:var(--text)}
+.api-add-row{display:flex;gap:6px;margin-top:6px}
+.prefs-action{width:100%;display:flex;align-items:center;gap:9px;padding:9px 11px;border:1px solid var(--rule-2);border-radius:7px;background:var(--surface);font-size:13px;color:var(--text-2);text-align:left;line-height:1.35}
+.prefs-action:hover{border-color:var(--text-2);color:var(--text);background:var(--bg-2)}
+.prefs-action .ti{font-size:14px;flex-shrink:0}
+.prefs-action .action-text{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.prefs-action .ti-chevron-down{margin-left:auto;color:var(--text-3);transition:transform 160ms}
+
+/* Tab strip */
+.tab-strip{display:flex;align-items:flex-end;gap:2px;padding:8px 20px 0;border-bottom:1px solid var(--rule);flex:0 0 auto;background:var(--bg)}
+.tab-strip-list{display:flex;align-items:flex-end;gap:2px;flex:0 1 auto;min-width:0;max-width:100%;overflow-x:auto}
+.tab-item{display:flex;align-items:center;gap:6px;padding:8px 4px;font-size:12.5px;color:var(--text-3);border-bottom:2px solid transparent;white-space:nowrap;flex:0 0 auto;cursor:pointer}
+.tab-item:hover{color:var(--text-2)}
+.tab-item.active{color:var(--text);border-bottom-color:var(--branch)}
+.tab-item-icon{display:grid;place-items:center;width:14px;height:14px;flex:0 0 auto;font-size:13px}
+.tab-item-close{margin-left:2px;border-radius:4px;padding:1px;font-size:12px;color:var(--text-3)}
+.tab-item-close:hover{background:var(--bg-3);color:var(--text)}
+.tab-strip-add{flex:0 0 auto;width:26px;height:26px;margin:0 0 6px 4px;border-radius:6px;color:var(--text-3);display:grid;place-items:center}
+.tab-strip-add:hover{background:var(--bg-2);color:var(--text)}
+
+/* Context panel */
+.ctx-panel{position:fixed;top:64px;right:16px;bottom:16px;width:min(340px,92vw);background:var(--surface);box-shadow:var(--shadow-lg);border-radius:12px;border:1px solid var(--rule);overflow:hidden;transform:translateX(calc(100% + 16px));transition:transform 240ms cubic-bezier(.2,.7,.2,1);z-index:100;display:flex;flex-direction:column}
+.ctx-panel.show{transform:translateX(0)}
+.ctx-top{padding:14px 16px;border-bottom:1px solid var(--rule);display:flex;align-items:center;gap:10px;flex-shrink:0}
+.ctx-top h3{flex:1;margin:0;font-size:14px;font-weight:600;color:var(--text)}
+.ctx-body{flex:1;overflow-y:auto;padding:14px 16px}
+.ctx-section{margin-bottom:20px}
+.ctx-label{font-family:var(--mono);font-size:9.5px;letter-spacing:0.12em;text-transform:uppercase;color:var(--text-3);margin-bottom:8px}
+.ctx-add-btn{font-size:12px;color:var(--text-3);padding:2px 4px;border-radius:4px;line-height:1;margin-top:-2px}
+.ctx-add-btn:hover{color:var(--text);background:var(--bg-2)}
+.ctx-folder{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600;color:var(--text);margin-bottom:6px}
+.ctx-folder .ti{color:var(--text-3);font-size:14px}
+.ctx-page{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:6px;font-size:13px;color:var(--text-2);cursor:pointer;margin-left:16px;position:relative}
+.ctx-page:hover{background:var(--bg-2);color:var(--text)}
+.ctx-page.active{color:var(--text);font-weight:500}
+.ctx-page-title,.ctx-branch-title{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ctx-branch{display:flex;align-items:center;gap:7px;padding:5px 8px;border-radius:6px;font-size:12px;color:var(--text-3);margin-left:36px;cursor:pointer;position:relative}
+.ctx-branch:hover{background:var(--bg-2);color:var(--text-2)}
+.ctx-branch .ti{font-size:11px}
+.ctx-empty{font-size:12px;color:var(--text-3);margin-left:16px}
+
+/* Highlights panel */
+.highlight-panel{position:fixed;top:64px;right:16px;bottom:16px;width:min(380px,92vw);background:var(--surface);box-shadow:var(--shadow-lg);border-radius:12px;border:1px solid var(--rule);overflow:hidden;transform:translateX(calc(100% + 16px));transition:transform 240ms cubic-bezier(.2,.7,.2,1);z-index:100;display:flex;flex-direction:column}
+.highlight-panel.show{transform:translateX(0)}
+#ctx-scrim,#highlight-scrim{background:transparent}
+.highlight-top{padding:14px 16px;border-bottom:1px solid var(--rule);display:flex;align-items:center;gap:10px;flex-shrink:0}
+.highlight-top h3{flex:1;margin:0;font-size:14px;font-weight:600;color:var(--text)}
+.highlight-count{font-family:var(--mono);font-size:10.5px;color:var(--text-3);border:1px solid var(--rule);border-radius:999px;padding:2px 7px}
+.highlight-body{flex:1;overflow-y:auto;padding:14px 16px}
+.highlight-list{display:flex;flex-direction:column;gap:8px}
+.highlight-empty{font-size:12.5px;color:var(--text-3);line-height:1.5;padding:8px 2px}
+
+/* Branch context promote menu */
+.menu{position:fixed;background:var(--surface-2);border:1px solid var(--rule-2);border-radius:8px;box-shadow:var(--shadow-lg);padding:4px;min-width:200px;max-height:calc(100vh - 40px);overflow-y:auto;z-index:220;display:none}
+.menu.show{display:block}
+.menu button{width:100%;padding:7px 10px;border-radius:5px;font-size:13px;color:var(--text);text-align:left;display:flex;align-items:center;gap:9px}
+.menu button:hover{background:var(--bg-3)}
+.menu button.on{background:var(--accent-soft);color:var(--text)}
+.menu button .ti{font-size:14px;color:var(--text-2);width:16px}
+.menu button.on .ti{color:var(--accent)}
+.menu button .desc{display:block;font-size:11.5px;color:var(--text-3);margin-top:1px}
+.menu button.danger,.menu button.danger .ti{color:#f87171}
+.menu .div,.menu-sep{height:1px;background:var(--rule);margin:3px 0}
+.model-check{display:none;margin-left:auto}
+.menu button.on .model-check{display:block}
+.menu-thinking-row{display:flex;align-items:center;justify-content:space-between;padding:7px 12px 6px;gap:10px}
+.menu-thinking-row span{font-size:12.5px;color:var(--text-2)}
+.thinking-switch{position:relative;width:32px;height:18px;flex-shrink:0;cursor:pointer;display:inline-block}
+.thinking-switch input{opacity:0;width:0;height:0;position:absolute}
+.thinking-switch .sw-track{position:absolute;inset:0;border-radius:9px;background:var(--bg-3);border:1px solid var(--rule);transition:background 150ms,border-color 150ms}
+.thinking-switch input:checked + .sw-track{background:var(--accent);border-color:var(--accent)}
+.thinking-switch .sw-thumb{position:absolute;top:2px;left:2px;width:12px;height:12px;border-radius:50%;background:#fff;transition:transform 150ms;box-shadow:0 1px 3px rgba(0,0,0,.3)}
+.thinking-switch input:checked ~ .sw-thumb{transform:translateX(14px)}
+.menu-thinking-note{padding:0 12px 8px;font-size:11px;color:var(--text-3);font-style:italic;margin:0}
+
+/* Toast */
+.toast{position:fixed;bottom:90px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--surface-2);border:1px solid var(--rule-2);color:var(--text);padding:9px 14px;border-radius:8px;font-size:13px;box-shadow:var(--shadow-lg);opacity:0;transition:opacity 200ms,transform 200ms;z-index:500;pointer-events:none;display:flex;align-items:center;gap:8px}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+.toast .ti{color:var(--accent)}
+
+/* Chat messages / branches (chat.css) */
+.branched{background:var(--branch-soft);border-bottom:1px dashed var(--branch);cursor:pointer;border-radius:2px;padding:0 2px;transition:background 120ms}
+.branched:hover{background:var(--branch-strong)}
+.branched .ti{font-size:11px;color:var(--branch);margin-left:3px;vertical-align:1px}
+.chat-stream{padding:8px 0 0;display:flex;flex-direction:column;gap:18px}
+.msg{animation:fadein 220ms ease-out}
+@keyframes fadein{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+.msg.user{display:flex;justify-content:flex-end}
+.msg.user .bub{max-width:75%;background:var(--user-bub);color:var(--text);border-radius:14px;padding:10px 14px;font-size:14.5px;line-height:1.55}
+.msg.ai{font-size:15px;line-height:1.7;color:var(--text)}
+.msg.ai p{margin:0 0 10px}
+.msg.ai p:last-child{margin-bottom:0}
+.msg-actions{display:flex;align-items:center;gap:6px;margin-top:8px}
+.msg-action{display:inline-flex;align-items:center;gap:5px;padding:4px 8px;border:1px solid var(--rule-2);border-radius:6px;background:var(--surface);color:var(--text-2);font-size:12px;line-height:1.3}
+.msg-action:hover{border-color:var(--rule-2);color:var(--text);background:var(--bg-2)}
+.msg-action .ti{font-size:13px}
+
+.composer-wrap{position:fixed;bottom:0;left:0;right:0;padding:10px 32px 14px;background:linear-gradient(to top,var(--bg) 60%,transparent);display:flex;justify-content:center;z-index:30;pointer-events:none;transition:left 220ms cubic-bezier(.2,.7,.2,1),right 240ms cubic-bezier(.2,.7,.2,1)}
+.composer-wrap.nav-open{left:var(--sidebar-w)}
+.composer-wrap.with-drawer{right:calc(var(--drawer-w) + var(--drawer-gap) * 2)}
+.composer{width:100%;max-width:780px;background:var(--surface);border:1px solid var(--rule-2);border-radius:14px;padding:10px 12px;display:flex;flex-direction:column;gap:8px;box-shadow:var(--shadow-md);pointer-events:auto;transition:border-color 120ms,box-shadow 120ms}
+.composer:focus-within{border-color:var(--text-3)}
+.composer textarea{border:none;outline:none;resize:none;background:transparent;color:var(--text);font-size:14.5px;line-height:1.5;width:100%;min-height:24px;max-height:160px;padding:4px 4px}
+.composer textarea::placeholder{color:var(--text-3)}
+.compose-row{display:flex;align-items:center;gap:6px}
+.compose-row .left{display:flex;gap:2px;flex:1}
+.chip{padding:5px 8px;border-radius:6px;font-size:12px;color:var(--text-2);display:inline-flex;align-items:center;gap:5px}
+.chip:hover{background:var(--bg-3);color:var(--text)}
+.chip .ti{font-size:14px}
+.send-btn{background:var(--accent);color:#fff;width:30px;height:30px;border-radius:50%;display:grid;place-items:center;font-size:15px;transition:background 120ms,transform 120ms}
+.send-btn:hover{background:var(--accent-2)}
+.send-btn:disabled{background:var(--bg-3);color:var(--text-3);cursor:not-allowed}
+
+.branch-stack{position:fixed;top:0;right:var(--drawer-gap);bottom:0;width:var(--drawer-w);z-index:40;pointer-events:none}
+.branch-stack.has-active{pointer-events:auto}
+.branch{position:absolute;left:0;right:0;background:var(--surface);border:1px solid var(--rule-2);border-radius:12px;box-shadow:var(--shadow-lg);display:flex;flex-direction:column;overflow:hidden;pointer-events:auto;transition:transform 220ms cubic-bezier(.2,.7,.2,1),opacity 220ms;transform-origin:right center;min-width:340px;max-width:calc(100vw - var(--drawer-gap) * 2)}
+.branch.expanded{height:min(420px,calc(100vh - 156px));min-height:240px}
+.branch-head{display:flex;align-items:center;gap:8px;padding:10px 12px;border-bottom:1px solid var(--rule);cursor:pointer;background:var(--surface);position:relative}
+.branch-head .ico{width:22px;height:22px;border-radius:5px;background:var(--accent-soft);color:var(--accent);display:grid;place-items:center;font-size:13px;flex-shrink:0}
+.branch-head .title{flex:1;font-size:13px;font-weight:500;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:flex;align-items:center;gap:6px}
+.branch-head .title .depth{color:var(--text-3);font-family:var(--mono);font-size:10.5px;margin-right:6px}
+.branch-head .actions{display:flex;gap:1px;opacity:0;pointer-events:none;transition:opacity 120ms}
+.branch:hover .branch-head .actions,.branch:focus-within .branch-head .actions{opacity:1;pointer-events:auto}
+.branch-head .actions button{width:24px;height:24px;border-radius:5px;color:var(--text-3);display:grid;place-items:center;font-size:14px}
+.branch-head .actions button:hover{background:var(--bg-3);color:var(--text)}
+.branch-quote{margin:8px 12px 0;padding:7px 10px;background:var(--bg-2);border-left:2px solid var(--branch);border-radius:0 6px 6px 0;font-size:12.5px;color:var(--text-2);line-height:1.45;font-style:italic}
+.branch-quote .lab{font-family:var(--mono);font-style:normal;font-size:9.5px;letter-spacing:0.12em;text-transform:uppercase;color:var(--branch);margin-bottom:4px;display:block}
+.branch-body{flex:1;min-height:0;overflow-y:auto;padding:8px 12px 4px;display:flex;flex-direction:column;gap:10px}
+.branch-body .msg.user .bub{max-width:80%;font-size:13.5px;padding:8px 12px}
+.branch-body .msg.ai{font-size:14px;line-height:1.65}
+.branch-compose{padding:8px 10px 10px;border-top:1px solid var(--rule);background:var(--surface)}
+.branch-compose .composer{box-shadow:none;border:1px solid var(--rule-2);background:var(--bg-2);padding:8px 10px}
+.branch-compose textarea{font-size:13.5px;min-height:20px;max-height:120px}
+.branch-compose .send-btn{width:26px;height:26px;font-size:13px}
+.branch-compose .chip{font-size:11px;padding:4px 6px}
+
+.attach-row{display:flex;flex-wrap:wrap;gap:4px;padding:4px 4px 0;min-height:0}
+.attach-row:empty{display:none}
+.file-chip{display:inline-flex;align-items:center;gap:5px;padding:3px 6px 3px 7px;background:var(--bg-2);border:1px solid var(--rule-2);border-radius:5px;font-size:11.5px;color:var(--text-2);max-width:160px}
+.file-chip .ti{font-size:12px;flex-shrink:0;color:var(--text-3)}
+.file-chip .fn{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1}
+.file-chip button{color:var(--text-3);padding:0 0 0 2px;font-size:11px;flex-shrink:0}
+.file-chip button:hover{color:var(--text)}
+
+/* Blank tab empty state */
+#blank-tab-empty{display:none;flex:1;flex-direction:column;align-items:center;justify-content:center;gap:22px;color:var(--text-3)}
+.bte-icon{font-size:34px;color:var(--text-3)}
+.bte-hint{font-size:14px;color:var(--text-2)}
+.bte-actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap;justify-content:center;max-width:560px}
+.bte-btn{display:flex;flex-direction:column;align-items:center;gap:8px;width:110px;padding:16px 10px;border-radius:11px;background:var(--surface);border:1px solid var(--rule);font-size:12.5px;color:var(--text-2)}
+.bte-btn:hover{border-color:var(--text-3);box-shadow:var(--shadow-md)}
+.bte-btn .ti{font-size:18px;color:var(--branch)}
+
+/* Responsive */
+@media (max-width: 1100px){
+  .branch-stack{display:none}
+  .composer-wrap.with-drawer{right:0}
+}
+@media (max-width: 760px){
+  .main.nav-open{margin-left:0}
+  .composer-wrap.nav-open{left:0}
+  .sidebar{width:min(300px,88vw)}
+}
+</style>
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="logo-mark" viewBox="0 0 36 36">
+      <rect width="36" height="36" rx="8" fill="#2F2F2E"/>
+      <path d="M21.75 14.6252L13.7442 21.7451" stroke="white" stroke-width="1.5"/>
+      <line y1="-0.75" x2="13.1029" y2="-0.75" transform="matrix(0.973066 0.230525 -0.111169 0.993801 13.5 22.5002)" stroke="white" stroke-width="1.5"/>
+      <line y1="-0.75" x2="9.53419" y2="-0.75" transform="matrix(-0.808595 -0.588365 0.324933 -0.945737 21.96 14.6089)" stroke="white" stroke-width="1.5"/>
+    </symbol>
+  </defs>
+</svg>
+
+<div class="pane-scrim" id="pane-scrim"></div>
+
+<div class="app">
+  <aside class="sidebar" id="sidebar" aria-label="Left pane" aria-hidden="true">
+    <div class="brand">
+      <svg width="24" height="24" aria-hidden="true"><use href="#logo-mark"/></svg>
+      <div class="brand-name">not<span class="accent">linear</span></div>
+      <button class="ic-btn side-close" id="close-sidebar" title="Close left pane"><i class="ti ti-layout-sidebar-left-collapse"></i></button>
+    </div>
+
+    <div class="side-scroll">
+    <button class="side-item" id="search-btn"><i class="ti ti-search"></i><span>Search</span><span style="margin-left:auto;font-family:var(--mono);font-size:10px;color:var(--text-3)">⌘K</span></button>
+    <button class="new-chat-btn" id="new-chat"><span class="new-chat-icon"><i class="ti ti-edit"></i></span><span class="new-chat-label">New chat</span><span class="new-chat-kbd">⌘N</span></button>
+
+    <div class="side-section side-section-row"><span class="side-sec-label"><i class="ti ti-chevron-down side-caret"></i>Projects</span><span style="display:flex;gap:2px"><button class="side-section-add" type="button" title="View all projects"><i class="ti ti-layout-grid"></i></button><button class="side-section-add" type="button" title="New project"><i class="ti ti-plus"></i></button></span></div>
+    <div class="side-collapse-body">
+      <div class="side-item project-row"><button type="button" class="project-open"><i class="ti ti-folder"></i><span class="project-name">Product design</span></button></div>
+      <div class="side-item project-row"><button type="button" class="project-open"><i class="ti ti-folder"></i><span class="project-name">Fundraising</span></button></div>
+    </div>
+
+    <div class="side-section side-section-row"><span><i class="ti ti-chevron-down"></i>coding projects</span><button class="side-section-add" type="button" title="Add coding project"><i class="ti ti-plus"></i></button></div>
+
+    <div class="side-section side-section-row"><span class="side-sec-label"><i class="ti ti-chevron-down side-caret"></i>Threads</span></div>
+    <div class="side-collapse-body">
+      <div class="side-item thread-row active"><button type="button" class="thread-open"><span class="thread-emoji"><i class="ti ti-file-text"></i></span><span class="thread-title">Non-linear chat system</span></button></div>
+      <div class="side-item thread-row"><button type="button" class="thread-open"><span class="thread-emoji"><i class="ti ti-file"></i></span><span class="thread-title">Pricing research</span></button></div>
+      <div class="side-item thread-row"><button type="button" class="thread-open"><span class="thread-emoji"><i class="ti ti-file"></i></span><span class="thread-title">Onboarding flow review</span></button></div>
+      <div class="side-item thread-row"><button type="button" class="thread-open"><span class="thread-emoji"><i class="ti ti-file"></i></span><span class="thread-title">Q3 planning notes</span></button></div>
+    </div>
+
+    <div class="side-section side-section-row"><span><i class="ti ti-chevron-down"></i>Notes</span><div style="display:flex;gap:2px"><button class="side-section-add" type="button" title="Delete all notes"><i class="ti ti-trash"></i></button><button class="side-section-add" type="button" title="New note"><i class="ti ti-plus"></i></button></div></div>
+
+    <div class="side-section">Updates</div>
+    <div style="display:flex;flex-direction:column;gap:2px;margin:2px 0 14px">
+      <button type="button" class="side-item"><i class="ti ti-sparkles"></i><span>Product story</span></button>
+    </div>
+
+    <div class="side-section side-section-row"><span class="side-sec-label"><i class="ti ti-chevron-down side-caret"></i>Recent branches</span></div>
+    <div class="recent-branches side-collapse-body">
+      <div class="side-item recent-branch-row"><button type="button" class="recent-branch-open"><i class="ti ti-git-branch-2"></i><span>Spatial memory does the heavy lifting</span><span class="recent-branch-page">Doc</span></button></div>
+      <div class="side-item recent-branch-row"><button type="button" class="recent-branch-open"><i class="ti ti-git-branch-2"></i><span>Make this the main thread</span><span class="recent-branch-page">Doc</span></button></div>
+    </div>
+    </div>
+
+    <div class="side-foot" id="open-prefs">
+      <div class="avatar">A</div>
+      <div class="name">Alex Chen</div>
+      <i class="ti ti-settings"></i>
+    </div>
+  </aside>
+
+  <div class="main" id="main-el">
+    <div class="tab-strip" id="tab-strip">
+      <div class="tab-strip-list">
+        <div class="tab-item active"><span class="tab-item-icon"><i class="ti ti-file-text"></i></span><span>Non-linear chat system</span></div>
+        <div class="tab-item"><span class="tab-item-icon"><i class="ti ti-notebook"></i></span><span>Notes</span><span class="tab-item-close"><i class="ti ti-x"></i></span></div>
+      </div>
+      <button type="button" class="tab-strip-add" title="New tab"><i class="ti ti-plus"></i></button>
+    </div>
+    <div class="topbar" id="topbar">
+      <button class="ic-btn" id="sidebar-toggle" title="Open left pane" aria-label="Open left pane" aria-expanded="false"><i class="ti ti-layout-sidebar-left-expand"></i></button>
+      <div class="crumbs"><span id="crumb-trail"><span class="here">Non-linear chat system</span></span></div>
+    </div>
+
+    <div id="blank-tab-empty">
+      <div class="bte-icon"><i class="ti ti-edit"></i></div>
+      <div class="bte-hint">Start typing to begin, or pick an option below</div>
+      <div class="bte-actions">
+        <button type="button" class="bte-btn"><i class="ti ti-message-circle-plus"></i><span>New chat</span></button>
+        <button type="button" class="bte-btn"><i class="ti ti-arrow-forward-up"></i><span>Existing chat</span></button>
+        <button type="button" class="bte-btn"><i class="ti ti-folder-plus"></i><span>Projects</span></button>
+        <button type="button" class="bte-btn"><i class="ti ti-folder-code"></i><span>Coding projects</span></button>
+        <button type="button" class="bte-btn"><i class="ti ti-notebook"></i><span>Notes</span></button>
+      </div>
+    </div>
+
+    <div class="doc-wrap">
+      <article class="doc" id="doc" contenteditable="true" spellcheck="false">
+        <p class="eyebrow" contenteditable="false">Working draft · Updated 2h ago</p>
+        <div class="doc-title-row"><span class="doc-title-emoji" title="Set emoji" contenteditable="false"><i class="ti ti-mood-smile"></i></span><h1>Non-linear chat <span class="accent">for research</span></h1></div>
+        <div class="meta" contenteditable="false">
+          <div id="meta-dynamic">
+            <div class="item"><i class="ti ti-user"></i><span>Alex Chen</span></div>
+            <div class="item"><i class="ti ti-clock"></i><span>14 min read</span></div>
+            <div class="item"><i class="ti ti-git-branch" style="color:var(--accent)"></i><span>2 branches</span></div>
+          </div>
+          <div class="meta-actions">
+            <button class="ic-btn" title="Insert emoji"><i class="ti ti-mood-smile"></i></button>
+            <button class="ic-btn" id="ctx-toggle" title="Context &amp; files"><i class="ti ti-sitemap"></i></button>
+            <button class="ic-btn" id="highlight-toggle" title="Highlights"><i class="ti ti-highlight"></i></button>
+            <button class="ic-btn" title="Branches — canvas view"><i class="ti ti-git-branch"></i></button>
+            <button class="ic-btn" title="Thread map"><i class="ti ti-map-2"></i></button>
+          </div>
+        </div>
+
+        <div id="doc-content">
+        <p>A canvas for non-linear thinking. The premise: most tools force a single thread, but real thinking forks constantly — a sentence sparks a tangent, the tangent has its own life, and you want to chase it without losing the spine.</p>
+
+        <p>This document is a chat. You can <strong>highlight any sentence</strong> to start a side-branch with AI, or just keep talking to it from the composer below. Branches appear as floating panels on the right — collapse them, branch from them again, or promote one as your main context.</p>
+
+        <h2>The problem</h2>
+        <p>Linear chat conflates two distinct activities: <strong>composing</strong> a coherent argument and <strong>exploring</strong> the space around it. When you ask a follow-up, the original thread is poisoned — context shifts, and you can't easily go back to where you were.</p>
+        <p>The workaround everyone discovers: open a new tab, paste the relevant excerpt, ask the tangent there. Then forget which tab is which. <span class="branched">Spatial memory does the heavy lifting</span> only as long as your window manager respects it.</p>
+
+        <div class="callout">
+          <span class="ico">✦</span>
+          <div class="body"><strong>The move.</strong> Make branching a one-gesture action — highlight, hit Branch, the side-panel appears. The doc stays where you left it. The branch can branch further, or be promoted to take over the main thread.</div>
+        </div>
+
+        <h2>Core flows</h2>
+
+        <h3>1. Select → Branch</h3>
+        <p>Highlight any text. A floating popover offers <strong>Branch</strong> (primary), comment, format. Branch opens a panel on the right with the selected phrase pinned at the top. The new chat is seeded with that quote as context — you ask, AI answers, and the source is always one glance away.</p>
+        <ul>
+          <li><strong>Borrowed muscle memory.</strong> Same gesture as Notion's comment, just re-aimed.</li>
+          <li><strong>Source becomes context.</strong> The branch always knows what it came from.</li>
+          <li><strong>Two clicks max.</strong> If it takes more, the gesture has failed.</li>
+        </ul>
+
+        <h3>2. Branch the branch</h3>
+        <p>Inside any branch panel, you can highlight an AI reply and branch <em>again</em>. The new sub-branch stacks on top of the parent. Depth is shown in the header — <code>↳ 2</code>, <code>↳ 3</code> — so you always know where you are.</p>
+        <p>Or: hit <strong>Make this the main thread</strong> from a branch's menu, and its conversation <span class="branched">replaces the doc as the working surface</span>. The old doc moves to a tab. This is how a tangent that turned out to matter becomes the new spine.</p>
+
+        <h3>3. The composer is always there</h3>
+        <p>Below this doc is a chat composer. Type into it to keep talking to AI without picking a sentence — useful when you want to add to the document, or generate the next section, or just think out loud. Replies appear inline below this paragraph.</p>
+
+        <h2>Anti-patterns</h2>
+        <ul>
+          <li><strong>No tree icons.</strong> The doc is the spine. Branches are subordinate.</li>
+          <li><strong>No notifications, badges, streaks.</strong> This is a thinking tool. It should never demand attention.</li>
+          <li><strong>No comparison panes inside a branch.</strong> If you want comparison, branch as siblings.</li>
+        </ul>
+        </div>
+
+        <div id="chat-stream" class="chat-stream" contenteditable="false">
+          <div class="msg user"><div class="bub">Can you sketch how branch depth should be shown in the header?</div></div>
+          <div class="msg ai">
+            <p>Use a small monospace tag like <code>↳ 2</code> right before the branch title — depth 1 is the root branch and doesn't need a tag. Keep it muted (<code>--text-3</code>) so it doesn't compete with the title.</p>
+            <div class="msg-actions">
+              <button class="msg-action"><i class="ti ti-copy"></i>Copy</button>
+              <button class="msg-action"><i class="ti ti-git-branch"></i>Branch this</button>
+            </div>
+          </div>
+        </div>
+      </article>
+    </div>
+  </div>
+</div>
+
+<!-- main composer -->
+<div class="composer-wrap" id="composer-wrap">
+  <div class="composer">
+    <div class="attach-row"></div>
+    <textarea id="main-input" rows="1" placeholder="Continue the thread, ask anything, or generate the next section…"></textarea>
+    <div class="compose-row">
+      <div class="left">
+        <button class="chip" title="Add files or folder"><i class="ti ti-plus"></i></button>
+        <button class="chip" title="Tools"><i class="ti ti-tool"></i></button>
+        <button class="chip model-chip" id="main-model-btn" title="Select model" aria-haspopup="menu" aria-expanded="false"><i class="ti ti-sparkles"></i><span class="model-label">Sonnet 5</span><i class="ti ti-chevron-down" style="font-size:11px"></i></button>
+        <button class="chip mode-chip" id="main-mode-btn" title="Conversation mode" aria-haspopup="menu" aria-expanded="false"><i class="ti ti-message-2"></i><span class="mode-label">General</span><i class="ti ti-chevron-down" style="font-size:11px"></i></button>
+      </div>
+      <button class="send-btn" id="main-send" disabled><i class="ti ti-arrow-up"></i></button>
+    </div>
+  </div>
+</div>
+
+<!-- model picker -->
+<div class="menu" id="model-menu" role="menu" aria-label="Select model" style="min-width:210px">
+  <button data-model="opus" class="on" role="menuitem"><i class="ti ti-crown"></i><span>Opus 5<span class="desc">Best reasoning</span></span><i class="ti ti-check model-check"></i></button>
+  <button data-model="sonnet" role="menuitem"><i class="ti ti-sparkles"></i><span>Sonnet 5<span class="desc">Best balance</span></span><i class="ti ti-check model-check"></i></button>
+  <button data-model="haiku" role="menuitem"><i class="ti ti-bolt"></i><span>Haiku 4.5<span class="desc">Cheap and fast</span></span><i class="ti ti-check model-check"></i></button>
+  <div class="menu-sep"></div>
+  <button data-model="deepseek" role="menuitem"><i class="ti ti-brand-open-source"></i><span>DeepSeek Flash<span class="desc">Fast, cheap</span></span><i class="ti ti-check model-check"></i></button>
+  <div class="menu-sep"></div>
+  <div class="menu-thinking-row">
+    <span>Extended thinking</span>
+    <label class="thinking-switch">
+      <input type="checkbox">
+      <span class="sw-track"></span>
+      <span class="sw-thumb"></span>
+    </label>
+  </div>
+  <p class="menu-thinking-note">Deeper reasoning. Adds 3–8s. Opus and Sonnet only.</p>
+</div>
+
+<!-- mode picker -->
+<div class="menu" id="mode-menu" role="menu" aria-label="Select conversation mode" style="min-width:210px">
+  <button data-mode="general" class="on" role="menuitem"><i class="ti ti-message-2"></i><span>General<span class="desc">Balanced default</span></span><i class="ti ti-check model-check"></i></button>
+  <button data-mode="research" role="menuitem"><i class="ti ti-telescope"></i><span>Research<span class="desc">Search-heavy, cited</span></span><i class="ti ti-check model-check"></i></button>
+  <button data-mode="coding" role="menuitem"><i class="ti ti-code"></i><span>Coding<span class="desc">Code-focused, precise</span></span><i class="ti ti-check model-check"></i></button>
+  <div class="menu-sep"></div>
+  <button data-mode="pm" role="menuitem"><i class="ti ti-users"></i><span>PM<span class="desc">User &amp; business focus</span></span><i class="ti ti-check model-check"></i></button>
+  <button data-mode="cto" role="menuitem"><i class="ti ti-cpu"></i><span>CTO<span class="desc">Build &amp; execute</span></span><i class="ti ti-check model-check"></i></button>
+  <button data-mode="critic" role="menuitem"><i class="ti ti-sword"></i><span>Critic<span class="desc">Devil's advocate</span></span><i class="ti ti-check model-check"></i></button>
+</div>
+
+<!-- Selection popover -->
+<div class="pop" id="pop" role="toolbar">
+  <button class="primary" data-act="branch"><i class="ti ti-git-branch"></i> Branch <span class="kbd">B</span></button>
+  <span class="div"></span>
+  <button title="Save highlight"><i class="ti ti-highlight"></i></button>
+  <span class="div"></span>
+  <button title="Ask AI inline"><i class="ti ti-sparkles"></i></button>
+  <span class="div"></span>
+  <button title="Bold"><i class="ti ti-bold"></i></button>
+  <button title="Italic"><i class="ti ti-italic"></i></button>
+  <button title="Link"><i class="ti ti-link"></i></button>
+</div>
+
+<!-- Branch stack (floating right) -->
+<div class="branch-stack has-active" id="branch-stack">
+  <div class="branch expanded" style="top:24px;height:min(420px,calc(100vh - 156px))">
+    <div class="branch-head">
+      <span class="ico"><i class="ti ti-git-branch"></i></span>
+      <span class="title">Spatial memory does the heavy lifting</span>
+      <span class="actions">
+        <button title="Collapse"><i class="ti ti-chevron-down"></i></button>
+        <button title="More"><i class="ti ti-dots"></i></button>
+        <button title="Close"><i class="ti ti-x"></i></button>
+      </span>
+    </div>
+    <div class="branch-quote"><span class="lab">Branched from doc</span>"Spatial memory does the heavy lifting"</div>
+    <div class="branch-body">
+      <div class="msg user"><div class="bub">Is spatial memory reliable enough to build a UX around, or is it a crutch?</div></div>
+      <div class="msg ai"><p>It's reliable for small N (under ~7 open items) and degrades fast after. That's exactly the range a single conversation's branches tend to stay in — so it's a reasonable bet, not a crutch, as long as branches stay visually distinct and don't reflow.</p></div>
+    </div>
+    <div class="branch-compose">
+      <div class="composer">
+        <textarea rows="1" placeholder="Reply in this branch…"></textarea>
+        <div class="compose-row">
+          <div class="left">
+            <button class="chip"><i class="ti ti-plus"></i></button>
+          </div>
+          <button class="send-btn" disabled><i class="ti ti-arrow-up"></i></button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Branch menu -->
+<div class="menu" id="branch-menu">
+  <button data-act="promote"><i class="ti ti-arrow-up-circle"></i><span>Make this the main thread<span class="desc">Replace the doc with this conversation</span></span></button>
+  <button data-act="copy"><i class="ti ti-copy"></i><span>Copy as quote</span></button>
+  <div class="div"></div>
+  <button data-act="close"><i class="ti ti-x"></i><span>Close branch</span></button>
+  <button data-act="delete" class="danger"><i class="ti ti-trash"></i><span>Delete branch<span class="desc">Remove it from this chat</span></span></button>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"><i class="ti ti-check"></i><span>Highlight saved</span></div>
+
+<!-- Context panel -->
+<div class="scrim" id="ctx-scrim"></div>
+<aside class="ctx-panel" id="ctx-panel" aria-label="Context and files">
+  <div class="ctx-top"><h3>Context</h3><button class="ic-btn" id="ctx-close"><i class="ti ti-x"></i></button></div>
+  <div class="ctx-body">
+    <div class="ctx-section">
+      <div class="ctx-label">Hierarchy</div>
+      <div class="ctx-folder"><i class="ti ti-file-text"></i><span>Non-linear chat system</span></div>
+      <div class="ctx-page active"><span class="ctx-page-title">Main doc</span></div>
+      <div class="ctx-branch attached"><i class="ti ti-git-branch"></i><span class="ctx-branch-title">Spatial memory does the heavy lifting</span></div>
+      <div class="ctx-branch"><i class="ti ti-git-branch"></i><span class="ctx-branch-title">Make this the main thread</span></div>
+    </div>
+    <div class="ctx-section">
+      <div class="ctx-label" style="display:flex;align-items:center;justify-content:space-between"><span>Page files</span><button class="ctx-add-btn" title="Add files to this page"><i class="ti ti-file-plus"></i></button></div>
+      <div class="ctx-empty">No files attached to this page.</div>
+    </div>
+  </div>
+</aside>
+
+<!-- Highlights panel -->
+<div class="scrim" id="highlight-scrim"></div>
+<aside class="highlight-panel" id="highlight-panel" aria-label="Highlights">
+  <div class="highlight-top"><h3>Highlights</h3><span class="highlight-count">2</span><button class="ic-btn" id="highlight-close"><i class="ti ti-x"></i></button></div>
+  <div class="highlight-body">
+    <div class="highlight-list">
+      <button class="highlight-row" style="width:100%">
+        <div class="highlight-row-main">
+          <div class="highlight-meta"><i class="ti ti-highlight"></i><span>Doc · Core flows</span></div>
+          <div class="highlight-text">Highlight any text. A floating popover offers Branch (primary), comment, format.</div>
+        </div>
+      </button>
+      <button class="highlight-row" style="width:100%">
+        <div class="highlight-row-main">
+          <div class="highlight-meta"><i class="ti ti-highlight"></i><span>Doc · Anti-patterns</span></div>
+          <div class="highlight-text">No notifications, badges, streaks. This is a thinking tool.</div>
+        </div>
+      </button>
+    </div>
+  </div>
+</aside>
+
+<!-- Search palette -->
+<div class="search-scrim" id="search-scrim"></div>
+<div class="search-palette" id="search-palette" role="dialog" aria-modal="true" aria-label="Search">
+  <div class="search-palette-input-row">
+    <i class="ti ti-search"></i>
+    <input class="search-palette-input" id="search-input" placeholder="Search threads and branches…" autocomplete="off" spellcheck="false">
+  </div>
+  <div class="search-results">
+    <div class="search-empty">Type to search threads, branches, and notes</div>
+  </div>
+</div>
+
+<!-- Personalization -->
+<div class="scrim" id="scrim"></div>
+<aside class="prefs" id="prefs">
+  <div class="prefs-top"><h3>Settings</h3><button class="ic-btn" id="prefs-close"><i class="ti ti-x"></i></button></div>
+  <div class="prefs-body">
+    <div class="prefs-section">
+      <div class="prefs-label">Appearance</div>
+      <div class="seg" id="seg-theme">
+        <button class="on" data-v="dark"><span class="t">Dark</span>Black mono.</button>
+        <button data-v="grey"><span class="t">Grey</span>Softer dark.</button>
+        <button data-v="light"><span class="t">Light</span>Bright &amp; clean.</button>
+      </div>
+    </div>
+    <div class="prefs-section">
+      <div class="prefs-label">Workspace name</div>
+      <input class="input" value="Workspace" />
+    </div>
+    <div class="prefs-section">
+      <div class="prefs-label">What should AI call you?</div>
+      <input class="input" value="Alex" />
+    </div>
+    <div class="prefs-section">
+      <div class="prefs-label">Tone preset</div>
+      <div class="seg">
+        <button class="on" data-v="concise"><span class="t">Concise</span>Short, direct.</button>
+        <button data-v="friendly"><span class="t">Friendly</span>Warm, casual.</button>
+        <button data-v="formal"><span class="t">Formal</span>Precise, structured.</button>
+      </div>
+      <div class="seg row2" style="margin-top:6px">
+        <button data-v="technical"><span class="t">Technical</span>Dense, exact.</button>
+        <button data-v="socratic"><span class="t">Socratic</span>Question-led.</button>
+      </div>
+      <p class="prefs-help">Applied to every AI reply across the main thread and branches.</p>
+    </div>
+    <div class="prefs-section">
+      <div class="prefs-label">What are you working on?</div>
+      <textarea class="input textarea">Designing notlinear — a non-linear AI thinking tool.</textarea>
+    </div>
+    <div class="prefs-section">
+      <div class="prefs-label">API Keys</div>
+      <select class="input" style="margin-bottom:6px">
+        <option>Anthropic (Claude)</option>
+        <option>DeepSeek (branches + context ranking)</option>
+      </select>
+      <div class="api-add-row">
+        <input class="input" type="password" placeholder="Paste API key…" autocomplete="off" />
+        <button class="connect-btn">Connect</button>
+      </div>
+      <p class="prefs-help">Stored locally in your browser. Keys are only sent to their respective APIs.</p>
+    </div>
+    <div class="prefs-section">
+      <div class="prefs-label">Changelog</div>
+      <button class="prefs-action" type="button"><i class="ti ti-history"></i><span class="action-text">View changelog</span><i class="ti ti-chevron-down"></i></button>
+    </div>
+  </div>
+</aside>
+
+<script>
+(function(){
+  var t = localStorage.getItem('nl_theme') || 'dark';
+  if (t==='light' || t==='grey') document.documentElement.setAttribute('data-theme', t);
+
+  var $ = function(s){ return document.querySelector(s); };
+  var mainEl = $('#main-el');
+  var composerWrap = $('#composer-wrap');
+  var sidebar = $('#sidebar');
+  var paneScrim = $('#pane-scrim');
+  var sidebarToggle = $('#sidebar-toggle');
+
+  function setSidebar(open){
+    sidebar.classList.toggle('open', open);
+    sidebar.setAttribute('aria-hidden', String(!open));
+    sidebarToggle.style.display = open ? 'none' : '';
+    var icon = sidebarToggle.querySelector('i');
+    if (icon) icon.className = open ? 'ti ti-layout-sidebar-left-collapse' : 'ti ti-layout-sidebar-left-expand';
+    var dock = open && window.innerWidth > 760;
+    mainEl.classList.toggle('nav-open', dock);
+    composerWrap.classList.toggle('nav-open', dock);
+    paneScrim.classList.toggle('show', open && !dock);
+  }
+  sidebarToggle.addEventListener('click', function(){ setSidebar(true); });
+  $('#close-sidebar').addEventListener('click', function(){ setSidebar(false); });
+  paneScrim.addEventListener('click', function(){ setSidebar(false); });
+
+  // composer autosize
+  function autosize(t){ t.style.height='auto'; t.style.height=Math.min(t.scrollHeight,160)+'px'; }
+  document.querySelectorAll('textarea').forEach(function(t){
+    t.addEventListener('input', function(){ autosize(t); });
+  });
+  var mainInput = $('#main-input');
+  var mainSend = $('#main-send');
+  mainInput.addEventListener('input', function(){ mainSend.disabled = !mainInput.value.trim(); });
+
+  // menus (model / mode)
+  function wireMenu(btnId, menuId){
+    var btn = $(btnId), menu = $(menuId);
+    btn.addEventListener('click', function(e){
+      e.stopPropagation();
+      var showing = menu.classList.contains('show');
+      document.querySelectorAll('.menu.show').forEach(function(m){ m.classList.remove('show'); });
+      if (!showing){
+        var r = btn.getBoundingClientRect();
+        menu.style.left = r.left + 'px';
+        menu.style.top = (r.top - menu.offsetHeight - 8) + 'px';
+        menu.classList.add('show');
+        btn.setAttribute('aria-expanded','true');
+      } else {
+        btn.setAttribute('aria-expanded','false');
+      }
+    });
+    menu.querySelectorAll('button[data-model],button[data-mode]').forEach(function(item){
+      item.addEventListener('click', function(){
+        menu.querySelectorAll('button').forEach(function(b){ b.classList.remove('on'); });
+        item.classList.add('on');
+        var label = item.querySelector('span > span') ? item.querySelector('span').childNodes[0].textContent : item.textContent.trim();
+        var out = btn.querySelector('.model-label,.mode-label');
+        if (out) out.textContent = label;
+        menu.classList.remove('show');
+      });
+    });
+  }
+  wireMenu('#main-model-btn', '#model-menu');
+  wireMenu('#main-mode-btn', '#mode-menu');
+  document.addEventListener('click', function(){
+    document.querySelectorAll('.menu.show').forEach(function(m){ m.classList.remove('show'); });
+  });
+
+  // selection popover
+  var pop = $('#pop');
+  document.getElementById('doc-content') && document.addEventListener('mouseup', function(){
+    var sel = window.getSelection();
+    if (sel && sel.toString().trim().length > 2 && document.getElementById('doc').contains(sel.anchorNode)){
+      var r = sel.getRangeAt(0).getBoundingClientRect();
+      pop.style.left = (r.left + r.width/2 - 90) + 'px';
+      pop.style.top = (r.top - 46) + 'px';
+      pop.classList.add('show');
+    } else if (!pop.contains(document.activeElement)) {
+      pop.classList.remove('show');
+    }
+  });
+  document.addEventListener('mousedown', function(e){
+    if (!pop.contains(e.target)) pop.classList.remove('show');
+  });
+
+  // context / highlight panels
+  function wirePanel(toggleId, panelId, scrimId, closeId){
+    var toggle = $(toggleId), panel = $(panelId), scrim = $(scrimId), close = $(closeId);
+    function open(){ panel.classList.add('show'); scrim.classList.add('show'); toggle.classList.add('active'); }
+    function shut(){ panel.classList.remove('show'); scrim.classList.remove('show'); toggle.classList.remove('active'); }
+    toggle.addEventListener('click', function(){ panel.classList.contains('show') ? shut() : open(); });
+    close.addEventListener('click', shut);
+    scrim.addEventListener('click', shut);
+  }
+  wirePanel('#ctx-toggle', '#ctx-panel', '#ctx-scrim', '#ctx-close');
+  wirePanel('#highlight-toggle', '#highlight-panel', '#highlight-scrim', '#highlight-close');
+
+  // settings drawer
+  var prefs = $('#prefs'), scrim = $('#scrim');
+  function openPrefs(){ prefs.classList.add('show'); scrim.classList.add('show'); }
+  function closePrefs(){ prefs.classList.remove('show'); scrim.classList.remove('show'); }
+  $('#open-prefs').addEventListener('click', openPrefs);
+  $('#prefs-close').addEventListener('click', closePrefs);
+  scrim.addEventListener('click', closePrefs);
+
+  // theme segmented control
+  $('#seg-theme').addEventListener('click', function(e){
+    var b = e.target.closest('button[data-v]');
+    if (!b) return;
+    this.querySelectorAll('button').forEach(function(x){ x.classList.remove('on'); });
+    b.classList.add('on');
+    var v = b.getAttribute('data-v');
+    if (v === 'dark') document.documentElement.removeAttribute('data-theme');
+    else document.documentElement.setAttribute('data-theme', v);
+    localStorage.setItem('nl_theme', v);
+  });
+
+  // generic seg toggles (tone etc.)
+  document.querySelectorAll('.seg:not(#seg-theme)').forEach(function(seg){
+    seg.addEventListener('click', function(e){
+      var b = e.target.closest('button[data-v]');
+      if (!b) return;
+      seg.querySelectorAll('button').forEach(function(x){ x.classList.remove('on'); });
+      b.classList.add('on');
+    });
+  });
+
+  // search palette
+  var searchScrim = $('#search-scrim'), searchPalette = $('#search-palette');
+  function openSearch(){ searchScrim.classList.add('show'); searchPalette.classList.add('show'); $('#search-input').focus(); }
+  function closeSearch(){ searchScrim.classList.remove('show'); searchPalette.classList.remove('show'); }
+  $('#search-btn').addEventListener('click', openSearch);
+  searchScrim.addEventListener('click', closeSearch);
+  document.addEventListener('keydown', function(e){
+    if ((e.metaKey||e.ctrlKey) && e.key.toLowerCase()==='k'){ e.preventDefault(); openSearch(); }
+    if (e.key === 'Escape'){ closeSearch(); closePrefs(); }
+  });
+
+  // toast demo
+  var toast = $('#toast');
+  document.querySelector('.pop [title="Save highlight"]').addEventListener('click', function(){
+    toast.classList.add('show');
+    setTimeout(function(){ toast.classList.remove('show'); }, 1800);
+  });
+
+  // topbar scroll shadow
+  var topbar = $('#topbar');
+  window.addEventListener('scroll', function(){
+    topbar.classList.toggle('scrolled', window.scrollY > 4);
+  }, {passive:true});
+})();
+</script>
+</body>
+</html>
