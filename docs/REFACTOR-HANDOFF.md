@@ -5,7 +5,7 @@ four hardening changes and the provider registry)** are committed on branch
 `refactor/p0-repo-hygiene`. **P3 (React shell) is implemented and automated-green but
 UNCOMMITTED and awaiting the human smoke test.** `main` is untouched at `ccf7504`.
 
-**P3 is committed (`cd5c67e`). P4.1a (Settings + API keys) and P4.1b (Modes manager) are implemented, automated-green and committed after it; the maintainer smoke-tested P3/P4.1 on 2026-10-04 and it passed. P4 item 2 (search palette, threads only) is implemented and committed, not yet smoke-tested. P4 item 3 (changelog viewer) is implemented and committed, NOT the Product story, which the maintainer asked to leave out for now. P4 item 4 (Projects grid and chat-linking) is implemented and committed, not yet smoke-tested; project rules/files/folder are deferred to item 5. Next: P4 item 5 (attachments).**
+**P3 is committed (`cd5c67e`). P4.1a (Settings + API keys) and P4.1b (Modes manager) are implemented, automated-green and committed after it; the maintainer smoke-tested P3/P4.1 on 2026-10-04 and it passed. P4 item 2 (search palette, threads only) is implemented and committed, not yet smoke-tested. P4 item 3 (changelog viewer) is implemented and committed, NOT the Product story, which the maintainer asked to leave out for now. P4 item 4 (Projects grid and chat-linking) is implemented and committed, not yet smoke-tested; project rules/files/folder are deferred to item 5. P4 items 5-7 (attachments machinery with project rules/files/folder, feedback, runtime logs) are implemented and committed, and legacy bug #055 was fixed on the way. **P4 is complete pending the maintainer's smoke test.** Next: P5a, with the dual-write decision already made (ADR-038).**
 
 This file is the context a new session needs. Read it instead of re-deriving the
 state, then read `AGENTS.md` and `CLAUDE.md` for the standing rules.
@@ -54,8 +54,8 @@ which has no FastAPI. `--legacy` runs the old dependency-free server.
 NOTLINEAR_SERVER=fastapi .venv/bin/python -m pytest tests/contract   # 146 (earlier figures here were stale)
 NOTLINEAR_SERVER=legacy  .venv/bin/python -m pytest tests/contract   # 118 + 28 skipped
 .venv/bin/python -m pytest tests/proxy                               # 7
-cd web && pnpm test && pnpm typecheck && pnpm lint                   # 247
-cd web && pnpm e2e                                                   # builds, then 95 Playwright (15 legacy + 80 /web/)
+cd web && pnpm test && pnpm typecheck && pnpm lint                   # 364
+cd web && pnpm e2e                                                   # builds, then 147 Playwright
 ```
 
 Then the manual steps at `AGENTS.md` "Verification" that automation cannot cover:
@@ -188,6 +188,20 @@ blocks Dexie's upgrade to v10 and the app silently never renders (blank body, no
 
 **Do not delete anything under "Landmines" with a range-replace.** See the note above.
 
+**Pointer events: read them before you `setState`.** `onPointerDown={e => setStrokes(s => [...s, [point(e)]])}`
+runs `point(e)` inside the updater, after React has reset `e.currentTarget`; the TypeError during render
+unmounts the WHOLE app. Compute from the event first. Only a real mouse-drag test finds this.
+
+**Every feedback endpoint is mocked in e2e, and the Playwright server runs with `NOTLINEAR_FAKE_NATIVE=1`.**
+A test that reached the real ones would append to the developer's feedback/FEEDBACK.md or open a native
+dialog. Add the same mock for any new `/__notlinear_*` endpoint a spec touches (BUGS.md #053).
+
+**Sidebar helpers key on the `invisible` class.** `aria-hidden` is deleted by Radix when a dialog closes,
+so `null` is ambiguous, and `isVisible()` stays true for the 200ms slide-out.
+
+**The legacy page's `load` event waits on CDN scripts** (mermaid, KaTeX, fonts). In scratch scripts use
+`waitUntil: 'domcontentloaded'` and wait for `.sidebar [data-thread]`.
+
 **Never use `waitForTimeout` to wait for legacy to save.** It flaked 1 run in 3. Poll the
 persisted state (`expect.poll(() => readPersistedState(...))`) for the actual condition.
 
@@ -225,7 +239,7 @@ the one-session-per-phase cadence is not. P5 alone is four sessions.
 | P2a | FastAPI core, static allowlist | **done**, smoke-tested |
 | P2 | Hardening (a-d) + provider registry | **done**, verified live |
 | P3 | React shell | **done, committed, smoke-tested** |
-| P4 | Leaf features | **in progress**: 4.1 Settings, keys and Modes done; items 2 (search, threads only), 3 (changelog; Product story deferred) and 4 (projects grid + chat-linking) done; item 5 (attachments) next |
+| P4 | Leaf features | **in progress**: 4.1 Settings, keys and Modes done; **complete pending smoke test**: 4.1 Settings/keys/Modes, 2 search (threads only), 3 changelog (Product story deferred), 4 projects, 5 attachments (+ project rules/files/folder), 6 feedback, 7 runtime logs |
 | P5 | Chat core (four sub-sessions) | |
 | P6 | Notes editor | |
 | P7 | Extension seams | |

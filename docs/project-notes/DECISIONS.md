@@ -4,6 +4,20 @@ Each entry: **Decision ID · status · context · decision · alternatives rejec
 
 ---
 
+## ADR-049 — P4 items 5-7: attachments, feedback and runtime logs in `/web/`
+- **Status:** accepted 2026-10-04.
+- **Context:** Three leaf features share one hazard: they reach native dialogs, the filesystem or `logs.md`, and legacy has fixed bugs in each (#021, #022, #053, #055). Two of them also depend on the chat composer, which is P5.
+- **Decision:**
+  1. **Attachments:** `web/src/attachments/` ports the file-kind rules, `readFiles` and the three-route picker. File rules and `readFiles` are tested against the real legacy functions cut out of `app.js`. The picker keeps legacy's order and its two lessons: the WebKit route clicks a fresh input synchronously before any `await` (#021), and a cancelled or failed native dialog falls through to the browser input instead of returning (#022). pdf.js stays on the same CDN at the same version rather than becoming a dependency. Its first consumer is the project panel (rules, files, linked folder); project files are stored text-only, base64 dropped, as legacy does.
+  2. **Feedback:** the panel keeps its draft in a store, because closing only hides it. The pen colour is read from a token at draw time, since a canvas cannot resolve `var()`. **Every feedback endpoint is mocked in Playwright**, and the Playwright server runs with `NOTLINEAR_FAKE_NATIVE=1`, so no test can append to the real `feedback/FEEDBACK.md` or put a native dialog on screen.
+  3. **Runtime logs:** the ring buffer, `loggedFetch`, the traces and the logs.md sync move to `web/src/lib/`. Credential redaction happens when an entry is built, not downstream, and is tested against the real legacy `loggedFetch`. The sync sends `X-Notlinear-Local`, which legacy's did not after ADR-035 (BUGS.md #055, fixed in legacy as well).
+  4. **Deferred, deliberately:** the composer `+` menu and "attach a branch transcript" (the composer is P5); and drag-and-drop, which legacy never had despite the handoff listing it. The streaming readers (`readStreamChunk`, `readResponseBody`) wait for P5a, so nothing logs yet in `/web/` beyond what tests inject.
+- **Alternatives rejected:** hitting the real feedback endpoints in e2e with cleanup (one missed cleanup writes into the developer's real log); adding the `pdfjs-dist` package (a large dependency for an occasional path); porting a drag-and-drop that does not exist.
+- **Consequences/tradeoffs:** `/web/` has no way to attach a file to a chat until P5. The runtime-log viewer is empty in practice until P5a. The feedback panel is not modal, so a confirm dialog opens beneath it (z-index) - acceptable, noted.
+- **Related files:** `web/src/{attachments,feedback}/*`, `web/src/lib/{request-log,runtime-log-sync}.ts`, `web/playwright.config.ts`, `web/tests/e2e/web-{project-files,feedback,logs}.spec.ts`
+
+---
+
 ## ADR-048 — Settings: prefs write one key at a time; API keys stay in localStorage and out of IndexedDB
 - **Status:** accepted 2026-10-04.
 - **Context:** `/web/` Settings edits the same `state.prefs` object legacy rewrites whole, and the same `nl_api_keys` entry that `frontend/views/notes.js:3101` parses directly.

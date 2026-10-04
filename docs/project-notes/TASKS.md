@@ -4,6 +4,24 @@ Each entry: **ID · Status · Goal · Context · Files likely involved · Accept
 
 ---
 
+## TASK-P4.5 — Attachments machinery; project rules, files, linked folder
+- **Status:** Done pending smoke test. Composer `+` menu and branch-transcript attach deferred to P5.
+- **Acceptance criteria:** file rules and reader identical to legacy; picker keeps #021/#022 behaviour; project files stored text-only; both apps store the same files for the same picks.
+- **Verification:** RUNS.md TASK-P4.5/6/7; ADR-049.
+
+## TASK-P4.6 — Feedback capture
+- **Status:** Done pending smoke test.
+- **Acceptance criteria:** panel, capture, annotation, Add/Discard, save and the bugs & ideas log behave as legacy; no test reaches the real endpoints.
+
+## TASK-P4.7 — Runtime logs viewer and logs.md sync
+- **Status:** Done pending smoke test. Empty in practice until P5a produces traffic.
+- **Acceptance criteria:** redaction at log time, identical entries to legacy for identical requests, debounced sync that sends `X-Notlinear-Local`.
+
+## TASK-BUG-055 — Legacy runtime-log sync 403 after the P2 hardening
+- **Status:** Done (BUGS.md #055).
+
+---
+
 ## TASK-P4.4 — Projects grid and chat-linking in `/web/`
 - **Status:** Done pending smoke test. Rules, files, linked folder and project emoji deferred to the attachments item.
 - **Goal:** list, create, rename, delete projects and file chats into them, sharing storage with legacy.

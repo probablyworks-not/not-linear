@@ -10,6 +10,7 @@ import { useUiStore } from './state/ui-store';
 import { newChat, syncFromDisk } from './state/actions';
 import { viewForTab } from './shell/TabStrip';
 import { flags } from './flags';
+import { installRuntimeLogSync } from './lib/runtime-log-sync';
 import { togglePanel } from './feedback/feedback-store';
 import './styles/app.css';
 
@@ -23,6 +24,7 @@ async function boot(): Promise<void> {
   useUiStore.getState().restoreTabs(new Set(app.deletedThreadIds), app.currentThreadId);
   mountView(viewForTab(useUiStore.getState().activeTabId ?? app.currentThreadId));
 
+  if (flags.logs) installRuntimeLogSync();
   installGlobalKeys({
     newChat: () => { void newChat(); },
     toggleSearch: () => { if (flags.search) useUiStore.getState().setSearchOpen(!useUiStore.getState().searchOpen); },

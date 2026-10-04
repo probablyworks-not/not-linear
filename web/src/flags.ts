@@ -8,4 +8,5 @@ export const flags = {
   changelog: true,
   projects: true,
   feedback: true,
+  logs: true,
 } as const;

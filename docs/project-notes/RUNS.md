@@ -4,6 +4,15 @@ Each entry: **date/time · task or bug ID · command category · result · impor
 
 ---
 
+## 2026-10-04 — TASK-P4.5/6/7 — full gate — pass (automated only)
+- **Command category:** test / lint / build
+- **Result:** pass, twice in a row
+- **Output:** `pnpm test` 364 (31 files); `pnpm e2e` 147 both runs; `pytest tests/server tests/proxy` 11; contract 146 (fastapi) and 118 + 28 skipped (legacy); typecheck, lint, build clean. Mutation checks caught: re-introducing #021 (click after an await) and #022 (early return on cancelled) in the picker; disabling the screenshot hide-wait; breaking pointer scaling; weakening the credential-header regex; dropping `X-Notlinear-Local` from the log sync.
+- **Notes:** the legacy log-sync regression test fails on the unfixed `app.js` (header `undefined`) and passes with the one-line fix. No test reaches the real feedback or runtime-log endpoints.
+- **Follow-up:** human smoke test of P4 in full; see the checklist in the session summary.
+
+---
+
 ## 2026-10-04 — TASK-P4.4 — full web gate — pass (automated only)
 - **Command category:** test / lint / build
 - **Result:** pass

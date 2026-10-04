@@ -10,6 +10,7 @@ import { ApiKeysSection } from './ApiKeysSection';
 import { flags } from '../flags';
 import { ChangelogSection } from '../changelog/ChangelogSection';
 import { FeedbackLog } from '../feedback/FeedbackLog';
+import { RuntimeLogs } from './RuntimeLogs';
 
 /**
  * Ports the Settings panel (index.html #prefs, app.js:4287). Defaults shown
@@ -144,6 +145,8 @@ function SettingsForm() {
       {flags.changelog && <ChangelogSection />}
 
       {flags.feedback && <FeedbackLog />}
+
+      {flags.logs && <RuntimeLogs />}
     </>
   );
 }

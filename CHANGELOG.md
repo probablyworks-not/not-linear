@@ -5,6 +5,14 @@ All notable repository changes made by AI agents should be recorded here.
 ## 2026-10-04
 
 - Agent: Claude Sonnet 5.5
+- Summary: P4 items 5-7 — project rules, files and linked folder (with the attachment machinery), the Feedback panel with screenshot, recording and annotation, and the Runtime logs viewer with the logs.md sync, all in `/web/`. P4 is now built; the composer-dependent parts (`+` menu, branch-transcript attach) are P5.
+- Files changed: `web/src/{attachments,feedback}/*`, `web/src/lib/{request-log,runtime-log-sync}.ts`, `web/src/{projects,settings,state,shell}/*`, `web/src/{flags.ts,main.tsx}`, `web/playwright.config.ts`, `web/tests/**`, `frontend/styles/tokens.css`, `docs/project-notes/*`, `FEATURES.md`, `docs/REFACTOR-HANDOFF.md`.
+- Behavior changes: none in legacy except the #055 fix below. `tokens.css` gains five additive tokens (`--annotate*`, `--success`). `pnpm e2e` now runs the server with `NOTLINEAR_FAKE_NATIVE=1`.
+- Fixed (legacy): **runtime logs had stopped syncing into `logs.md`** since the P2 hardening, because `syncRuntimeLogFile()` sent no `X-Notlinear-Local` header and the server answered 403 (BUGS.md #055). One header added in `frontend/app.js`, with a regression test.
+- Observed: legacy has no attachment drag-and-drop, although the handoff listed it. The legacy page's `load` event waits on CDN scripts, so scratch scripts should use `domcontentloaded`.
+- Verification: 364 vitest, 147 Playwright (twice), 11 server/proxy, contract suites, typecheck, lint, build. Human smoke test NOT run.
+
+- Agent: Claude Sonnet 5.5
 - Summary: P4 item 4 — Projects in `/web/`: sidebar list, full-screen grid (search, sort, cards), and a project panel for the name, filing chats in and out, creating a chat inside a project, and deleting the project. Behind `flags.projects`.
 - Files changed: `web/src/{db/project-ops.ts,lib/time-ago.ts,projects/*,state/*,shell/*,ui/confirm-copy.ts,db/{types,thread-ops}.ts}`, `web/tests/{projects,e2e}/*`, `docs/project-notes/*`, `FEATURES.md`, `docs/REFACTOR-HANDOFF.md`.
 - Behavior changes: none in legacy. In `/web/`, a chat filed in a project is hidden from the Threads list and reached through its project, as in legacy. Rules, files, the linked folder and project emoji are not shown yet and are left untouched in storage.
