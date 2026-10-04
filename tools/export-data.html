@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="en" data-theme="dark-mono">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>notlinear — export data</title>
+<link rel="stylesheet" href="/frontend/styles/tokens.css">
+<style>
+  /* Standalone tool: tokens.css is reused so this matches the app's palette,
+     but no app CSS is loaded — these pages must keep working even if the
+     frontend is mid-refactor or deleted. */
+  body {
+    margin: 0; padding: 32px 24px;
+    background: var(--bg, #141414); color: var(--text, #e8e8e8);
+    font: 13px/1.6 ui-sans-serif, -apple-system, system-ui, sans-serif;
+  }
+  main { max-width: 760px; margin: 0 auto; }
+  h1 { font-size: 14px; font-weight: 600; margin: 0 0 4px; letter-spacing: .01em; }
+  .sub { color: var(--text-2, #999); margin: 0 0 24px; font-size: 12px; }
+  .card {
+    border: 1px solid var(--rule, #2a2a2a); border-radius: 10px;
+    padding: 18px; margin-bottom: 16px; background: var(--surface, #1a1a1a);
+  }
+  button {
+    font: inherit; font-weight: 500; cursor: pointer;
+    background: var(--accent, #d9622b); color: #fff; border: 0;
+    border-radius: 7px; padding: 9px 16px;
+    transition: opacity 140ms ease;
+  }
+  button:hover:not(:disabled) { opacity: .88; }
+  button:disabled { opacity: .45; cursor: default; }
+  button.secondary { background: transparent; color: var(--text, #e8e8e8); border: 1px solid var(--rule, #2a2a2a); }
+  pre {
+    white-space: pre-wrap; word-break: break-word; font-size: 12px;
+    background: var(--bg, #141414); border: 1px solid var(--rule, #2a2a2a);
+    border-radius: 7px; padding: 12px; margin: 14px 0 0; max-height: 340px; overflow: auto;
+  }
+  .warn { border-left: 2px solid var(--accent, #d9622b); padding-left: 12px; color: var(--text-2, #999); font-size: 12px; }
+  .err { color: #e5584d; }
+  .ok { color: #4caf7d; }
+  code { font-size: 12px; background: var(--bg, #141414); padding: 1px 5px; border-radius: 4px; }
+  ol { padding-left: 20px; } li { margin-bottom: 6px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Export notlinear data</h1>
+  <p class="sub">Reads both IndexedDB databases and all of localStorage, and saves them as one JSON file.
+     &nbsp;·&nbsp; <a href="/frontend/index.html" style="color:var(--accent,#d9622b)">Open the app</a></p>
+
+  <div class="card" id="origin-card"></div>
+
+  <div class="card">
+    <button id="export" disabled>Read data and download backup</button>
+    <button id="preview" class="secondary" disabled>Preview without downloading</button>
+    <button id="raw" class="secondary" hidden>Show raw JSON</button>
+    <pre id="out" hidden></pre>
+    <textarea id="rawbox" hidden readonly spellcheck="false"
+      style="width:100%;height:220px;margin-top:12px;font:12px/1.5 ui-monospace,monospace;
+             background:var(--bg,#141414);color:var(--text,#e8e8e8);
+             border:1px solid var(--rule,#2a2a2a);border-radius:7px;padding:10px"></textarea>
+  </div>
+
+  <div class="card warn">
+    <strong>The backup file contains your API keys and the full text of your notes, in plain text.</strong>
+    Store it outside this repository — anywhere inside it risks being committed. Keep a copy off this machine.
+  </div>
+
+  <div class="card">
+    <strong style="font-size:12px">Why this exists</strong>
+    <ol style="margin:10px 0 0">
+      <li>Every thread, branch, highlight and note lives only in this browser profile. Nothing else holds a copy.</li>
+      <li>Clearing site data for <code>127.0.0.1</code> deletes all of it, with no undo and no warning.</li>
+      <li>An export you have never restored is not a backup. Use <a href="/tools/import-data.html" style="color:var(--accent,#d9622b)">import-data.html</a> to restore this file into a fresh browser profile once, and confirm your threads and notes appear, before relying on it.</li>
+    </ol>
+  </div>
+</main>
+
+<script type="module">
+import { createBackup, summarize, saveTextFile, detectRealm, DB_NAMES, listExistingDatabases } from './_backup-lib.js';
+
+const $ = id => document.getElementById(id);
+const out = $('out');
+const rawBtn = $('raw');
+let rawJSON = '';   // kept so the raw-JSON escape hatch can show the exact bytes we tried to save
+
+// Guard the origin before enabling anything. IndexedDB is origin-scoped, so
+// opening this page over file:// or on localhost:NNNN silently reads a
+// different (empty) database — and an empty backup that reports success is the
+// single worst outcome this tool could produce.
+async function checkOrigin(){
+  const card = $('origin-card');
+  if (location.protocol === 'file:'){
+    card.innerHTML = '<span class="err"><strong>Opened as a file, not through the server.</strong></span><br>'
+      + 'IndexedDB is per-origin, so this page cannot see your data. Start the server and open '
+      + '<code>http://127.0.0.1:8765/tools/export-data.html</code>.';
+    return false;
+  }
+  const realm = detectRealm();
+  const existing = await listExistingDatabases();
+  const present = DB_NAMES.filter(n => existing.includes(n));
+  const realmLine = `<strong>Backing up: ${realm.label}</strong><br>`
+    + '<span style="color:var(--text-2,#999)">The desktop app and each browser keep <em>separate</em> databases, '
+    + 'even though all of them load <code>http://127.0.0.1:8765</code>. This page can only back up the one it is '
+    + 'running in, so run it once per place you have data.</span><hr style="border:0;border-top:1px solid var(--rule,#2a2a2a);margin:12px 0">';
+
+  if (!present.length){
+    card.innerHTML = realmLine + `<span class="err"><strong>No notlinear databases found here.</strong></span><br>`
+      + 'Nothing to back up in this realm. If your threads are in the desktop app, run this page '
+      + 'inside the app (see below). If they are in a browser, check you are on '
+      + '<code>http://127.0.0.1:8765</code> — <code>localhost</code> is a different origin with different data.';
+    return false;
+  }
+  const missing = DB_NAMES.filter(n => !existing.includes(n));
+  card.innerHTML = realmLine + `<span class="ok">Found:</span> <code>${present.join('</code>, <code>')}</code>`
+    + (missing.length ? `<br><span style="color:var(--text-2,#999)">Not present (nothing to back up): <code>${missing.join('</code>, <code>')}</code></span>` : '');
+  return true;
+}
+
+// run: build the backup once, then either show it or download it. Both buttons
+// share this so a preview reflects exactly what a download would contain.
+async function run(download){
+  $('export').disabled = $('preview').disabled = true;
+  out.hidden = false;
+  out.textContent = 'Reading…';
+  try {
+    const backup = await createBackup();
+    const json = JSON.stringify(backup, null, 2);
+    const size = (new Blob([json]).size / 1024).toFixed(1);
+    out.textContent = summarize(backup) + `\n\nBackup size: ${size} KB`;
+
+    if (download){
+      // Timestamp in the filename, colons stripped so it is a legal filename
+      // on every platform. saveTextFile picks a save route that actually works
+      // here — a plain blob download does nothing inside the desktop app.
+      const stamp = backup.createdAt.replace(/[:.]/g, '-');
+      const route = await saveTextFile(`notlinear-backup-${stamp}.json`, json);
+      out.textContent += route === 'cancelled'
+        ? '\n\nSave cancelled — nothing was written.'
+        : `\n\nSaved via ${route}. Move it outside this repo, then restore it once to prove it works.`
+          + '\n\nIf no file appeared, use "Show raw JSON" below and paste it into a file by hand.';
+      rawBtn.hidden = false;
+      rawJSON = json;
+    }
+  } catch (err){
+    out.textContent = 'Export failed: ' + (err?.message || err)
+      + '\n\nNothing was written or changed. Reading is all this page does.';
+    out.classList.add('err');
+  } finally {
+    $('export').disabled = $('preview').disabled = false;
+  }
+}
+
+// Last-ditch path: if every save route fails silently (most likely inside the
+// desktop app), show the exact JSON so it can be copied into a file by hand.
+rawBtn.addEventListener('click', () => {
+  const box = $('rawbox');
+  box.hidden = !box.hidden;
+  if (!box.hidden){ box.value = rawJSON; box.focus(); box.select(); }
+});
+
+$('export').addEventListener('click', () => run(true));
+$('preview').addEventListener('click', () => run(false));
+
+checkOrigin().then(ok => {
+  if (ok) $('export').disabled = $('preview').disabled = false;
+});
+</script>
+</body>
+</html>
