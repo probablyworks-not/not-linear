@@ -176,7 +176,11 @@ class TestScanProject:
 
     def test_nonexistent_path_reports_an_error_not_a_crash(self, server: str) -> None:
         response = post(server, "/__notlinear_scan_project", {"path": "/definitely/not/here"})
-        assert response.status_code in (200, 400)
+        # FastAPI refuses before scanning: an unapproved path is 403 whether or
+        # not it exists, which also avoids leaking whether it exists. The old
+        # server had no consent ledger and simply failed the scan.
+        expected = (403,) if server_flavour() == "fastapi" else (200, 400)
+        assert response.status_code in expected
         assert response.json()["ok"] is False
 
     def test_scanning_a_real_directory_returns_ok(self, server: str, tmp_path: Any) -> None:

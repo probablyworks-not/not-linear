@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import base64
 import mimetypes
+import re
 import os
 import signal
 import subprocess
@@ -41,12 +42,27 @@ class NativeUnavailable(RuntimeError):
     """Raised when a native dialog is requested but cannot be shown."""
 
 
-def _run_osascript(script: str, timeout: int = OSASCRIPT_TIMEOUT_S) -> subprocess.CompletedProcess[str]:
+def _run_osascript(
+    script: str,
+    timeout: int = OSASCRIPT_TIMEOUT_S,
+    args: list[str] | None = None,
+) -> subprocess.CompletedProcess[str]:
+    """Runs an AppleScript, passing any user-controlled values as real argv.
+
+    `args` exists so a filename never has to be interpolated into the script
+    text. See save_file: building the script with an f-string let a crafted
+    name close the quoted string and append arbitrary AppleScript, which the
+    old comment waved away as acceptable because the value "originates from
+    this app's own frontend" — which is exactly the assumption the CORS hole
+    had already broken.
+    """
     if fake_native():
-        # A canned "user picked nothing" result. Tests that want a chosen path
-        # monkeypatch subprocess.run directly instead.
         return subprocess.CompletedProcess(args=["osascript"], returncode=1, stdout="", stderr="")
-    return subprocess.run(["osascript", "-e", script], capture_output=True, text=True, timeout=timeout)
+    cmd = ["osascript", "-e", script]
+    if args:
+        cmd.append("-")          # end of options; what follows is argv
+        cmd.extend(args)
+    return subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
 
 
 def pick_folder(prompt: str = "Select a coding project folder") -> dict[str, Any]:
@@ -120,15 +136,27 @@ def open_files(is_folder: bool = False) -> dict[str, Any]:
     return {"ok": True, "files": files}
 
 
+# Conservative: no path separators, no NUL, bounded length. A save dialog's
+# default name is a name, not a path.
+SAFE_FILENAME = re.compile(r"^[^/\x00]{1,120}$")
+
+
 def save_file(filename: str, content: str) -> dict[str, Any]:
     """Native Save dialog, then writes the content where the user chose.
 
-    NOTE: `filename` is interpolated straight into the AppleScript, exactly as
-    the original did. Carried over unchanged so the move is reviewable; the fix
-    is a separate commit.
+    The filename is passed as argv and read with `item 1 of argv`, never
+    interpolated into the script text, so no quoting is involved and there is
+    nothing to escape out of.
     """
-    script = f'POSIX path of (choose file name with prompt "Save Markdown file" default name "{filename}")'
-    result = _run_osascript(script)
+    if not SAFE_FILENAME.match(filename or ""):
+        return {"ok": False, "error": "invalid filename"}
+    script = (
+        "on run argv\n"
+        "  return POSIX path of (choose file name "
+        'with prompt "Save Markdown file" default name (item 1 of argv))\n'
+        "end run"
+    )
+    result = _run_osascript(script, args=[filename])
     if result.returncode != 0:
         return {"ok": False, "cancelled": True}
     save_path = result.stdout.strip()

@@ -19,7 +19,7 @@ from fastapi.responses import PlainTextResponse
 
 from .. import config
 from ..legacy import LegacyJSONResponse, err, legacy_json, ok, read_json
-from ..services import feedback_store, link_preview as link_preview_service
+from ..services import consent, feedback_store, link_preview as link_preview_service
 from ..services import macos, project_scan, runtime_logs
 
 router = APIRouter()
@@ -42,7 +42,12 @@ async def pick_folder(request: Request) -> LegacyJSONResponse:
     async def handler() -> LegacyJSONResponse:
         if not config.native_allowed():
             return err("native dialogs are disabled (NOTLINEAR_ALLOW_NATIVE=0)")
-        return _passthrough(macos.pick_folder())
+        result = macos.pick_folder()
+        # The native dialog IS the consent, so this is the only place that
+        # records a directory as approved (ADR-035).
+        if result.get("ok") and result.get("path"):
+            consent.allow(result["path"])
+        return _passthrough(result)
     return await legacy_json(handler)
 
 
@@ -53,6 +58,20 @@ async def scan_project(request: Request) -> LegacyJSONResponse:
         folder_path = (data.get("path") or "").strip()
         if not folder_path:
             return err("path required")
+        # One-time migration. Anyone upgrading already has a project folder in
+        # prefs, chosen through the picker in an earlier session — before any
+        # ledger existed to record it. Without this they would hit 403 on the
+        # first scan and it would look like the picker had broken.
+        #
+        # So: an EMPTY ledger trusts the first path it is given and records it.
+        # That is trust-on-first-use, and it is weaker than requiring a fresh
+        # pick. It is bounded to exactly one path, only while the ledger is
+        # empty, and the alternative is breaking every existing install on
+        # upgrade. Once seeded, every later path must be inside an approved
+        # root.
+        consent.seed_if_empty(folder_path)
+        if not consent.is_allowed(folder_path):
+            return err(consent.describe_refusal(folder_path), status=403)
         return _passthrough(project_scan.scan_project(folder_path))
     return await legacy_json(handler)
 
