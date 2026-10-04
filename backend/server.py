@@ -74,6 +74,30 @@ def _reexec_into_venv_if_needed() -> None:
     os.execv(str(venv_python), [str(venv_python), str(Path(__file__).resolve()), *sys.argv[1:]])
 
 
+def port_is_free(host: str, port: int) -> bool:
+    """True if a server could bind ``host:port`` right now.
+
+    Sets SO_REUSEADDR, as uvicorn does when it really binds. Without it this
+    probe was STRICTER than the server it guards: after a server stops, its
+    connections linger in TIME_WAIT for up to a minute, and a plain bind()
+    refuses the port even though nothing is listening and uvicorn would start
+    fine. That made "restart the server" fail with "already in use" for a
+    minute after every stop. A live listener still fails the bind, so a genuine
+    second copy is still caught.
+    """
+    import socket
+
+    probe = socket.socket()
+    try:
+        probe.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        probe.bind((host, port))
+        return True
+    except OSError:
+        return False
+    finally:
+        probe.close()
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Serve notlinear and accept local runtime log syncs.")
     parser.add_argument("--host", default="127.0.0.1")
@@ -119,11 +143,7 @@ def main() -> None:
     # Fail loudly and early if the port is taken, BEFORE printing the "serving"
     # line. Printing first meant a failed bind still announced success, which
     # is exactly how a stale server on :8765 gets mistaken for the new one.
-    import socket
-    probe = socket.socket()
-    try:
-        probe.bind((args.host, args.port))
-    except OSError:
+    if not port_is_free(args.host, args.port):
         sys.stderr.write(
             f"notlinear: {args.host}:{args.port} is already in use.\n"
             "\n"
@@ -133,8 +153,6 @@ def main() -> None:
             "Quit it, or start this one on a different port with --port.\n"
         )
         raise SystemExit(1)
-    finally:
-        probe.close()
 
     # Same line the stdlib server printed — the launchers and their logs key
     # off seeing the server come up, and a human looks for this URL.

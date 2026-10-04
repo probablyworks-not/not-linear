@@ -31,6 +31,8 @@ jobs:
       # The /web/* dev proxy (HTTP passthrough + HMR websocket pump), against a
       # fake Vite. Independent of NOTLINEAR_SERVER.
       - run: pytest tests/proxy
+      # The server's port probe (BUGS.md #054).
+      - run: pytest tests/server
 
   frontend:
     name: typecheck and schema tests

@@ -830,3 +830,17 @@ None currently tracked.
 - Files touched: `frontend/providers/openai.js`, `BUGS.md`, `CHANGELOG.md`.
 - Test case: send a prompt with an OpenAI model; request returns 200 and streams. Not click-tested this session.
 - Related: none.
+
+### #054 — "Already in use" for about a minute after every server stop
+- Status: fixed
+- Date discovered: 2026-10-04
+- Date fixed: 2026-10-04
+- Agent: Claude Sonnet 5.5
+- Symptom: Stopping the server (Ctrl-C, or quitting `Notlinear.app`) and starting it again within about a minute printed "127.0.0.1:8765 is already in use", although `lsof` showed nothing listening. It also made the Playwright web server fail to start after a previous run, repeatedly.
+- Root cause: the "fail early if the port is taken" probe added in P0 (`cc7362a`) did a plain `bind()`. Connections the stopped server had closed linger in `TIME_WAIT`, and a bind without `SO_REUSEADDR` is refused while any exist. uvicorn sets `SO_REUSEADDR` itself, so it would have started fine: the probe was stricter than the server it guarded. `Notlinear.app`'s webview additionally holds `CLOSE_WAIT` connections to the old server until the app is quit.
+- Fix: `port_is_free()` in `backend/server.py` sets `SO_REUSEADDR` on the probe. A live listener still fails the bind, so a genuine second copy is still caught.
+- Files touched: `backend/server.py`, `tests/server/test_port_probe.py`, `.github/workflows/ci.yml`.
+- Test case: start the server, stop it, start it again at once - it comes up. Verified three times in a row with `TIME_WAIT` sockets present. Automated: a free port is free; a live listener is still detected; a restart after a close is allowed; and a test that reproduces the old plain-`bind()` refusal, so the regression test is known to be able to fail.
+- Prevention: the probe's job is to predict whether uvicorn can bind, so it must bind the way uvicorn does.
+- Related: P0 hotfix `cc7362a`.
+

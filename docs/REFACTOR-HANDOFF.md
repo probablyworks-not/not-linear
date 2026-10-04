@@ -136,26 +136,15 @@ a spare port (`NOTLINEAR_PORT=8767` for Vite's HMR, `--port 8767` for the server
 websocket pump is tested against a fake Vite (`tests/proxy`), not yet by editing a file with
 a live browser on `:8765`: do that once.
 
-**`pnpm e2e` can fail to start its server for about a minute after the previous run.**
-`netstat` shows only `TIME_WAIT` on :8766 and no process. Cause: `backend/server.py` probes the
-port with a plain `bind()` and no `SO_REUSEADDR` (uvicorn sets that flag itself, so the probe is
-stricter than the real server). One-line fix, deliberately not made (out of scope); until then
-wait for `TIME_WAIT` to clear: `until ! netstat -an | grep -q "\.8766 .*TIME_WAIT"; do sleep 3; done`.
+**The "already in use" after a restart is FIXED (BUGS.md #054).** The port probe lacked
+`SO_REUSEADDR`. One thing remains by design: `Notlinear.app` must be fully quit (⌘Q) before
+you start a server yourself, because its webview holds connections to the old server and the
+app starts its own server on launch. If `ps -eo pid,command | grep "[N]otlinear.app"` shows a
+process, quit it first.
 
-**Legacy's palette hides threads with no saved state, and `doc-main`'s title is an in-memory
-default.** Any parity test between the apps must persist the seed threads first (see
-`web-search.spec.ts`), or it compares data differences instead of behaviour.
-
-**Radix `aria-hidden`s everything behind an open dialog.** `getByRole('complementary')` (the
-sidebar) then reports "absent" whether or not it is open, so `toBeHidden()` on a role query is
-vacuous. Use a CSS locator (`aside[aria-label="Left pane"]`), and assert it visible first.
-
-**A fresh database has no `prefs.mode`/`tone`/`model`/`theme`.** Legacy defaults them in memory
-(`core/state.js`); `/web/` must apply the same default wherever it reads a pref. The Modes
-"Active" badge missed this.
-
-**Prompt text is generated, not retyped.** `settings/default-modes.ts` is emitted from
-`frontend/core/modes.js` (see its header). Do the same for any other prompt copy ported.
+**Do not paste shell snippets with `#` comments into interactive zsh.** Without
+`interactive_comments`, an apostrophe in a comment opens an unclosed quote and the terminal
+sits at `quote>`. Give the maintainer comment-free commands.
 
 **Never use `waitForTimeout` to wait for legacy to save.** It flaked 1 run in 3. Poll the
 persisted state (`expect.poll(() => readPersistedState(...))`) for the actual condition.

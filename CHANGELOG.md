@@ -5,6 +5,12 @@ All notable repository changes made by AI agents should be recorded here.
 ## 2026-10-04
 
 - Agent: Claude Sonnet 5.5
+- Summary: Fixed the server's "already in use" error that appeared for about a minute after every stop (BUGS.md #054).
+- Files changed: `backend/server.py`, `tests/server/test_port_probe.py`, `.github/workflows/ci.yml`, `BUGS.md`, `docs/REFACTOR-HANDOFF.md`.
+- Behavior changes: restarting the server immediately after stopping it now works. A genuinely running second copy is still refused. Nothing else changes.
+- Verification: 4 new tests, one of which reproduces the old failure; three real stop/start cycles on a spare port with `TIME_WAIT` sockets present.
+
+- Agent: Claude Sonnet 5.5
 - Summary: P4 item 2 — search palette in `/web/` (⌘K / Ctrl+K and a sidebar Search row), behind `flags.search`.
 - Files changed: `web/src/search/*`, `web/src/{flags.ts,lib/keyboard.ts,main.tsx,state/ui-store.ts,shell/*}`, `web/tests/{search,e2e}/*`, `docs/project-notes/*`, `FEATURES.md`, `docs/REFACTOR-HANDOFF.md`.
 - Behavior changes: none in legacy. In `/web/`, threads only (branch results arrive with P5b), and it lists never-persisted seed threads that legacy's palette hides.
