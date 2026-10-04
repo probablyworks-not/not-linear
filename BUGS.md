@@ -844,3 +844,16 @@ None currently tracked.
 - Prevention: the probe's job is to predict whether uvicorn can bind, so it must bind the way uvicorn does.
 - Related: P0 hotfix `cc7362a`.
 
+### #055 — Runtime logs stopped syncing into logs.md after the P2 hardening
+- Status: fixed
+- Date discovered: 2026-10-04
+- Date fixed: 2026-10-04
+- Agent: Claude Sonnet 5.5
+- Symptom: `logs.md` stopped receiving runtime-log events; Settings → Runtime logs showed "logs.md sync unavailable" after the first event. Nothing else visibly broke, which is why it went unnoticed: the in-app log viewer still worked, since it reads the in-memory buffer.
+- Root cause: P2 hardening (ADR-035) made the server refuse any POST to `/__notlinear_*` without `X-Notlinear-Local` (403, before any handler runs). `loggedFetch` and the other call sites were updated, but `syncRuntimeLogFile()` in `app.js` uses a bare `fetch` and sent only `content-type`. The 403 tripped `logFileSyncDisabled = true`, so it never retried.
+- Fix: send `X-Notlinear-Local: 1` from `syncRuntimeLogFile()`.
+- Files touched: `frontend/app.js`, `web/tests/e2e/legacy-log-sync.spec.ts`.
+- Test case: Playwright captures the sync request and requires the header; a second test posts without it to the real server and requires 403, so the header is shown to be load-bearing. The first test fails on the unfixed code (header `undefined`). The endpoint is fulfilled by the test, so `logs.md` is never written. Manual: trigger a chat request, wait ~2s, and `logs.md` gains a runtime-log block.
+- Prevention: smoke step 8 only passes if someone opens `logs.md`; the automated check now covers it. When adding a header requirement to an endpoint family, grep every `fetch(` to that family, not just the wrapper.
+- Related: #054, ADR-035.
+

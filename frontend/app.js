@@ -153,7 +153,9 @@ import { appState } from './core/state.js';
     try {
       const res = await fetch(RUNTIME_LOG_SYNC_ENDPOINT, {
         method:'POST',
-        headers:{ 'content-type':'application/json' },
+        // Required by every /__notlinear_* endpoint since the P2 hardening (ADR-035). Without it the
+        // server answers 403, this sync disables itself, and logs.md silently stops updating (BUGS.md #055).
+        headers:{ 'content-type':'application/json', 'X-Notlinear-Local':'1' },
         body:JSON.stringify({ events:requestLog }),
       });
       if (!res.ok){
