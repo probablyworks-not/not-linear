@@ -4,6 +4,16 @@ Each entry: **ID · Status · Goal · Context · Files likely involved · Accept
 
 ---
 
+## TASK-P2 — Hardening and provider registry (phase 2 complete)
+- **Status:** Done (smoke test passed on the live app 2026-10-04, with all four hardening changes verified active on the running instance)
+- **Goal:** Close the local trust boundary the P0 CORS fix exposed as wrong, and replace the three hand-maintained tool-schema copies with one registry.
+- **Context:** P2 of the approved plan. The hardening was deliberately carried over unchanged from P2a so the move diff stayed reviewable, then landed as four individually revertable commits. P2b was pulled forward from P5 because it is DOM-free, testable immediately, and the premise of P7.
+- **Files likely involved:** `backend/app/services/{safe_fetch,consent,macos}.py`, `backend/app/middleware/local_only.py`, `backend/app/routers/endpoints.py`, `frontend/core/{api-client,feedback}.js`, `web/src/providers/*`
+- **Acceptance criteria:** A POST without `X-Notlinear-Local` is refused and one with it succeeds. Private and loopback addresses unreachable from `link_preview`, every redirect hop re-validated. `scan_project` limited to picked folders, with an upgrade path that does not break existing installs. No filename reaches AppleScript source. One tool list derives both provider schemas and the prompt prose.
+- **Verification:** 144 contract tests (fastapi), 63 vitest, 15 Playwright, mutation tests on the description oracle, then live probes against the running app. See ADR-035 and ADR-037.
+
+---
+
 ## TASK-P2a — FastAPI core (phase 2a of the refactor)
 - **Status:** Done (smoke test passed 2026-10-04, verified on the real Notlinear.app bundle). Next: the four hardening commits, then P2b (providers in TS)
 - **Goal:** Move the twelve `/__notlinear_*` endpoints to modular FastAPI routers with behaviour provably unchanged, and replace whole-repo static serving with an explicit allowlist.

@@ -4,6 +4,15 @@ Each entry: **date/time · task or bug ID · command category · result · impor
 
 ---
 
+## 2026-10-04 — P2 (hardening + P2b) — manual smoke test on the live app — pass
+- **Command category:** manual GUI smoke test via `Notlinear.app` after a full restart, plus agent-side probes against that same live instance
+- **Result:** pass — user reports "working" with all P2 hardening active
+- **Output:** Live server confirmed as the restarted one (pid 56857, started 16:12, `Server: uvicorn`) rather than the pre-hardening process. All four hardening changes verified active on the instance the user is actually using, not on a test server: `Cache-Control: no-store, must-revalidate` present on `/frontend/app.js`; a POST without `X-Notlinear-Local` returns 403 while the same POST with it returns 200, so the gate is enforced without breaking the app; `link_preview` on `http://169.254.169.254/` returns `{"ok": false, "error": "refusing to fetch a private or local address"}`. The consent ledger is absent, so the next folder scan will seed it via the trust-on-first-use migration.
+- **Caveat on scope:** as with the previous run, the user reported the app working overall rather than confirming each numbered step. Steps 4 and 5 (search-backed branch question; files-and-folder attach) are the ones whose backend behaviour changed in this phase and are recorded as "not observed to fail" rather than individually verified.
+- **Follow-up:** A near miss worth remembering: the FastAPI move silently dropped `Cache-Control: no-store`, which the stdlib server set from `end_headers()`. Since `app.js` gained a required request header in the same phase, a stale cached copy would have called every endpoint without it and received 403 — presenting as "the app is broken after restart". Found by asking what the old server's `end_headers()` did that the new one did not, not by any test; there is a regression test now (commit 2721a2e).
+
+---
+
 ## 2026-10-04 — TASK-P2 (hardening + P2b) — full suite — pass
 - **Command category:** `pytest tests/contract` under both server flavours, `pnpm test`, `pnpm typecheck`, `pnpm e2e`, mutation tests
 - **Result:** pass — 142 contract (fastapi), 120 + 22 skipped (legacy), 63 vitest, 15 Playwright, typecheck clean
