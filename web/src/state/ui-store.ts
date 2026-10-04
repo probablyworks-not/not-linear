@@ -19,6 +19,7 @@ interface PendingConfirm extends ConfirmRequest { resolve(ok: boolean): void }
 
 export interface UiState {
   sidebarOpen: boolean;
+  settingsOpen: boolean;
   tabs: Tab[];
   activeTabId: string | null;
   confirm: PendingConfirm | null;
@@ -26,6 +27,7 @@ export interface UiState {
 
 export interface UiActions {
   setSidebarOpen(open: boolean): void;
+  setSettingsOpen(open: boolean): void;
   /** Reads nl_tabs_v1; call after the app store has hydrated. */
   restoreTabs(deleted: ReadonlySet<string>, fallbackId: string): void;
   /** Opens `id` as a tab (if new) and activates it. */
@@ -44,11 +46,13 @@ function persistTabs(tabs: Tab[], active: string | null): void {
 
 export const useUiStore = create<UiState & UiActions>((set, get) => ({
   sidebarOpen: false, // legacy ships the sidebar collapsed
+  settingsOpen: false,
   tabs: [],
   activeTabId: null,
   confirm: null,
 
   setSidebarOpen(open) { set({ sidebarOpen: open }); },
+  setSettingsOpen(open) { set({ settingsOpen: open }); },
 
   restoreTabs(deleted, fallbackId) {
     let raw: string | null = null;

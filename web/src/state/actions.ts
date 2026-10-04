@@ -47,6 +47,8 @@ export async function deleteChat(id: string): Promise<void> {
  * Dexie builds — so focus is the sync point.)
  */
 export async function syncFromDisk(): Promise<void> {
+  // Pending debounced edits first, or the re-read would overwrite text still being typed.
+  await useAppStore.getState().flushPrefs();
   await useAppStore.getState().hydrate();
   useUiStore.getState().dropTabs(useAppStore.getState().deletedThreadIds);
 }

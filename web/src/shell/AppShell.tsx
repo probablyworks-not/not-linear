@@ -10,6 +10,8 @@ import { Topbar } from './Topbar';
 import { TabStrip } from './TabStrip';
 import { ConfirmDialog } from '../ui/ConfirmDialog';
 import { Toaster } from '../ui/toast';
+import { SettingsDialog } from '../settings/SettingsDialog';
+import { flags } from '../flags';
 
 export function AppShell() {
   const sidebarOpen = useUiStore(s => s.sidebarOpen);
@@ -60,6 +62,7 @@ export function AppShell() {
           )}
         </main>
       </div>
+      {flags.settings && <SettingsDialog />}
       <ConfirmDialog />
       <Toaster />
     </div>

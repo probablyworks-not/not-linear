@@ -135,10 +135,9 @@ test.describe('one database, two apps', () => {
     await openApp(page);
     await openSidebar(page);
     await page.locator('#new-chat').click();
-    await page.waitForTimeout(600); // legacy persists after the render
-    const state = await readPersistedState(page);
-    const id = (state as { current: string }).current;
-    expect(id).toMatch(/^chat-\d+$/);
+    // Legacy saves a moment after rendering; wait for the row, not a fixed time.
+    await expect.poll(async () => ((await readPersistedState(page)) as { current: string } | null)?.current).toMatch(/^chat-\d+$/);
+    const id = ((await readPersistedState(page)) as { current: string }).current;
 
     await openWeb(page);
     await showSidebar(page);
@@ -175,7 +174,7 @@ test.describe('one database, two apps', () => {
     await row.hover();
     await row.locator('.thread-delete').click();
     await page.locator('#delete-confirm-delete').click();
-    await page.waitForTimeout(500);
+    await expect.poll(async () => ((await readPersistedState(page)) as { deletedThreads: string[] } | null)?.deletedThreads).toContain('planning');
 
     await openWeb(page);
     await showSidebar(page);

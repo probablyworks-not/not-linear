@@ -5,6 +5,13 @@ All notable repository changes made by AI agents should be recorded here.
 ## 2026-10-04
 
 - Agent: Claude Sonnet 5.5
+- Summary: P4.1a — Settings and API keys in `/web/`: theme, names, tone, context, default model, API keys (masked), context ranking, SearXNG, plus a live list of which model tools are on and what turns the others on. Behind `flags.settings`.
+- Files changed: `web/src/{flags.ts,settings/*,lib/{api-keys,theme}.ts,db/prefs-ops.ts,state/*,shell/*,main.tsx}`, `web/tests/{settings,e2e}/*`, `docs/project-notes/*`, `FEATURES.md`, `docs/REFACTOR-HANDOFF.md`. New dependency `@radix-ui/react-dialog`.
+- Behavior changes: none in legacy. `/web/` gains a Settings dialog. Settings and legacy share `state.prefs` and `localStorage.nl_api_keys` (same shape, so `notes.js` still reads it); a change in either shows in the other after a reload or window focus.
+- Observed: `backend/server.py` reports "port already in use" for about a minute after the previous server stops. Its probe does a plain `bind()` without `SO_REUSEADDR`, so lingering `TIME_WAIT` sockets fail it, while uvicorn (which sets the flag) would start fine. It hit the Playwright server repeatedly. A one-line fix; not made here (out of scope). Also: with the sidebar and Settings both open, the first Esc closes the sidebar, because legacy's precedence does; kept for parity.
+- Verification: 144 vitest, 47 Playwright, typecheck, lint, build. Human smoke test NOT run.
+
+- Agent: Claude Sonnet 5.5
 - Summary: P3 — the React shell. `/web/` now renders on the same origin and the same IndexedDB as the legacy app: sidebar, new chat, delete (with the legacy confirm wording), tab strip persisted to `nl_tabs_v1`, topbar, Esc priority chain, and the three themes, all painted from `tokens.css` with a lint rule forbidding literal colours.
 - Files changed: `web/**` (Tailwind, ESLint, `src/{state,db,lib,registry,shell,ui}`, tests), `backend/app/{dev_proxy,main,config}.py`, `tests/proxy/test_dev_proxy.py`, `frontend/styles/tokens.css`, `.github/workflows/ci.yml`, `docs/project-notes/*`, `FEATURES.md`, `docs/REFACTOR-HANDOFF.md`.
 - Behavior changes: none in the legacy app. `tokens.css` gains six additive tokens (`--danger*`, `--on-danger`, `--scrim`) that no legacy rule reads. `/web/` is new and additive; `/` still redirects to legacy. `pnpm e2e` now builds first; CI gains `pnpm lint` and `pytest tests/proxy`.

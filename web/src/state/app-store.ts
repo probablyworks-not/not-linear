@@ -1,6 +1,10 @@
 import { create } from 'zustand';
 import { loadChatState, updateChatState } from '../db/chat-repo';
 import { createThreadIn, deleteThreadIn, MAIN_THREAD_ID, emptyState } from '../db/thread-ops';
+import { setPrefIn, type PrefKey } from '../db/prefs-ops';
+import { createDebouncedWriter } from '../lib/debounced-writer';
+import { connectKey, disconnectKey, readApiKeys } from '../lib/api-keys';
+import { applyTheme } from '../lib/theme';
 import type { PersistedPrefs, PersistedProject, PersistedState, PersistedThread } from '../db/types';
 
 // Mirrors frontend/core/state.js:31 `appState`, field for field, so a feature
@@ -61,7 +65,23 @@ export interface AppActions {
   createThread(): Promise<string | null>;
   /** Caller owns the confirm dialog; this is the write. */
   deleteThread(id: string): Promise<boolean>;
+  /**
+   * Sets one pref. Memory updates at once; the database write is immediate for
+   * discrete choices and debounced (200ms, per key) for typed text. Writes only
+   * this key, so a concurrent legacy save to a different pref is not clobbered.
+   */
+  setPref<K extends PrefKey>(key: K, value: PersistedPrefs[K], opts?: { debounce?: boolean }): Promise<void>;
+  /** Theme is the one pref with a side effect: `nl_theme` and <html data-theme> must follow it. */
+  setTheme(theme: string): Promise<void>;
+  /** Writes any debounced pref edits now (blur, close, window hide, before a re-read). */
+  flushPrefs(): Promise<void>;
+  /** Re-reads localStorage.nl_api_keys, which the other app may have changed. */
+  refreshApiKeys(): void;
+  connectApiKey(provider: string, key: string): void;
+  disconnectApiKey(provider: string): void;
 }
+
+const prefWriter = createDebouncedWriter<string>();
 
 function fromPersisted(s: PersistedState): Partial<AppState> {
   return {
@@ -76,9 +96,24 @@ function fromPersisted(s: PersistedState): Partial<AppState> {
   };
 }
 
+/**
+ * Everything but prefs. Thread actions use this: a pref being typed lives in
+ * memory ahead of its debounced write, and copying the database's (older) prefs
+ * back would roll the user's keystrokes back mid-sentence.
+ */
+function threadFields(s: PersistedState): Partial<AppState> {
+  const all = fromPersisted(s);
+  delete all.prefs;
+  return all;
+}
+
 const initial = emptyState();
 
-export const useAppStore = create<AppState & AppActions>((set) => ({
+async function persistPref<K extends PrefKey>(key: K, value: PersistedPrefs[K]): Promise<void> {
+  await updateChatState(s => setPrefIn(s, key, value));
+}
+
+export const useAppStore = create<AppState & AppActions>((set, get) => ({
   currentThreadId: MAIN_THREAD_ID,
   threadState: initial.threads,
   mainMessages: [],
@@ -96,7 +131,7 @@ export const useAppStore = create<AppState & AppActions>((set) => ({
   activeController: null,
   threadAttachments: {},
   branchAttachments: {},
-  apiKeys: {},
+  apiKeys: readApiKeys(),
   dynamicThreads: [],
   deletedThreadIds: [],
   hydrated: false,
@@ -104,7 +139,11 @@ export const useAppStore = create<AppState & AppActions>((set) => ({
 
   async hydrate() {
     try {
-      set({ ...fromPersisted(await loadChatState()), hydrated: true, error: null });
+      const persisted = await loadChatState();
+      set({ ...fromPersisted(persisted), apiKeys: readApiKeys(), hydrated: true, error: null });
+      // Legacy re-applies prefs.theme on every load (app.js:4319). Only when one
+      // is actually stored: with none, the pre-paint script's choice stands.
+      if (persisted.prefs.theme) applyTheme(persisted.prefs.theme);
     } catch (e) {
       set({ hydrated: true, error: e instanceof Error ? e.message : String(e) });
     }
@@ -115,7 +154,7 @@ export const useAppStore = create<AppState & AppActions>((set) => ({
     set({ currentThreadId: id });
     try {
       const { state } = await updateChatState(s => { s.current = id; });
-      set(fromPersisted(state));
+      set(threadFields(state));
     } catch (e) {
       set({ error: e instanceof Error ? e.message : String(e) });
     }
@@ -124,7 +163,7 @@ export const useAppStore = create<AppState & AppActions>((set) => ({
   async createThread() {
     try {
       const { state, result } = await updateChatState(s => createThreadIn(s, Date.now()));
-      set({ ...fromPersisted(state), error: null });
+      set({ ...threadFields(state), error: null });
       return result;
     } catch (e) {
       set({ error: e instanceof Error ? e.message : String(e) });
@@ -132,10 +171,31 @@ export const useAppStore = create<AppState & AppActions>((set) => ({
     }
   },
 
+  async setPref(key, value, opts) {
+    set({ prefs: { ...get().prefs, [key]: value } });
+    const write = async (): Promise<void> => {
+      try { await persistPref(key, value); }
+      catch (e) { set({ error: e instanceof Error ? e.message : String(e) }); }
+    };
+    if (opts?.debounce) prefWriter.schedule(key, write);
+    else { prefWriter.cancel(key); await write(); }
+  },
+
+  async setTheme(theme) {
+    applyTheme(theme);
+    await get().setPref('theme', theme);
+  },
+
+  flushPrefs() { return prefWriter.flushAll(); },
+
+  refreshApiKeys() { set({ apiKeys: readApiKeys() }); },
+  connectApiKey(provider, key) { set({ apiKeys: connectKey(provider, key) }); },
+  disconnectApiKey(provider) { set({ apiKeys: disconnectKey(provider) }); },
+
   async deleteThread(id) {
     try {
       const { state, result } = await updateChatState(s => deleteThreadIn(s, id));
-      set({ ...fromPersisted(state), error: null });
+      set({ ...threadFields(state), error: null });
       return result;
     } catch (e) {
       set({ error: e instanceof Error ? e.message : String(e) });

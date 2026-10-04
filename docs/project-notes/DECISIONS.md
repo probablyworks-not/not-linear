@@ -4,6 +4,16 @@ Each entry: **Decision ID · status · context · decision · alternatives rejec
 
 ---
 
+## ADR-048 — Settings: prefs write one key at a time; API keys stay in localStorage and out of IndexedDB
+- **Status:** accepted 2026-10-04.
+- **Context:** `/web/` Settings edits the same `state.prefs` object legacy rewrites whole, and the same `nl_api_keys` entry that `frontend/views/notes.js:3101` parses directly.
+- **Decision:** (1) `setPref` updates memory at once and writes **only that key** in a single read-modify-write transaction; discrete choices write immediately, typed text coalesces per key over 200ms and is flushed on blur, close, hide and before any re-read. (2) Typed inputs keep a local draft, because legacy stores `'Workspace'` the instant the folder field is emptied and a controlled input bound to the store would snap back mid-edit. (3) Thread actions never copy database prefs back into memory, or they would roll back text still inside its debounce window. (4) Theme writes `prefs.theme` and `nl_theme` together and applies `data-theme`, since legacy re-applies `prefs.theme` over `nl_theme` on every load; `hydrate` applies a stored theme but leaves the pre-paint choice alone when none is stored. (5) Keys are read-modify-written against `localStorage` itself, never against an in-memory copy, so a key the other app added meanwhile is not deleted. Keys are shown masked only, never logged, never put in IndexedDB or a URL, and `tests` assert each. (6) The choice lists (models, tones, providers, ranking) are copies pinned to the legacy markup and `MODEL_OPTIONS` by an oracle test, and the oracle was mutation-tested.
+- **Alternatives rejected:** writing the whole `prefs` object (clobbers a legacy edit to another pref); keeping keys in `prefs` (breaks `notes.js`, and puts secrets in the IndexedDB that backups export); deriving the choice lists by importing `app.js` (it is an IIFE with no exports).
+- **Consequences/tradeoffs:** Esc deliberately keeps legacy's precedence, so with the sidebar and Settings both open the first Esc closes the sidebar. The oracle's index.html half is deleted at the P6 cutover.
+- **Related files:** `web/src/state/app-store.ts`, `web/src/db/prefs-ops.ts`, `web/src/lib/{api-keys,theme}.ts`, `web/src/settings/*`, `web/tests/settings/*`
+
+---
+
 ## ADR-038 — Chat content is dual-written: structured data for React, legacy-parsable HTML in `stream`
 - **Status:** accepted 2026-10-04. Decided by the maintainer before P5a, as the handoff required.
 - **Context:** Legacy persists a thread's conversation as rendered HTML in `threads[id].stream` (`stream.innerHTML`), with highlights and branch anchors living inside it as `<span class="highlighted" data-hid>` and `.branched[data-bid]`. React would rather store structured turns and anchors as `(turnId, offset)` in `highlightsV2`. The Dexie schema is frozen and both apps read the same row, so React's choice decides whether legacy keeps working.

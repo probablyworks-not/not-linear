@@ -5,7 +5,7 @@ four hardening changes and the provider registry)** are committed on branch
 `refactor/p0-repo-hygiene`. **P3 (React shell) is implemented and automated-green but
 UNCOMMITTED and awaiting the human smoke test.** `main` is untouched at `ccf7504`.
 
-**Next phase is P4 (leaf features), after the user has smoke-tested P3 and committed it.**
+**P3 is committed (`cd5c67e`). P4.1a (Settings + API keys) is implemented, automated-green and committed after it; the user has not yet smoke-tested either. Next: P4.1b (Modes modal), then P4 items 2-7.**
 
 This file is the context a new session needs. Read it instead of re-deriving the
 state, then read `AGENTS.md` and `CLAUDE.md` for the standing rules.
@@ -54,8 +54,8 @@ which has no FastAPI. `--legacy` runs the old dependency-free server.
 NOTLINEAR_SERVER=fastapi .venv/bin/python -m pytest tests/contract   # 146 (earlier figures here were stale)
 NOTLINEAR_SERVER=legacy  .venv/bin/python -m pytest tests/contract   # 118 + 28 skipped
 .venv/bin/python -m pytest tests/proxy                               # 7
-cd web && pnpm test && pnpm typecheck && pnpm lint                   # 108
-cd web && pnpm e2e                                                   # builds, then 33 Playwright (15 legacy + 18 /web/)
+cd web && pnpm test && pnpm typecheck && pnpm lint                   # 144
+cd web && pnpm e2e                                                   # builds, then 47 Playwright (15 legacy + 32 /web/)
 ```
 
 Then the manual steps at `AGENTS.md` "Verification" that automation cannot cover:
@@ -136,9 +136,19 @@ a spare port (`NOTLINEAR_PORT=8767` for Vite's HMR, `--port 8767` for the server
 websocket pump is tested against a fake Vite (`tests/proxy`), not yet by editing a file with
 a live browser on `:8765`: do that once.
 
-**A port can report "in use" for a short while after the previous server stops**, with
-nothing visible in `lsof`/`netstat`. It hit the Playwright server twice, back to back. Cause
-not investigated; wait and retry before assuming a stray process.
+**`pnpm e2e` can fail to start its server for about a minute after the previous run.**
+`netstat` shows only `TIME_WAIT` on :8766 and no process. Cause: `backend/server.py` probes the
+port with a plain `bind()` and no `SO_REUSEADDR` (uvicorn sets that flag itself, so the probe is
+stricter than the real server). One-line fix, deliberately not made (out of scope); until then
+wait for `TIME_WAIT` to clear: `until ! netstat -an | grep -q "\.8766 .*TIME_WAIT"; do sleep 3; done`.
+
+**Never use `waitForTimeout` to wait for legacy to save.** It flaked 1 run in 3. Poll the
+persisted state (`expect.poll(() => readPersistedState(...))`) for the actual condition.
+
+**`getByRole('button', { name: 'Connect' })` also matches "Disconnect …".** Use `exact: true`.
+
+**Legacy's sidebar and its Settings entry are off-screen until opened**, and Socratic/Technical
+tone buttons are in a second `.seg` row outside `#seg-tone`.
 
 **`tokens.css` gained six tokens in P3** (`--danger*`, `--on-danger`, `--scrim`) because
 `base.css` hardcodes those colours and `web/` forbids literals. If a design needs another
@@ -169,7 +179,7 @@ the one-session-per-phase cadence is not. P5 alone is four sessions.
 | P2a | FastAPI core, static allowlist | **done**, smoke-tested |
 | P2 | Hardening (a-d) + provider registry | **done**, verified live |
 | P3 | React shell | **done, uncommitted, smoke test pending** |
-| P4 | Leaf features | **next** |
+| P4 | Leaf features | **in progress**: 4.1a Settings + keys done; 4.1b Modes modal next |
 | P5 | Chat core (four sub-sessions) | |
 | P6 | Notes editor | |
 | P7 | Extension seams | |

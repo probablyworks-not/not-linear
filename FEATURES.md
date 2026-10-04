@@ -418,7 +418,8 @@ selecting a thread opens a placeholder. What it does today, against the *same* o
 - **Themes** dark-mono / grey / light via `data-theme` and the shared `nl_theme` key, every colour a `var(--…)` from `tokens.css`; ESLint forbids literal colours in `web/src`.
 - **Esc chain** as an ordered priority table (`lib/keyboard.ts`): confirm closes before the sidebar.
 - **View registry** (`registry/views.ts`) with `registerView` / `mountView` / `onViewChange`, the seam P7 plugs into.
-- Not here yet: Search, Projects, Notes sections, Settings, Product story, recent branches (P4); anything inside a thread (P5).
+- **Settings** (sidebar footer → dialog, `flags.settings`): theme, workspace name, your name, tone, "what are you working on", default model (14 choices), API keys, context ranking, SearXNG URL. Prefs write one key at a time (typed text debounced 200ms, flushed on blur/close); theme writes `prefs.theme` and `nl_theme` together. **API keys** live in `localStorage.nl_api_keys` (same flat shape legacy and `notes.js` read), shown masked, never logged, never in IndexedDB; connecting toasts "API key connected". A live **"Tools the model can use"** list shows each of the five tools on/off and what enables it, derived from the `TOOL_SPECS` registry. Not yet: Modes modal (P4.1b), changelog viewer, runtime logs, feedback (later P4 items).
+- Not here yet: Search, Projects, Notes sections, Product story, recent branches (P4); anything inside a thread (P5).
 - Cross-app freshness is on window focus, not live; a stale legacy tab can overwrite a `/web/` change when it saves.
 - Served from `web/dist` by the Python server, or proxied to Vite with `NOTLINEAR_DEV_PROXY=1` (`pnpm dev` in `web/`).
 
@@ -490,4 +491,4 @@ Worth tracking separately since these look clickable but currently do nothing (o
 
 ---
 
-*Last compiled 2026-10-04 (section 6b added for the P3 React shell; section 7 updated for the P2 FastAPI move; the rest 2026-08-02) by direct codebase inspection (`frontend/app.js`, `frontend/views/notes.js`, `frontend/core/*.js`, `frontend/providers/*.js`, `backend/server.py`, `index.html`, `redesign_product.md`, `BUGS.md`, `AGENTS.md`). If you land a feature and don't see it here, add it in the same session — see the update rule at the top of this file.*
+*Last compiled 2026-10-04 (section 6b added for the P3 React shell and extended for P4.1a Settings; section 7 updated for the P2 FastAPI move; the rest 2026-08-02) by direct codebase inspection (`frontend/app.js`, `frontend/views/notes.js`, `frontend/core/*.js`, `frontend/providers/*.js`, `backend/server.py`, `index.html`, `redesign_product.md`, `BUGS.md`, `AGENTS.md`). If you land a feature and don't see it here, add it in the same session — see the update rule at the top of this file.*

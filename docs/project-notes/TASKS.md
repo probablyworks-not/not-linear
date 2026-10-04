@@ -4,6 +4,24 @@ Each entry: **ID · Status · Goal · Context · Files likely involved · Accept
 
 ---
 
+## TASK-P4.1a — Settings and API keys in `/web/`
+- **Status:** Done pending the human smoke test (automated gate green 2026-10-04).
+- **Goal:** Edit prefs and API keys from `/web/`, sharing storage with legacy, with live tool availability.
+- **Context:** P4 item 1, split: the Modes modal (`core/modes.js`, ADR-046) is **TASK-P4.1b**, Todo.
+- **Files likely involved:** `web/src/settings/*`, `web/src/lib/{api-keys,theme}.ts`, `web/src/state/app-store.ts`
+- **Acceptance criteria:** every pref round-trips between the apps; `nl_api_keys` keeps its shape and `notes.js` still reads it; keys never rendered unmasked, logged, or stored in IndexedDB; theme agrees in `prefs.theme` and `nl_theme`; option lists pinned to legacy; tool list derives from the registry.
+- **Verification:** RUNS.md 2026-10-04 TASK-P4.1a; ADR-048.
+
+---
+
+## TASK-P4.1b — Modes modal and `core/modes.js` port
+- **Status:** Todo
+- **Goal:** Port the conversation-modes editor, overrides-only (ADR-046).
+- **Files likely involved:** `frontend/core/modes.js`, `frontend/views/modes-modal.js`, `web/src/settings/`
+- **Acceptance criteria:** create/edit/reset/delete a mode in `/web/` and see it in legacy and vice versa; `customModes`/`modeOverrides` untouched by every other Settings write.
+
+---
+
 ## TASK-P3 — React shell (phase 3 of the refactor)
 - **Status:** Done pending the human smoke test (automated gate green 2026-10-04).
 - **Goal:** `/web/` renders a shell that shares the legacy app's origin and data, with tokens, tabs, confirm/toast, a view registry and the Esc chain, and no hardcoded colour anywhere.

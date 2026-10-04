@@ -6,12 +6,14 @@ import { useUiStore } from '../state/ui-store';
 import { deleteChat, newChat, selectThread } from '../state/actions';
 import { ESC_PRIORITY, useEscLayer } from '../lib/keyboard';
 import { visibleThreads, MAIN_THREAD_ID } from '../db/thread-ops';
+import { flags } from '../flags';
 
 const SIDE_ITEM = 'relative flex w-full items-center gap-[9px] rounded-md text-left text-sm leading-tight text-text-2 hover:bg-bg-2 hover:text-text';
 
 export function Sidebar() {
   const open = useUiStore(s => s.sidebarOpen);
   const setOpen = useUiStore(s => s.setSidebarOpen);
+  const setSettingsOpen = useUiStore(s => s.setSettingsOpen);
   const activeTabId = useUiStore(s => s.activeTabId);
   const threadState = useAppStore(s => s.threadState);
   const dynamic = useAppStore(s => s.dynamicThreads);
@@ -102,14 +104,26 @@ export function Sidebar() {
           </div>
         </div>
 
-        {/* Settings arrives with the P4 leaf features; until then this is identity only. */}
-        <div className="mt-auto flex items-center gap-2 rounded-md p-2">
-          <div className="grid h-6 w-6 place-items-center rounded-full bg-bg-3 text-xs font-medium">
-            {(displayName.trim()[0] ?? 'Y').toUpperCase()}
+        {/* Identity + the way into Settings (flags.settings). */}
+        {flags.settings ? (
+          <button
+            type="button" onClick={() => setSettingsOpen(true)} aria-label="Open settings"
+            className="mt-auto flex w-full items-center gap-2 rounded-md p-2 text-left hover:bg-bg-2"
+          >
+            <div className="grid h-6 w-6 place-items-center rounded-full bg-bg-3 text-xs font-medium">
+              {(displayName.trim()[0] ?? 'Y').toUpperCase()}
+            </div>
+            <div className="flex-1 truncate text-sm font-medium">{displayName}</div>
+            <Settings size={14} className="text-text-3" aria-hidden />
+          </button>
+        ) : (
+          <div className="mt-auto flex items-center gap-2 rounded-md p-2">
+            <div className="grid h-6 w-6 place-items-center rounded-full bg-bg-3 text-xs font-medium">
+              {(displayName.trim()[0] ?? 'Y').toUpperCase()}
+            </div>
+            <div className="flex-1 truncate text-sm font-medium">{displayName}</div>
           </div>
-          <div className="flex-1 truncate text-sm font-medium">{displayName}</div>
-          <Settings size={14} className="text-text-3" aria-hidden />
-        </div>
+        )}
       </aside>
     </>
   );

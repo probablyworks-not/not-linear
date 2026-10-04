@@ -4,6 +4,15 @@ Each entry: **date/time · task or bug ID · command category · result · impor
 
 ---
 
+## 2026-10-04 — TASK-P4.1a — full web gate — pass (automated only)
+- **Command category:** test / lint / build
+- **Result:** pass
+- **Output:** `pnpm test` 144 (17 files); typecheck, lint clean; `pnpm e2e` 47 (15 legacy, 18 shell, 14 settings). One flake found along the way: `a chat created in legacy appears in the /web/ sidebar` failed 1 run in 3 on a fixed 600ms sleep; replaced with polls and 47/47 after. Settings screenshot reviewed (keys masked, tool list live).
+- **Environment note:** `pnpm e2e` fails to start its server for roughly a minute after a previous run, with `netstat` showing only `TIME_WAIT` on :8766 and no process. `backend/server.py` probes the port with a plain `bind()` and no `SO_REUSEADDR`; uvicorn sets that flag itself, so the probe is stricter than the real server. Pre-existing (cc7362a), not fixed here.
+- **Follow-up:** human smoke test in `Notlinear.app` (separate IndexedDB from Chrome): set a theme and a key in `/web/`, confirm legacy and the Notes AI features see them.
+
+---
+
 ## 2026-10-04 — TASK-P3 — full suite + live proxy check — pass (automated only)
 - **Command category:** test / lint / build
 - **Result:** pass

@@ -97,6 +97,17 @@ Each entry: **date · summary · files touched · why changed · risks · tests 
 
 ---
 
+## 2026-10-04 — P4.1a: Settings and API keys in `/web/`
+- **Summary:** Settings dialog (theme, workspace name, your name, tone, context, default model, API keys, context ranking, SearXNG) opened from the sidebar footer, behind `flags.settings`. A live "Tools the model can use" list derives from `TOOL_SPECS`/`availableTools`, so it can't disagree with what providers will offer. The Modes modal is P4.1b.
+- **Files touched:** `web/src/{flags.ts,settings/*,lib/{api-keys,theme}.ts,db/prefs-ops.ts,state/{app-store,ui-store,actions}.ts,shell/{Sidebar,AppShell}.tsx,main.tsx}`, `web/tests/{settings,e2e/web-settings.spec.ts}`, `web/tests/e2e/web-shell.spec.ts` (flake fix), ADR-048. Dependency added: `@radix-ui/react-dialog`.
+- **Why:** P4 item 1. Also the first real use of the P3 write path for more than threads.
+- **Risks:** `nl_api_keys` is shared with legacy and `notes.js`: shape unchanged, read-modify-write against storage. Prefs are written one key at a time. A stale legacy tab can still overwrite a pref on its next save (ADR-039).
+- **Tests run:** 144 vitest, 47 Playwright (15 legacy + 18 shell + 14 settings), typecheck, lint, build. Mutation-tested twice: the options oracle (drifted id and blurb both fail) and the rollback race (reverting the fix fails its test). Human smoke test NOT run.
+- **Found while testing:** a rollback race (thread actions copying DB prefs over text being typed), fixed before it shipped; and three fixed `waitForTimeout`s in my own P3/P4 e2e tests, one of which flaked 1 run in 3, replaced with polls on the real condition.
+- **Next steps:** P4.1b (Modes modal / `core/modes.js`), then item 2 (search palette).
+
+---
+
 ## 2026-09-29 — Remove Coding Projects
 
 - **Summary:** Removed the Coding Projects view; documented it in `docs/coding-projects-archive.md`.

@@ -23,9 +23,10 @@ async function boot(): Promise<void> {
 
   installGlobalKeys({ newChat: () => { void newChat(); } });
   // The other app may have changed the shared row while this one was hidden.
-  window.addEventListener('focus', () => { void syncFromDisk(); });
+  window.addEventListener('focus', () => { void syncFromDisk(); useAppStore.getState().refreshApiKeys(); });
   document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'visible') void syncFromDisk();
+    if (document.visibilityState === 'visible') { void syncFromDisk(); useAppStore.getState().refreshApiKeys(); }
+    else void useAppStore.getState().flushPrefs();
   });
 
   createRoot(document.getElementById('root')!).render(
