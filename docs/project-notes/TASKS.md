@@ -5,7 +5,7 @@ Each entry: **ID · Status · Goal · Context · Files likely involved · Accept
 ---
 
 ## TASK-P2a — FastAPI core (phase 2a of the refactor)
-- **Status:** Done pending human smoke test; the four hardening commits and P2b (providers in TS) are not started
+- **Status:** Done (smoke test passed 2026-10-04, verified on the real Notlinear.app bundle). Next: the four hardening commits, then P2b (providers in TS)
 - **Goal:** Move the twelve `/__notlinear_*` endpoints to modular FastAPI routers with behaviour provably unchanged, and replace whole-repo static serving with an explicit allowlist.
 - **Context:** P2a of the approved plan. The endpoints are frozen per AGENTS.md, so the move must be provable rather than reviewed — hence the dual-server contract suite and the in-process service parity diff.
 - **Files likely involved:** `backend/app/**`, `backend/server.py`, `backend/server_legacy.py`, `tests/contract/**`, `requirements.txt`
@@ -15,7 +15,7 @@ Each entry: **ID · Status · Goal · Context · Files likely involved · Accept
 ---
 
 ## TASK-P1 — Test safety net (phase 1 of the React/FastAPI refactor)
-- **Status:** Done pending a real-data fixture and a first CI run on GitHub
+- **Status:** Done (smoke test passed 2026-10-04). Still open: a real-data fixture to un-skip 3 schema tests, and a first CI run on GitHub
 - **Goal:** Automated regression coverage before any production code moves, so every later phase has an oracle instead of a ten-step manual click-through.
 - **Context:** P1 of the approved plan, and the phase plan.md calls the highest-leverage prerequisite. Deliberately changes NO production code, which is also why it was safe to run before P0's human smoke test — its Playwright suite automates most of that smoke test anyway.
 - **Files likely involved:** `web/**`, `tests/contract/**`, `.github/workflows/ci.yml`, `requirements-dev.txt`, `pytest.ini`
@@ -25,7 +25,7 @@ Each entry: **ID · Status · Goal · Context · Files likely involved · Accept
 ---
 
 ## TASK-P0 — Repo and dev hygiene (phase 0 of the React/FastAPI refactor)
-- **Status:** Done pending human smoke test; `git gc` step deliberately not run (irreversible, awaiting approval)
+- **Status:** Done (smoke test passed 2026-10-04; `git gc` run, 62MB -> 4.2MB, 29 commits intact)
 - **Goal:** Make the working tree and dev setup safe and portable before any refactor: close the CORS hole, stop tracking user content and build artifacts, remove hardcoded paths, and correct docs that point at things that do not exist.
 - **Context:** P0 of the approved nine-phase plan. The CORS fix was pulled forward from P2 because it closes a live, exploitable hole and needs no FastAPI.
 - **Files likely involved:** `backend/server.py`, `.gitignore`, `launchers/*`, `README.md`, `AGENTS.md`, `CLAUDE.md`, `plan.md`, `frontend/core/store.js`, `frontend/views/notes.js`, `docs/project-notes/DECISIONS.md`

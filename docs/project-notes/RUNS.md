@@ -4,6 +4,15 @@ Each entry: **date/time · task or bug ID · command category · result · impor
 
 ---
 
+## 2026-10-04 — P0+P1+P2a — manual smoke test — pass (user-reported)
+- **Command category:** manual GUI smoke test via `Notlinear.app`, plus agent-side HTTP probes against the live instance
+- **Result:** pass — user reports "it is working" after running the app on the new FastAPI backend
+- **Output:** The live instance was confirmed to be `Notlinear.app` (PID 51039, launched from `~/Desktop`) running `backend/server.py` under uvicorn (PID 51044, `Server: uvicorn`). That alone exercises three things no automated test could: the `/notlinear.html` route the compiled bundle loads, the venv re-exec from the system `python3` every launcher uses, and the compiled-in repo path resolving from a copy outside the repo. Agent-side probes against that same live instance: `/notlinear.html`, `/frontend/index.html`, `/CHANGELOG.md`, `/logo.svg`, `/tools/export-data.html` all 200; `/BUGS.md`, `/uploads/`, `/docs/project-notes/RUNS.md`, `/backend/server.py` all 404; foreign-origin preflight 403, own-origin preflight 200.
+- **Caveat on scope:** the user reported the app working overall; the agent did not receive per-step confirmation for steps 2-7 individually (DeepSeek rate-limit fallback, nested branch reopen, search-backed branch status, files+folder attach, light-mode highlights contrast). Treat those as "not observed to fail" rather than "verified". The branch and highlight paths are untouched by P0-P2a (no frontend logic changed), so the risk concentrates on the endpoints that moved: `scan_project`, `open_files`, `save_file`, `link_preview`.
+- **Follow-up:** A stale pre-session stdlib server on :8765 initially masked the new one and made an agent pre-check misread `/BUGS.md` as a regression; the shim now bind-checks before announcing success (commit cc7362a). One idle stray `backend/server.py` (PID 47090) left over from a failed start.
+
+---
+
 ## 2026-10-04 — TASK-P2a — contract parity across both servers + e2e — pass
 - **Command category:** `pytest tests/contract` under both `NOTLINEAR_SERVER` values, `pnpm test`, `pnpm typecheck`, `pnpm e2e`, manual server starts under three interpreters
 - **Result:** pass — 79 tests under fastapi, 58 + 21 skipped under legacy, 37 vitest, 13 Playwright

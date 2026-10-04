@@ -1,5 +1,8 @@
 # CLAUDE.md — not-linear
 
+**Mid-refactor: read `docs/REFACTOR-HANDOFF.md` first** — it carries the current phase, the
+verification gate, and the landmines that cost real time to rediscover.
+
 **Read `AGENTS.md` first and follow it.** It is the source of truth for every agent — repo map, setup, verification smoke test, do-not-touch list, security rules, and the project-memory file structure. When anything here is unclear, **AGENTS.md wins.** This file only adds Claude-specific behavior; keep it short.
 
 ## Claude-specific behavior
