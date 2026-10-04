@@ -4,6 +4,22 @@ Each entry: **Decision ID · status · context · decision · alternatives rejec
 
 ---
 
+## ADR-033 — FastAPI replaces the stdlib http.server; the twelve legacy endpoints are frozen and pinned by contract tests
+- **Status:** accepted 2026-10-04.
+- **Context:** `backend/server.py` was 949 lines with a single `do_POST` if/elif chain over ten endpoints and no place to put streaming, jobs, auth or MCP. The business logic was already factored into module-level functions; only the request dispatch was monolithic.
+- **Decision:** `backend/app/` with `config.py`, `legacy.py`, `middleware/`, `services/` and `routers/`. Services are copy-pasted from `server.py` with no logic edits. The twelve `/__notlinear_*` paths, their status codes and body shapes are frozen; `tests/contract` runs the same suite against both servers via `NOTLINEAR_SERVER=legacy|fastapi`, so "byte-identical" is checked, not asserted. `tests/contract/test_service_parity.py` additionally diffs the moved functions against the originals in one process.
+- **Alternatives rejected:** rewriting the handlers while moving them (makes the contract diff unreadable — the `save_file` AppleScript injection and the SSRF gap are therefore carried over unchanged and fixed in their own commits); a subprocess-based test server (native dialogs would pop real windows and hang CI).
+- **Consequences/tradeoffs:** The app now has runtime dependencies where it had none; `pip install -r requirements.txt` is a required setup step and the "no build step, just run it" property is gone (see ADR-031). FastAPI silently changes four things that had to be forced back: `JSONResponse` appends `; charset=utf-8`, Pydantic returns 422 where these handlers return 400, an unhandled exception renders an HTML 500 page, and `runtime_logs` used `send_error`'s HTML bodies — those error-path *bodies* are explicitly out of contract, status codes are not. `backend/server_legacy.py` is retained as the parity oracle until the P3 gate.
+- **Related files:** `backend/app/**`, `backend/server.py`, `backend/server_legacy.py`, `tests/contract/**`
+
+## ADR-034 — Static serving is an explicit allowlist; the repository root is no longer served
+- **Status:** accepted 2026-10-04.
+- **Context:** `ThreadingHTTPServer(..., directory=REPO_ROOT)` served the **whole repository** over HTTP. `GET /BUGS.md` returned 96 KB of private bug triage, `/uploads/` returned personal screenshots, `/docs/project-notes/` was browsable, and `/backend/server.py` was readable. No exploit was needed — anything in the browser could simply ask.
+- **Decision:** Serve only `/frontend`, `/tools`, `/feedback/media`, and the single files the app actually fetches: `/CHANGELOG.md`, `/logo.svg`, `/notlinear.html`. `/` redirects to `/frontend/index.html`, and that one line is the rollback switch when the React app takes over at the P6 gate. `tests/contract/test_static_exposure.py` asserts both halves — what must 404 and what must still work.
+- **Alternatives rejected:** keeping root serving with a denylist (a denylist is wrong by default; every new private file would need remembering).
+- **Consequences/tradeoffs:** Anything added at the repo root that the frontend needs must be added to the allowlist deliberately. The first cut omitted `/notlinear.html`, which is the URL the compiled `Notlinear.app` binary loads, and the desktop app rendered a 404 — invisible to every other test because nothing else requests that path. There is now a regression test for exactly that URL. `logs.md` needs no route at all; it is write-only via POST.
+- **Related files:** `backend/app/main.py`, `backend/app/config.py`, `tests/contract/test_static_exposure.py`
+
 ## ADR-047 — Backup/restore lives in standalone `tools/` pages using raw IndexedDB, not Dexie
 - **Status:** accepted 2026-10-04.
 - **Context:** The approved refactor plan writes to live `kv:'state'` rows from phase P5 and rewrites note content in P6, but the repo had no export of any kind — all chat and note data existed in one browser profile with no second copy. A backup tool must therefore work before, during and after the refactor, including while the frontend is half-migrated.

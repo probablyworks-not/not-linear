@@ -8,7 +8,7 @@ This is the canonical list of **what the product does**, organized by area, at t
 
 ## Architecture note
 
-`frontend/` + `backend/server.py` is the canonical, currently-running app (`notlinear.html` at repo root is now just a `meta refresh` redirect stub to `frontend/index.html` for old launcher shortcuts — the migration in `MIGRATION.md` has completed its cutover). Everything below describes the modular tree.
+`frontend/` + `backend/app/` (entered via `backend/server.py`) is the canonical, currently-running app (`notlinear.html` at repo root is now just a `meta refresh` redirect stub to `frontend/index.html` for old launcher shortcuts — the migration in `MIGRATION.md` has completed its cutover). Everything below describes the modular tree.
 
 ---
 
@@ -407,9 +407,22 @@ Bold/italic, inline code, markdown + auto-linked bare URLs, full GFM-style pipe 
 
 ---
 
-## 7. Backend endpoints (`backend/server.py`)
+## 7. Backend endpoints (`backend/app/`, entry point `backend/server.py`)
 
-Python stdlib only (`ThreadingHTTPServer`, `127.0.0.1:8765`), serves the whole repo statically with `Cache-Control: no-store, must-revalidate` (edits always show up fresh) and wide-open CORS. Several endpoints are **macOS-only** (shell out to `osascript`/`screencapture`) and fail/timeout on other platforms.
+FastAPI on uvicorn (`127.0.0.1:8765`), entered via `backend/server.py`, which re-execs into the repo's
+`.venv` when the calling interpreter lacks the dependencies — this is what keeps the launchers and
+`Notlinear.app` working, since they all invoke the system `python3`. `--legacy` still runs the
+pre-P2 stdlib server (`backend/server_legacy.py`), kept as the contract-test oracle until P3.
+
+Static serving is an **explicit allowlist** (ADR-034): `/frontend`, `/tools`, `/feedback/media`,
+plus `/CHANGELOG.md`, `/logo.svg` and `/notlinear.html`. Everything else at the repo root — `BUGS.md`,
+`logs.md`, `uploads/`, `docs/project-notes/` — now 404s; before P2 the entire repository was served.
+`/` redirects to `/frontend/index.html`.
+
+CORS is **not** wide open (ADR-035 pending, P0 fix in place): the allow header is echoed only for the
+exact loopback origin the server is bound to, `Vary: Origin` is always sent, and a preflight from any
+other origin gets 403. Several endpoints remain **macOS-only** (shell out to `osascript`/`screencapture`)
+and fail on other platforms.
 
 | Endpoint | User-facing capability | Limits |
 |---|---|---|
@@ -462,4 +475,4 @@ Worth tracking separately since these look clickable but currently do nothing (o
 
 ---
 
-*Last compiled 2026-08-02 by direct codebase inspection (`frontend/app.js`, `frontend/views/notes.js`, `frontend/core/*.js`, `frontend/providers/*.js`, `backend/server.py`, `index.html`, `redesign_product.md`, `BUGS.md`, `AGENTS.md`). If you land a feature and don't see it here, add it in the same session — see the update rule at the top of this file.*
+*Last compiled 2026-10-04 (section 7 updated for the P2 FastAPI move; the rest 2026-08-02) by direct codebase inspection (`frontend/app.js`, `frontend/views/notes.js`, `frontend/core/*.js`, `frontend/providers/*.js`, `backend/server.py`, `index.html`, `redesign_product.md`, `BUGS.md`, `AGENTS.md`). If you land a feature and don't see it here, add it in the same session — see the update rule at the top of this file.*

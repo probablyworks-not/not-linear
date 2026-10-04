@@ -1,40 +1,45 @@
 """Shared fixtures for the legacy endpoint contract tests.
 
-These tests pin the current behaviour of every ``/__notlinear_*`` endpoint so
-that P2's move to FastAPI can be proved byte-identical rather than asserted to
-be. The ``server`` fixture is parametrised by the ``NOTLINEAR_SERVER``
-environment variable so the exact same test file can be run against either
-implementation:
+These tests pin the behaviour of every ``/__notlinear_*`` endpoint so that
+P2's move to FastAPI can be proved byte-identical rather than asserted to be.
+The ``server`` fixture is parametrised by the ``NOTLINEAR_SERVER`` environment
+variable so the exact same test file runs against either implementation:
 
-    NOTLINEAR_SERVER=legacy  pytest tests/contract    # today (default)
-    NOTLINEAR_SERVER=fastapi pytest tests/contract    # P2 onwards
+    NOTLINEAR_SERVER=legacy  pytest tests/contract    # the stdlib server
+    NOTLINEAR_SERVER=fastapi pytest tests/contract    # backend/app
 
-The server runs **in-process** on a thread rather than as a subprocess. That is
-deliberate: every native dialog in ``backend/server.py`` goes through
-``subprocess.run``, and running in-process is what lets a test replace it. A
-subprocess server would pop real macOS dialogs and hang the suite.
+Both run **in-process** on a thread rather than as a subprocess. That is
+deliberate: every native dialog goes through ``subprocess.run``, and running
+in-process is what lets a test replace it. A subprocess server would pop real
+macOS dialogs and hang the suite.
 
-Safety: ``backend/server.py`` resolves ``LOGS_PATH``, ``FEEDBACK_DIR`` and
-``FEEDBACK_MEDIA_DIR`` at import time, relative to the repo. Left alone, the
-tests would append to the developer's real ``logs.md`` and scatter files in
-``feedback/media/``. The ``isolated_paths`` fixture is autouse so that cannot
-happen by omission — a test has to opt out, not opt in.
+Safety: both implementations resolve their log and feedback paths at import
+time, relative to the repo. Left alone, the tests would append to the
+developer's real ``logs.md`` and ``feedback/FEEDBACK.md`` — which is not
+hypothetical, it happened once (BUGS.md #053) because ``FEEDBACK_PATH`` was
+missed. ``isolated_paths`` is autouse so that cannot happen by omission, and it
+patches whichever module set is in play.
 """
 
 from __future__ import annotations
 
 import importlib.util
+import os
 import socket
 import sys
 import threading
-from http.server import ThreadingHTTPServer
 from pathlib import Path
 from typing import Any, Callable, Iterator
 
 import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-SERVER_PY = REPO_ROOT / "backend" / "server.py"
+SERVER_PY = REPO_ROOT / "backend" / "server_legacy.py"
+sys.path.insert(0, str(REPO_ROOT / "backend"))
+
+
+def server_flavour() -> str:
+    return os.environ.get("NOTLINEAR_SERVER", "legacy")
 
 
 def _load_legacy_server() -> Any:
@@ -50,50 +55,93 @@ def _load_legacy_server() -> Any:
 
 @pytest.fixture(scope="session")
 def server_module() -> Any:
-    """The imported backend/server.py module."""
-    which = __import__("os").environ.get("NOTLINEAR_SERVER", "legacy")
-    if which == "legacy":
+    """The module under test.
+
+    For ``legacy`` this is backend/server.py. For ``fastapi`` it is a small
+    shim object exposing the same constant names the tests read, sourced from
+    backend/app, so the test bodies do not have to branch.
+    """
+    if server_flavour() == "legacy":
         return _load_legacy_server()
-    # P2 will add the FastAPI app here. Failing loudly beats silently testing
-    # the legacy server while believing FastAPI was covered.
-    raise pytest.UsageError(
-        f"NOTLINEAR_SERVER={which!r} is not available yet; the FastAPI app arrives in P2"
-    )
+
+    from app import config
+    from app.services import feedback_store, runtime_logs
+
+    class FastApiFacade:
+        """Presents backend/app under the names the tests already use."""
+        subprocess = __import__("app.services.macos", fromlist=["subprocess"]).subprocess
+        REPO_ROOT = config.REPO_ROOT
+
+        @property
+        def LOGS_PATH(self) -> Path:
+            return runtime_logs.LOGS_PATH
+
+        @property
+        def FEEDBACK_MEDIA_DIR(self) -> Path:
+            return feedback_store.FEEDBACK_MEDIA_DIR
+
+        @property
+        def MAX_BODY_BYTES(self) -> int:
+            return config.MAX_BODY_BYTES
+
+        @property
+        def MAX_EVENTS(self) -> int:
+            return config.MAX_EVENTS
+
+        @staticmethod
+        def _media_file_from_rel(rel: str) -> Path:
+            return feedback_store._media_file_from_rel(rel)
+
+    return FastApiFacade()
 
 
 @pytest.fixture(autouse=True)
-def isolated_paths(server_module: Any, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """Redirects every path the server writes to into a temp directory.
+def isolated_paths(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Redirects every path either implementation writes to into a temp dir.
 
-    Autouse on purpose: forgetting it would mean a test appending to the real
-    logs.md or writing screenshots into the repo.
+    Autouse on purpose. See BUGS.md #053: a sweep that POSTs to all twelve
+    endpoints also POSTs to feedback_save, which writes a real entry.
     """
     logs = tmp_path / "logs.md"
     feedback = tmp_path / "feedback"
     media = feedback / "media"
     media.mkdir(parents=True, exist_ok=True)
-    monkeypatch.setattr(server_module, "LOGS_PATH", logs, raising=False)
-    monkeypatch.setattr(server_module, "FEEDBACK_DIR", feedback, raising=False)
-    monkeypatch.setattr(server_module, "FEEDBACK_MEDIA_DIR", media, raising=False)
-    # FEEDBACK_PATH was missed on the first pass: feedback_list READ the real
-    # feedback/FEEDBACK.md and feedback_save would have WRITTEN to it.
-    monkeypatch.setattr(server_module, "FEEDBACK_PATH", feedback / "FEEDBACK.md", raising=False)
+
+    if server_flavour() == "legacy":
+        module = sys.modules.get("notlinear_server_under_test") or _load_legacy_server()
+        for name, value in (
+            ("LOGS_PATH", logs), ("FEEDBACK_DIR", feedback),
+            ("FEEDBACK_MEDIA_DIR", media), ("FEEDBACK_PATH", feedback / "FEEDBACK.md"),
+        ):
+            monkeypatch.setattr(module, name, value, raising=False)
+        return
+
+    # FastAPI: each service holds its own imported copy of the path, and the
+    # routers read them off the module at call time, so patching the service
+    # module is what takes effect.
+    from app import config as app_config
+    from app.services import feedback_store, runtime_logs
+
+    monkeypatch.setattr(runtime_logs, "LOGS_PATH", logs, raising=False)
+    monkeypatch.setattr(feedback_store, "FEEDBACK_DIR", feedback, raising=False)
+    monkeypatch.setattr(feedback_store, "FEEDBACK_MEDIA_DIR", media, raising=False)
+    monkeypatch.setattr(feedback_store, "FEEDBACK_PATH", feedback / "FEEDBACK.md", raising=False)
+    monkeypatch.setattr(app_config, "LOGS_PATH", logs, raising=False)
+    monkeypatch.setattr(app_config, "FEEDBACK_PATH", feedback / "FEEDBACK.md", raising=False)
+    monkeypatch.setattr(app_config, "FEEDBACK_DIR", feedback, raising=False)
+    # create_app() reads this at call time to mount /feedback/media, and the
+    # `server` fixture depends on this one, so the patch lands first and the
+    # mount points at the temp directory rather than the repo's.
+    monkeypatch.setattr(app_config, "FEEDBACK_MEDIA_DIR", media, raising=False)
 
 
 @pytest.fixture
 def fake_native(server_module: Any, monkeypatch: pytest.MonkeyPatch) -> Callable[..., None]:
-    """Replaces ``subprocess.run`` so no real macOS dialog is ever opened.
-
-    Returns a configure function so a test can choose what the fake dialog
-    "returns" — a chosen path, an empty string for a cancelled dialog, or a
-    non-zero exit for a failure.
-    """
+    """Replaces ``subprocess.run`` so no real macOS dialog is ever opened."""
 
     class FakeCompleted:
         def __init__(self, stdout: str = "", stderr: str = "", returncode: int = 0) -> None:
-            self.stdout = stdout
-            self.stderr = stderr
-            self.returncode = returncode
+            self.stdout, self.stderr, self.returncode = stdout, stderr, returncode
 
     state: dict[str, Any] = {"stdout": "", "stderr": "", "returncode": 0, "calls": []}
 
@@ -101,7 +149,11 @@ def fake_native(server_module: Any, monkeypatch: pytest.MonkeyPatch) -> Callable
         state["calls"].append(cmd)
         return FakeCompleted(state["stdout"], state["stderr"], state["returncode"])
 
-    monkeypatch.setattr(server_module.subprocess, "run", fake_run)
+    if server_flavour() == "legacy":
+        monkeypatch.setattr(server_module.subprocess, "run", fake_run)
+    else:
+        from app.services import macos
+        monkeypatch.setattr(macos.subprocess, "run", fake_run)
 
     def configure(stdout: str = "", stderr: str = "", returncode: int = 0) -> None:
         state.update(stdout=stdout, stderr=stderr, returncode=returncode)
@@ -112,23 +164,44 @@ def fake_native(server_module: Any, monkeypatch: pytest.MonkeyPatch) -> Callable
 
 @pytest.fixture
 def server(server_module: Any, isolated_paths: None) -> Iterator[str]:
-    """Boots the handler on an ephemeral port; yields the base URL."""
+    """Boots the server under test on an ephemeral port; yields the base URL."""
     with socket.socket() as probe:
         probe.bind(("127.0.0.1", 0))
         port = probe.getsockname()[1]
 
-    handler = server_module.NotlinearHandler
-    httpd = ThreadingHTTPServer(
-        ("127.0.0.1", port),
-        lambda *a, **kw: handler(*a, directory=str(REPO_ROOT), **kw),
-    )
-    thread = threading.Thread(target=httpd.serve_forever, daemon=True)
+    if server_flavour() == "legacy":
+        from http.server import ThreadingHTTPServer
+        handler = server_module.NotlinearHandler
+        httpd = ThreadingHTTPServer(
+            ("127.0.0.1", port),
+            lambda *a, **kw: handler(*a, directory=str(REPO_ROOT), **kw),
+        )
+        thread = threading.Thread(target=httpd.serve_forever, daemon=True)
+        thread.start()
+        try:
+            yield f"http://127.0.0.1:{port}"
+        finally:
+            httpd.shutdown()
+            httpd.server_close()
+            thread.join(timeout=5)
+        return
+
+    import uvicorn
+    from app.main import create_app
+
+    config = uvicorn.Config(create_app(port), host="127.0.0.1", port=port, log_level="error")
+    uvi = uvicorn.Server(config)
+    thread = threading.Thread(target=uvi.run, daemon=True)
     thread.start()
+    # uvicorn needs a moment before it accepts connections.
+    for _ in range(100):
+        if uvi.started:
+            break
+        threading.Event().wait(0.05)
     try:
         yield f"http://127.0.0.1:{port}"
     finally:
-        httpd.shutdown()
-        httpd.server_close()
+        uvi.should_exit = True
         thread.join(timeout=5)
 
 

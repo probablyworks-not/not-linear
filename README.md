@@ -40,6 +40,22 @@ If you change the port, use it in the URL too. Keep the host at `127.0.0.1` unle
 
 Another copy is probably running (or something else holds port 8765). Either open the URL above directly, or start on a different port with `--port`.
 
+## Setup
+
+The server runs on FastAPI, so it has dependencies where earlier versions had
+none. One-time setup:
+
+```bash
+python3 -m venv .venv
+.venv/bin/pip install -r requirements.txt
+```
+
+A `.venv` in the repo root is found automatically, so the launchers and
+`Notlinear.app` keep working without installing anything system-wide. If you
+would rather not install anything at all, `python3 backend/server.py --legacy`
+still runs the old dependency-free server — but note it serves the entire
+repository over HTTP, which is why it was replaced.
+
 ## macOS desktop app
 
 Double-click `Notlinear.app` (built from `launchers/`). It starts the same local server and opens Notlinear in its own window, so you never need to open the URL yourself. A lighter alternative is `launchers/Notlinear.command`, which starts the server and opens your default browser.

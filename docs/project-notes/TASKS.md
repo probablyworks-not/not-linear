@@ -4,6 +4,16 @@ Each entry: **ID · Status · Goal · Context · Files likely involved · Accept
 
 ---
 
+## TASK-P2a — FastAPI core (phase 2a of the refactor)
+- **Status:** Done pending human smoke test; the four hardening commits and P2b (providers in TS) are not started
+- **Goal:** Move the twelve `/__notlinear_*` endpoints to modular FastAPI routers with behaviour provably unchanged, and replace whole-repo static serving with an explicit allowlist.
+- **Context:** P2a of the approved plan. The endpoints are frozen per AGENTS.md, so the move must be provable rather than reviewed — hence the dual-server contract suite and the in-process service parity diff.
+- **Files likely involved:** `backend/app/**`, `backend/server.py`, `backend/server_legacy.py`, `tests/contract/**`, `requirements.txt`
+- **Acceptance criteria:** The same contract suite passes under `NOTLINEAR_SERVER=legacy` and `=fastapi`. Repo files no longer served; the app's own files still are, including the URL the compiled bundle loads. Every launcher still starts the server. `Notlinear.app` works unmodified.
+- **Verification:** both pytest runs, service parity diff, exposure tests, Playwright against FastAPI, manual start under three interpreters; then the human 10-step smoke test.
+
+---
+
 ## TASK-P1 — Test safety net (phase 1 of the React/FastAPI refactor)
 - **Status:** Done pending a real-data fixture and a first CI run on GitHub
 - **Goal:** Automated regression coverage before any production code moves, so every later phase has an oracle instead of a ten-step manual click-through.

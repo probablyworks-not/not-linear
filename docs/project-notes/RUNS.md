@@ -4,6 +4,14 @@ Each entry: **date/time · task or bug ID · command category · result · impor
 
 ---
 
+## 2026-10-04 — TASK-P2a — contract parity across both servers + e2e — pass
+- **Command category:** `pytest tests/contract` under both `NOTLINEAR_SERVER` values, `pnpm test`, `pnpm typecheck`, `pnpm e2e`, manual server starts under three interpreters
+- **Result:** pass — 79 tests under fastapi, 58 + 21 skipped under legacy, 37 vitest, 13 Playwright
+- **Output:** The same contract suite passes against the stdlib server and FastAPI, which is the P2 gate. Exposure verified closed: `/BUGS.md`, `/logs.md`, `/uploads/`, `/docs/project-notes/*` all 404 where they previously returned content. `/notlinear.html`, `/frontend/index.html`, `/CHANGELOG.md`, `/logo.svg` and `/tools/*` still 200. CORS: foreign-origin preflight 403, app-origin 200. Server started successfully with `/usr/bin/python3` (3.9.6), Homebrew `python3` (3.14.4) and `.venv/bin/python`, confirming the re-exec fires from the first two and does not loop on the third. Playwright's 13 tests, including streaming and persistence round trips, pass against the FastAPI server.
+- **Follow-up:** `logs.md` is modified by an e2e run — that is the real app syncing its runtime log through the real server, and the file is gitignored, so it is expected rather than an isolation failure. The hardening commits are not done. The human 10-step smoke test is still outstanding, now covering two phases of server change.
+
+---
+
 ## 2026-10-04 — TASK-P1 — vitest + pytest + Playwright + CI — pass
 - **Command category:** `pnpm typecheck`, `pnpm test` (vitest), `pytest tests/contract`, `pnpm e2e` (Playwright/chromium), mutation tests
 - **Result:** pass — 37 vitest passed + 3 skipped, 32 pytest passed, 13 Playwright passed

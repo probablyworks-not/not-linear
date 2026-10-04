@@ -1,0 +1,11 @@
+# Runtime dependencies for the FastAPI backend (ADR-033).
+#
+# Note what this costs: before P2, backend/server.py was stdlib-only and the
+# quick start was a single command with nothing to install. A fresh clone now
+# needs `pip install -r requirements.txt` first. backend/server.py remains the
+# entry point — it is a shim that execs uvicorn — so the launchers and
+# Notlinear.app are unaffected.
+fastapi>=0.115,<1.0
+uvicorn[standard]>=0.34,<1.0
+# Only used by the P3 dev proxy (NOTLINEAR_DEV_PROXY=1), never in normal use.
+httpx>=0.28,<1.0

@@ -17,13 +17,17 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - run: pip install -r requirements-dev.txt
-      # The native-dialog endpoints shell out to osascript and are faked in
-      # conftest.py, so this suite runs on Linux despite the app being
-      # macOS-first for those features.
+      - run: pip install -r requirements.txt -r requirements-dev.txt
+      # Run the SAME contract suite against both servers. This is what makes
+      # "the FastAPI move is byte-identical" a checked claim rather than an
+      # assertion. The native-dialog endpoints shell out to osascript and are
+      # faked in conftest.py, so both run on Linux.
       - run: pytest tests/contract
         env:
           NOTLINEAR_SERVER: legacy
+      - run: pytest tests/contract
+        env:
+          NOTLINEAR_SERVER: fastapi
 
   frontend:
     name: typecheck and schema tests
@@ -58,6 +62,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+      # The e2e webServer runs backend/server.py, which needs FastAPI since P2.
+      - run: pip install -r requirements.txt
       - uses: pnpm/action-setup@v4
         with:
           version: 10
