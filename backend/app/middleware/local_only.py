@@ -96,4 +96,12 @@ class LocalOriginMiddleware(BaseHTTPMiddleware):
         response.headers["Vary"] = "Origin"
         if origin is not None:
             response.headers["Access-Control-Allow-Origin"] = origin
+        # Carried over from the stdlib server's end_headers(). There is no build
+        # step and no versioned asset URLs, so a cached frontend file is served
+        # until some cache decides otherwise — and WKWebView's is not the
+        # browser's. This bit immediately: app.js gained the X-Notlinear-Local
+        # header in P2, and a stale cached copy would call every endpoint
+        # without it and get 403, which looks like a broken app rather than a
+        # stale file.
+        response.headers.setdefault("Cache-Control", "no-store, must-revalidate")
         return response

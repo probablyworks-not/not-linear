@@ -103,6 +103,20 @@ class TestStillServed:
         assert response.status_code == 200
         assert "frontend/index.html" in response.text
 
+    @pytest.mark.parametrize("path", ["/frontend/index.html", "/frontend/app.js", "/CHANGELOG.md", "/notlinear.html"])
+    def test_frontend_files_are_never_cached(self, server: str, path: str) -> None:
+        """Regression guard.
+
+        The stdlib server sent this on every response because there is no build
+        step and no versioned asset URLs. The FastAPI move dropped it, and the
+        consequence was immediate rather than theoretical: app.js gained a
+        required request header in P2, so a stale cached copy would call every
+        endpoint without it and get 403 — indistinguishable, to a user, from
+        the app being broken.
+        """
+        response = requests.get(f"{server}{path}", timeout=TIMEOUT)
+        assert "no-store" in response.headers.get("Cache-Control", "")
+
     def test_root_redirects_to_the_legacy_app(self, server: str) -> None:
         """One line, and the rollback switch between the two apps at the P6 gate."""
         response = requests.get(f"{server}/", timeout=TIMEOUT, allow_redirects=False)
