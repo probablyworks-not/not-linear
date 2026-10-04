@@ -45,11 +45,23 @@ These rules apply to **every** AI coding agent working in this repository (Claud
 
 - **Desktop:** double-click `Notlinear.app` — opens its own macOS window and starts the server at `http://127.0.0.1:8765/`.
 - **Browser (any OS):** `python3 backend/server.py`, then open `http://127.0.0.1:8765/frontend/index.html`. See `README.md`. (Plain `python3 -m http.server` also works but disables runtime-log file sync and native pickers.)
-- **No install, no build, no package manager.**
+- **One-time setup since P2 (ADR-033):** `python3 -m venv .venv && .venv/bin/pip install -r requirements.txt`. The server is FastAPI now, so it has dependencies where it had none. `backend/server.py` finds a repo `.venv` automatically, so the launchers and `Notlinear.app` still work without installing anything system-wide; `--legacy` runs the old dependency-free server.
+- The frontend still has **no build step** — `frontend/` is native ES modules served as-is. `web/` (the React app, P3 onward) does have one.
 
 ## Verification — run before claiming any task is done
 
-There are **no automated tests**; verification is the **manual smoke test** below. Run it after every change and record the outcome in `docs/project-notes/RUNS.md`.
+Since P1 there **are** automated tests, and they are the first gate:
+
+```bash
+NOTLINEAR_SERVER=fastapi pytest tests/contract   # endpoint contract + static allowlist
+NOTLINEAR_SERVER=legacy  pytest tests/contract   # same suite, old server (parity oracle)
+cd web && pnpm test && pnpm typecheck            # schema oracle vs frontend/core/store.js
+cd web && pnpm e2e                               # Playwright against the legacy app
+```
+
+They do not replace the **manual smoke test** below — steps 2, 4, 5, 6 and 10 need a human, a real
+provider or a native dialog. Run it after every change and record the outcome in
+`docs/project-notes/RUNS.md`.
 
 1. App loads via `Notlinear.app` / server at `:8765`.
 2. Send a chat message (Claude). Confirm Claude→DeepSeek auto-fallback on rate limit still works (bug #023).

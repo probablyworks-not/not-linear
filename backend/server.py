@@ -116,6 +116,26 @@ def main() -> None:
 
     from app.main import create_app
 
+    # Fail loudly and early if the port is taken, BEFORE printing the "serving"
+    # line. Printing first meant a failed bind still announced success, which
+    # is exactly how a stale server on :8765 gets mistaken for the new one.
+    import socket
+    probe = socket.socket()
+    try:
+        probe.bind((args.host, args.port))
+    except OSError:
+        sys.stderr.write(
+            f"notlinear: {args.host}:{args.port} is already in use.\n"
+            "\n"
+            "Another copy is probably running (check with:\n"
+            f"    lsof -nP -iTCP:{args.port} -sTCP:LISTEN\n"
+            ").\n"
+            "Quit it, or start this one on a different port with --port.\n"
+        )
+        raise SystemExit(1)
+    finally:
+        probe.close()
+
     # Same line the stdlib server printed — the launchers and their logs key
     # off seeing the server come up, and a human looks for this URL.
     print(f"Serving Notlinear on http://{args.host}:{args.port}/frontend/index.html")
