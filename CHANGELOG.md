@@ -4,6 +4,13 @@ All notable repository changes made by AI agents should be recorded here.
 
 ## 2026-10-04
 
+- Agent: Claude Sonnet 5.5
+- Summary: P3 — the React shell. `/web/` now renders on the same origin and the same IndexedDB as the legacy app: sidebar, new chat, delete (with the legacy confirm wording), tab strip persisted to `nl_tabs_v1`, topbar, Esc priority chain, and the three themes, all painted from `tokens.css` with a lint rule forbidding literal colours.
+- Files changed: `web/**` (Tailwind, ESLint, `src/{state,db,lib,registry,shell,ui}`, tests), `backend/app/{dev_proxy,main,config}.py`, `tests/proxy/test_dev_proxy.py`, `frontend/styles/tokens.css`, `.github/workflows/ci.yml`, `docs/project-notes/*`, `FEATURES.md`, `docs/REFACTOR-HANDOFF.md`.
+- Behavior changes: none in the legacy app. `tokens.css` gains six additive tokens (`--danger*`, `--on-danger`, `--scrim`) that no legacy rule reads. `/web/` is new and additive; `/` still redirects to legacy. `pnpm e2e` now builds first; CI gains `pnpm lint` and `pytest tests/proxy`.
+- Observed: a legacy tab holding stale in-memory state will overwrite changes made in `/web/` on its next save, since the schema is one whole row (ADR-039). Separately, restarting the server within about a minute of stopping it can report "port already in use" while `lsof` and `netstat` show nothing on that port, and clears by itself shortly after; cause not investigated, not fixed here. The handoff's test counts (142 / 120+22) were stale: an untouched `HEAD` gives 146 / 118+28.
+- Verification: 108 vitest, 33 Playwright, 146 + 118 contract, 7 proxy, typecheck, lint, build. The human smoke test has NOT been run.
+
 - Agent: Claude Opus 5
 - Summary: Branch pushed, and the real-data schema fixture generated — which immediately corrected two things the synthetic seeds had wrong.
 - Files changed: `web/tests/fixtures/*` (new), `web/tests/schema/__snapshots__/chat-keypaths.json` (new), `web/src/db/{types,keypaths}.ts`, `web/tests/schema/chat-store.oracle.test.ts`, `web/scripts/backup-to-fixture.mjs`.

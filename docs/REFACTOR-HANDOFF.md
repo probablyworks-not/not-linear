@@ -1,10 +1,11 @@
 # Refactor handoff — read this first
 
 **Status as of 2026-10-04.** Phases P-1, P0, P1 and **P2 (complete, including the
-four hardening changes and the provider registry)** are done and committed on branch
-`refactor/p0-repo-hygiene`. `main` is untouched at `ccf7504`. Nothing is pushed.
+four hardening changes and the provider registry)** are committed on branch
+`refactor/p0-repo-hygiene`. **P3 (React shell) is implemented and automated-green but
+UNCOMMITTED and awaiting the human smoke test.** `main` is untouched at `ccf7504`.
 
-**Next phase is P3 (React shell).**
+**Next phase is P4 (leaf features), after the user has smoke-tested P3 and committed it.**
 
 This file is the context a new session needs. Read it instead of re-deriving the
 state, then read `AGENTS.md` and `CLAUDE.md` for the standing rules.
@@ -18,9 +19,9 @@ state, then read `AGENTS.md` and `CLAUDE.md` for the standing rules.
 | Branch | `refactor/p0-repo-hygiene` (5 commits ahead of `main`) |
 | Plan of record | `/Users/yash/.claude/plans/pasted-content-id-9423-notlinear-refact-cheeky-brooks.md` |
 | Backend | FastAPI in `backend/app/`, entry point `backend/server.py` |
-| Old backend | `backend/server_legacy.py` — kept as the test oracle, delete at the P3 gate |
+| Old backend | `backend/server_legacy.py` — kept as the contract-test oracle; the P6 cutover deletes it (P3's gate still needs it) |
 | Frontend | `frontend/` unchanged (native ES modules, no build step) |
-| New frontend | `web/` — scaffold + tests only, no app yet |
+| New frontend | `web/` — shell only (P3): sidebar, tabs, confirm/toast, themes. No chat, no notes |
 
 ```
 33a02fd  Record P2 completion in the memory files
@@ -50,10 +51,11 @@ which has no FastAPI. `--legacy` runs the old dependency-free server.
 ## The gate before claiming anything is done
 
 ```bash
-NOTLINEAR_SERVER=fastapi .venv/bin/python -m pytest tests/contract   # 142 tests
-NOTLINEAR_SERVER=legacy  .venv/bin/python -m pytest tests/contract   # 120 + 22 skipped
-cd web && pnpm test && pnpm typecheck                                # 63 + 3 skipped
-cd web && pnpm e2e                                                   # 15 Playwright
+NOTLINEAR_SERVER=fastapi .venv/bin/python -m pytest tests/contract   # 146 (earlier figures here were stale)
+NOTLINEAR_SERVER=legacy  .venv/bin/python -m pytest tests/contract   # 118 + 28 skipped
+.venv/bin/python -m pytest tests/proxy                               # 7
+cd web && pnpm test && pnpm typecheck && pnpm lint                   # 108
+cd web && pnpm e2e                                                   # builds, then 33 Playwright (15 legacy + 18 /web/)
 ```
 
 Then the manual steps at `AGENTS.md` "Verification" that automation cannot cover:
@@ -116,6 +118,36 @@ only thing standing between a test suite and the developer's real files.
 injection test used a payload containing `/`, which the filename check rejected
 before `osascript` was ever called. It passed, and it tested nothing.
 
+**Two writers, one whole-row schema (P3).** The legacy app rewrites the entire `state`
+row from memory on every save. `web/` therefore writes only via `db/chat-repo.ts`: one
+read-modify-write per `rw` transaction, touching only the fields its mutator owns. It still
+cannot stop a *stale* legacy tab overwriting a web change on its next save; `/web/`
+re-reads on window focus to narrow the window. Never add a second write path in `web/`.
+
+**Never create a blank `state` row while `localStorage.nl_state_v2` exists.** Legacy imports
+that key into Dexie exactly once, only when the row is absent; a blank row written first
+shadows the user's old data permanently. `chat-repo.ts` refuses, and has a test.
+
+**`pnpm e2e` builds `web/dist` first.** The Playwright server serves `/web/` from the
+static mount, which only exists if `web/dist` does when the server starts.
+
+**Don't kill PID 56857 or 47090.** 56857 is a running app on `:8765`; verify the dev proxy on
+a spare port (`NOTLINEAR_PORT=8767` for Vite's HMR, `--port 8767` for the server). The HMR
+websocket pump is tested against a fake Vite (`tests/proxy`), not yet by editing a file with
+a live browser on `:8765`: do that once.
+
+**A port can report "in use" for a short while after the previous server stops**, with
+nothing visible in `lsof`/`netstat`. It hit the Playwright server twice, back to back. Cause
+not investigated; wait and retry before assuming a stray process.
+
+**`tokens.css` gained six tokens in P3** (`--danger*`, `--on-danger`, `--scrim`) because
+`base.css` hardcodes those colours and `web/` forbids literals. If a design needs another
+colour, add a token; do not add a literal and do not widen the lint rule.
+
+**The user's safety hook false-positives on harmless text** (it blocked a heredoc that merely
+mentioned `os.environ`, and a test file). Writing the file with the Write/Edit tools instead
+of a shell heredoc works; don't try to disguise content to get past it.
+
 **Playwright failures are usually wrong test assumptions.** Three were:
 `applyTheme` overwrites `nl_theme` from `prefs.theme`; the sidebar ships
 collapsed so rows are not clickable; the search palette hides via opacity so its
@@ -136,8 +168,8 @@ the one-session-per-phase cadence is not. P5 alone is four sessions.
 | P1 | Test safety net + CI | **done** |
 | P2a | FastAPI core, static allowlist | **done**, smoke-tested |
 | P2 | Hardening (a-d) + provider registry | **done**, verified live |
-| P3 | React shell | **next** |
-| P4 | Leaf features | |
+| P3 | React shell | **done, uncommitted, smoke test pending** |
+| P4 | Leaf features | **next** |
 | P5 | Chat core (four sub-sessions) | |
 | P6 | Notes editor | |
 | P7 | Extension seams | |
@@ -155,45 +187,27 @@ Two things from P2 to carry forward:
 
 ---
 
-### P3 — React shell (next)
+### P3 — React shell (done; uncommitted; smoke test pending)
 
-Foundation only. No chat, no notes.
+Delivered, with ADR-031/036/039/040/041. Deviations from the plan above worth knowing:
 
-1. **Tailwind + shadcn wired to tokens.** `web/tailwind.config.ts` maps every
-   colour to a `var(--...)` from `frontend/styles/tokens.css` — enumerate them,
-   do not invent. **No literal hex anywhere in `web/`**, enforced by an ESLint
-   `no-restricted-syntax` rule, so bug #022 cannot recur. Preserve the three
-   themes via the existing `data-theme` attribute and copy the pre-paint inline
-   script from `frontend/index.html:55`.
-2. **Shell layout as React**: sidebar sections, topbar + shadow, tab strip
-   (ADR-022, key `nl_tabs_v1`), left pane. Toast and confirm become shadcn
-   `Sonner`/`AlertDialog` but with the **exact copy** from `core/ui.js:116-137` —
-   the delete-confirm wording is user-visible and asserted in smoke step 3.
-3. **Zustand slices** mirroring `core/state.js:31 appState` field for field.
-   **TanStack Query only for backend-derived reads** (`/CHANGELOG.md`,
-   `scan_project`, `feedback_list`) — Dexie is local state behind `useLiveQuery`
-   or store actions, never a query cache. Write that boundary down as an ADR;
-   it is the thing teams get wrong.
-4. **Persistence wiring**: `web/src/db/chat.ts` goes live, honouring
-   "debounce, don't blast" — typing debounced, position and status immediate.
-5. **Dev proxy**: FastAPI proxies `/web/*` to Vite so both apps share the
-   `127.0.0.1:8765` origin and one IndexedDB. `web/vite.config.ts` already has
-   `base: '/web/'` and `hmr.clientPort: 8765`; the server side is
-   `backend/app/dev_proxy.py` behind `NOTLINEAR_DEV_PROXY=1` — an httpx
-   streaming passthrough plus a websocket pump, ~60 lines. **Documented
-   fallback** if the websocket pump proves flaky: `vite build --watch` and serve
-   `web/dist` statically. Record that in the P3 ADR as accepted.
-6. **Registry**: port `core/registry.js`'s `registerView`/`mountView`/
-   `onViewChange` semantics for P7's plugin seam; drop the three
-   `register*Opener` bridges — in React those are store actions.
-7. **Keyboard**: `web/src/lib/keyboard.ts` for the Esc chain (`app.js:6252`).
-   Port the precedence (preview > confirm > popover > panel) as a **priority
-   list, not nested ifs**.
+- **Sidebar is Threads only.** Search, Projects, Notes, Updates and Recent-branches sections,
+  and the Settings footer action, are *not* rendered — each belongs to a P4/P5 feature and a
+  dead button is worse than an absent one. The footer shows identity only.
+- **Selecting a thread opens a placeholder**, because chat is P5.
+- **No `useLiveQuery`.** Cross-app live notification is unreliable (the two apps ship different
+  Dexie builds), so the store re-hydrates on window focus (ADR-041).
+- **Rename is not built.** `lib/debounced-writer.ts` (200ms, keyed, tested) exists for the
+  first typed field, which is P5's composer; nothing in P3 types into the database.
+- **New-chat button is the inverse of text colour**, not legacy's always-dark literal gradient.
+- **`registerChatOpener` & friends are gone**; they are store actions (`state/actions.ts`).
+- Icons are `lucide-react` (CLAUDE.md), not the Tabler webfont legacy uses.
 
-**Gate:** `/web/` renders in all three themes with zero hardcoded colours
-(ESLint proves it); tabs persist to `nl_tabs_v1`; legacy still passes its smoke
-test; **a thread created in legacy appears in `/web/`'s sidebar and vice versa,
-within one storage realm**; schema tests green.
+**Gate (automated, green):** three themes render from tokens, ESLint proves zero literals (and a
+test proves the rule fires); `nl_tabs_v1` round-trips; create and delete work in both directions
+across the two apps; schema tests green. **Still manual:** run the 10-step smoke test in the
+legacy app and click through `/web/` in the real `Notlinear.app` realm, which is a *separate*
+IndexedDB from Chrome's.
 **Rollback:** `/web/` is purely additive; `/` still redirects to legacy.
 
 ### P4 — Leaf features (two-three sessions)
@@ -224,6 +238,8 @@ between both apps (smoke step 7 run in **both**); logs still land in `logs.md`.
 a broken leaf is a flag flip rather than a revert.
 
 ### P5 — Chat core (four sub-sessions)
+
+**DECIDED 2026-10-04: dual-write (ADR-038).** The text below is the reasoning, kept for context. Do not reopen it.
 
 **Decide before P5a:** dual-write `state.stream`, or declare a one-way cutover
 where web writes `highlightsV2` only and legacy chat becomes read-only.
@@ -362,19 +378,13 @@ green; secret scan clean.
 
 | ID | Covers | Phase |
 |---|---|---|
-| ADR-031 | Build step accepted: React 18 + TS + Vite (supersedes ADR-001) | P3 |
-| ADR-036 | Dexie schemas frozen; legacy `store.js` as the oracle; additive fields only | P3 |
-| ADR-038 | Highlights/branch anchors as `(turnId, offset)` in `highlightsV2`; `state.stream` dual-written | P5b |
-| ADR-039 | Dual-app coexistence: FastAPI dev-proxies `/web/*` to Vite; one origin per storage realm | P3 |
-| ADR-040 | shadcn on Tailwind mapped to `tokens.css`; lint rule forbids literal colours | P3 |
-| ADR-041 | Zustand owns app state; TanStack Query owns backend reads only; Dexie never behind a query cache | P3 |
 | ADR-042 | Notes v2 on BlockNote with inline specs, lossless converter, mandatory backup | P6 |
 | ADR-043 | Extension seams register as `ToolSpec`s; connectors use `safe_fetch` | P7 |
 | ADR-044 | License + publish checklist | P8 |
 
-Already written: ADR-032 (fresh squashed repo), ADR-033 (FastAPI), ADR-034
-(static allowlist), ADR-035 (trust boundary), ADR-037 (provider registry),
-ADR-047 (backup tools).
+Already written: ADR-031, 038 (dual-write decision; anchor details to be added as an amendment in P5b), 032 (fresh squashed repo), 033 (FastAPI), 034
+(static allowlist), 035 (trust boundary), 036, 037 (provider registry), 039, 040, 041,
+047 (backup tools).
 
 ---
 

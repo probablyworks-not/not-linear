@@ -63,3 +63,9 @@ def fake_native() -> bool:
 def native_allowed() -> bool:
     """False disables every endpoint that shells out to a native dialog."""
     return os.environ.get("NOTLINEAR_ALLOW_NATIVE", "1") != "0"
+
+
+# Vite's dev server (P3). Loopback only, fixed port: web/vite.config.ts sets
+# strictPort, so it either owns 5173 or refuses to start.
+VITE_HOST = "127.0.0.1"
+VITE_PORT = 5173

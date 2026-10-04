@@ -1,5 +1,13 @@
 # CHANGES.md — internal work memory
 
+## 2026-10-04 — P3: React shell
+- **Summary:** `/web/` renders a working shell on the same origin and the same IndexedDB row as the legacy app: sidebar with seed + dynamic threads, new chat, delete with the legacy confirm copy, tab strip persisted to `nl_tabs_v1`, topbar, Esc priority chain, three themes. No chat, no notes (P5, P6).
+- **Files touched:** `web/{index.html,tailwind.config.ts,postcss.config.js,eslint.config.js,vite.config.ts,package.json}`, `web/src/{main.tsx,styles,state,db/{chat-repo,thread-ops},lib,registry,shell,ui}/**`, `web/tests/{shell,e2e/web-shell.spec.ts}`, `backend/app/{dev_proxy,main,config}.py`, `tests/proxy/test_dev_proxy.py`, `frontend/styles/tokens.css` (+6 tokens), `.github/workflows/ci.yml`, ADR-031/036/039/040/041.
+- **Why:** the plan of record's P3. Foundation for P4-P7, with the cross-app guarantee ("a thread made in either app shows in both") enforced by Playwright rather than by hand.
+- **Risks:** two writers on a whole-row schema. `web/` writes via one read-modify-write transaction touching only its own fields, but a stale legacy tab will still overwrite web changes when it saves (ADR-039). `web/` stores **no** chat content yet, so the rendered-HTML `stream` landmine is untouched.
+- **Tests run:** 108 vitest, 33 Playwright (15 legacy + 18 web), 146 contract (fastapi) + 118 passed/28 skipped (legacy), 7 proxy, typecheck, lint, build. The human smoke test is NOT run.
+- **Next steps:** run the smoke test (steps 1, 3, 7, 10 in both apps), then P4. Decide dual-write vs one-way cutover before P5a.
+
 ## 2026-10-04 — Real-data fixture, and what it corrected
 - Branch `refactor/p0-repo-hygiene` pushed (15 commits). GitHub reported the repo has **moved** to `probablyworks-not/not-linear`; the local remote was repointed to the new URL.
 - Fixture generated from a real desktop-app backup: 91 threads, 18 projects, 3 notes rows, 8 localStorage keys. It un-skipped the 3 fixture tests and immediately earned its place.

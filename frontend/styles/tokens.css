@@ -55,6 +55,16 @@
   --highlight-soft:rgba(244,184,59,0.28);
   --highlight-strong:rgba(244,184,59,0.42);
   --user-bub:#1A1A1A;
+  /* Destructive actions + modal scrim. Constant across themes. Added in P3 for
+     web/: base.css hardcodes these literals in the delete-confirm dialog, which
+     is exactly the pattern bug #022 warns about, and web/ forbids literal
+     colours outright. Additive only: no existing rule reads these. */
+  --danger:#f87171;
+  --danger-soft:rgba(248,113,113,0.10);
+  --danger-strong:#b91c1c;
+  --danger-border:#dc2626;
+  --on-danger:#ffffff;
+  --scrim:rgba(0,0,0,0.58);
   /* Elevation shadows for floating panels/drawers/dialogs. */
   --shadow-md:0 4px 20px rgba(0,0,0,0.60);
   --shadow-lg:0 12px 48px rgba(0,0,0,0.80);

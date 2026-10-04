@@ -407,6 +407,21 @@ Bold/italic, inline code, markdown + auto-linked bare URLs, full GFM-style pipe 
 
 ---
 
+## 6b. React shell at `/web/` (P3 — foundation only)
+
+A second front end, being built toward replacing `frontend/` (ADR-031). It has **no chat and no Notes yet**:
+selecting a thread opens a placeholder. What it does today, against the *same* origin and the *same*
+`notlinear` IndexedDB row as the legacy app (ADR-036, ADR-039):
+
+- **Sidebar** listing the four seed threads plus dynamic ones, minus deleted; **New chat** (⌘N / Ctrl+N) creates the exact thread object legacy's `startNewChat` does; **delete** (hover trash, never on `doc-main`) shows the legacy confirm copy verbatim and tombstones the id in `deletedThreads`. Sidebar ships collapsed; the toggle and Esc open and close it.
+- **Tab strip** persisted to `localStorage.nl_tabs_v1` in legacy's `{tabs:[{id}], active}` shape (shared with the legacy tab strip). `blank` is never saved; closing the last tab reopens `doc-main`; a tab is dropped only for an *explicitly deleted* thread.
+- **Themes** dark-mono / grey / light via `data-theme` and the shared `nl_theme` key, every colour a `var(--…)` from `tokens.css`; ESLint forbids literal colours in `web/src`.
+- **Esc chain** as an ordered priority table (`lib/keyboard.ts`): confirm closes before the sidebar.
+- **View registry** (`registry/views.ts`) with `registerView` / `mountView` / `onViewChange`, the seam P7 plugs into.
+- Not here yet: Search, Projects, Notes sections, Settings, Product story, recent branches (P4); anything inside a thread (P5).
+- Cross-app freshness is on window focus, not live; a stale legacy tab can overwrite a `/web/` change when it saves.
+- Served from `web/dist` by the Python server, or proxied to Vite with `NOTLINEAR_DEV_PROXY=1` (`pnpm dev` in `web/`).
+
 ## 7. Backend endpoints (`backend/app/`, entry point `backend/server.py`)
 
 FastAPI on uvicorn (`127.0.0.1:8765`), entered via `backend/server.py`, which re-execs into the repo's
@@ -475,4 +490,4 @@ Worth tracking separately since these look clickable but currently do nothing (o
 
 ---
 
-*Last compiled 2026-10-04 (section 7 updated for the P2 FastAPI move; the rest 2026-08-02) by direct codebase inspection (`frontend/app.js`, `frontend/views/notes.js`, `frontend/core/*.js`, `frontend/providers/*.js`, `backend/server.py`, `index.html`, `redesign_product.md`, `BUGS.md`, `AGENTS.md`). If you land a feature and don't see it here, add it in the same session — see the update rule at the top of this file.*
+*Last compiled 2026-10-04 (section 6b added for the P3 React shell; section 7 updated for the P2 FastAPI move; the rest 2026-08-02) by direct codebase inspection (`frontend/app.js`, `frontend/views/notes.js`, `frontend/core/*.js`, `frontend/providers/*.js`, `backend/server.py`, `index.html`, `redesign_product.md`, `BUGS.md`, `AGENTS.md`). If you land a feature and don't see it here, add it in the same session — see the update rule at the top of this file.*

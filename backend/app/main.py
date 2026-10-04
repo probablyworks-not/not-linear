@@ -71,7 +71,13 @@ def create_app(port: int = config.DEFAULT_PORT) -> FastAPI:
         app.mount("/tools", StaticFiles(directory=config.TOOLS_DIR), name="tools")
     config.FEEDBACK_MEDIA_DIR.mkdir(parents=True, exist_ok=True)
     app.mount("/feedback/media", StaticFiles(directory=config.FEEDBACK_MEDIA_DIR), name="feedback-media")
-    if config.WEB_DIST_DIR.exists():
+    if config.dev_proxy_enabled():
+        # Imported lazily so the production path carries no websocket/httpx
+        # proxy code. Registers /web routes; must come before nothing else
+        # claims /web, hence instead of (not alongside) the static mount.
+        from . import dev_proxy
+        dev_proxy.install(app)
+    elif config.WEB_DIST_DIR.exists():
         app.mount("/web", StaticFiles(directory=config.WEB_DIST_DIR, html=True), name="web")
 
     return app

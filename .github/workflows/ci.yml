@@ -28,6 +28,9 @@ jobs:
       - run: pytest tests/contract
         env:
           NOTLINEAR_SERVER: fastapi
+      # The /web/* dev proxy (HTTP passthrough + HMR websocket pump), against a
+      # fake Vite. Independent of NOTLINEAR_SERVER.
+      - run: pytest tests/proxy
 
   frontend:
     name: typecheck and schema tests
@@ -47,12 +50,15 @@ jobs:
           cache-dependency-path: web/pnpm-lock.yaml
       - run: pnpm install --frozen-lockfile
       - run: pnpm typecheck
+      # Includes the no-literal-colour rule (bug #022), which is also exercised
+      # by a test that feeds it offenders, so it cannot silently stop firing.
+      - run: pnpm lint
       # Includes the differential oracle against the real frontend/core/store.js
       # and the frozen-schema assertions.
       - run: pnpm test
 
   e2e:
-    name: end-to-end smoke (legacy app)
+    name: end-to-end smoke (legacy app + /web shell)
     runs-on: ubuntu-latest
     defaults:
       run:

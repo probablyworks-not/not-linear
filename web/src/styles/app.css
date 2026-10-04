@@ -1,0 +1,12 @@
+/* Tokens are the single source of truth and live in the legacy app until the
+   P6 gate moves them here. Imported by path so there is exactly one copy. */
+@import '../../../frontend/styles/tokens.css';
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html, body, #root { height: 100%; }
+  body { @apply bg-bg text-text font-sans text-base; margin: 0; -webkit-font-smoothing: antialiased; }
+  ::selection { background: var(--accent-soft); color: var(--text); }
+}

@@ -55,8 +55,9 @@ Since P1 there **are** automated tests, and they are the first gate:
 ```bash
 NOTLINEAR_SERVER=fastapi pytest tests/contract   # endpoint contract + static allowlist
 NOTLINEAR_SERVER=legacy  pytest tests/contract   # same suite, old server (parity oracle)
-cd web && pnpm test && pnpm typecheck            # schema oracle vs frontend/core/store.js
-cd web && pnpm e2e                               # Playwright against the legacy app
+cd web && pnpm test && pnpm typecheck && pnpm lint   # schema oracle, shell logic, no-literal-colour rule
+pytest tests/proxy                               # the /web dev proxy, against a fake Vite
+cd web && pnpm e2e                               # builds web/, then Playwright against legacy AND /web/
 ```
 
 They do not replace the **manual smoke test** below — steps 2, 4, 5, 6 and 10 need a human, a real

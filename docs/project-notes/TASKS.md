@@ -4,6 +4,17 @@ Each entry: **ID · Status · Goal · Context · Files likely involved · Accept
 
 ---
 
+## TASK-P3 — React shell (phase 3 of the refactor)
+- **Status:** Done pending the human smoke test (automated gate green 2026-10-04).
+- **Goal:** `/web/` renders a shell that shares the legacy app's origin and data, with tokens, tabs, confirm/toast, a view registry and the Esc chain, and no hardcoded colour anywhere.
+- **Context:** Foundation only. Chat is P5 and Notes P6, so selecting a thread opens a placeholder that says so.
+- **Files likely involved:** `web/src/**`, `web/{tailwind,eslint}.config.*`, `backend/app/dev_proxy.py`, `frontend/styles/tokens.css`
+- **Acceptance criteria:** three themes render from tokens with a lint rule proving zero literals; tabs persist to `nl_tabs_v1` in legacy's shape; a thread created or deleted in either app shows in the other; delete-confirm copy is byte-identical; Esc closes the highest-priority surface first; schema tests green.
+- **Verification:** see RUNS.md 2026-10-04 TASK-P3. ADR-031, 036, 039, 040, 041.
+- **Open:** `backend/server_legacy.py` is still here. The handoff says "delete at the P3 gate" in one place and "delete at the P6 cutover" in another; the P3 gate needs it as the contract oracle, so it stays until P6.
+
+---
+
 ## TASK-P2 — Hardening and provider registry (phase 2 complete)
 - **Status:** Done (smoke test passed on the live app 2026-10-04, with all four hardening changes verified active on the running instance)
 - **Goal:** Close the local trust boundary the P0 CORS fix exposed as wrong, and replace the three hand-maintained tool-schema copies with one registry.

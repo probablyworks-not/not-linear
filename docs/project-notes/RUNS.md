@@ -4,6 +4,12 @@ Each entry: **date/time · task or bug ID · command category · result · impor
 
 ---
 
+## 2026-10-04 — TASK-P3 — full suite + live proxy check — pass (automated only)
+- **Command category:** test / lint / build
+- **Result:** pass
+- **Output:** `pnpm test` 108 (the 3 real-fixture tests now run); `pnpm typecheck` and `pnpm lint` clean; `pnpm build` ok (377 kB js); `pnpm e2e` 33 (15 legacy + 18 `/web/`); `pytest tests/proxy` 7; `pytest tests/contract` 146 fastapi, 118 passed + 28 skipped legacy. The same contract counts come out on an untouched `HEAD` checked out into a worktree, so the handoff's "142" and "120 + 22" were stale, not a regression. Live: the real Vite served through `:8767/web/` returned 200 for the page and for `/web/src/main.tsx`. Screenshots of dark and light themes reviewed.
+- **Follow-up:** human smoke test of both apps; the HMR websocket was proven against a fake Vite, **not** against a live browser edit on `:8765` (a copy of the app was already running there, so verification used `:8767`).
+
 ## 2026-10-04 — P2 (hardening + P2b) — manual smoke test on the live app — pass
 - **Command category:** manual GUI smoke test via `Notlinear.app` after a full restart, plus agent-side probes against that same live instance
 - **Result:** pass — user reports "working" with all P2 hardening active

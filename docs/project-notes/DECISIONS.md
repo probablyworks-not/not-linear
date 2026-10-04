@@ -4,6 +4,59 @@ Each entry: **Decision ID · status · context · decision · alternatives rejec
 
 ---
 
+## ADR-038 — Chat content is dual-written: structured data for React, legacy-parsable HTML in `stream`
+- **Status:** accepted 2026-10-04. Decided by the maintainer before P5a, as the handoff required.
+- **Context:** Legacy persists a thread's conversation as rendered HTML in `threads[id].stream` (`stream.innerHTML`), with highlights and branch anchors living inside it as `<span class="highlighted" data-hid>` and `.branched[data-bid]`. React would rather store structured turns and anchors as `(turnId, offset)` in `highlightsV2`. The Dexie schema is frozen and both apps read the same row, so React's choice decides whether legacy keeps working.
+- **Decision:** React writes the structured data **and** regenerates legacy-parsable HTML into `stream` on every save (`serializeStreamHTML`). `highlightsV2` is an additive field. Both apps can open and continue any thread, and P5 can be abandoned at any point with no data consequence.
+- **Alternatives rejected:** a one-way cutover where web writes `highlightsV2` only and legacy chat becomes read-only. Cheaper (no HTML to keep correct), but from the first React message the apps disagree and a retreat strands data in the new format.
+- **Consequences/tradeoffs:** the HTML shape is the thing bugs #002-#009 were about, so `serializeStreamHTML` needs a round-trip test against the real fixture (91 threads, 74 branch anchors): `legacy HTML -> structured -> HTML` must preserve every `data-hid` and `data-bid`, and legacy must reload a React-written thread identically. This is the dominant cost of P5. Anchor storage details (`turnId` scheme, offset basis) are finalised in P5b and recorded as an amendment here.
+- **Related files:** `web/src/db/types.ts`, `frontend/app.js` (`stream` writes at :1164 and :1369), `web/tests/fixtures/notlinear.kv.v1.json`
+
+---
+
+## ADR-041 — Zustand owns app state; TanStack Query owns backend reads only; Dexie is never behind a query cache
+- **Status:** accepted 2026-10-04.
+- **Context:** The React shell has two kinds of data. Local state (threads, tabs, prefs) lives in IndexedDB and is written by *two* apps. Backend-derived data (`/CHANGELOG.md`, `scan_project`, `feedback_list`) is fetched, can be stale, and has no second writer. Teams routinely put both behind one query cache; for the first kind that gives two sources of truth for one row, with the legacy app as an uninvolved third writer.
+- **Decision:** `web/src/state/app-store.ts` mirrors `core/state.js` `appState` field for field and is hydrated from the shared `state` row; its actions call `db/chat-repo.ts`, which is the only chat-database I/O in `web/`. `state/ui-store.ts` holds shell state that legacy keeps in DOM classes (sidebar, tabs, the confirm dialog). TanStack Query is installed with `retry: false` and is used for the three backend reads only, from P4. Dexie is **not** exposed through `useLiveQuery` or a query cache. The other app is picked up by re-hydrating on window focus.
+- **Alternatives rejected:** `useLiveQuery` over the `state` row (the two apps ship different Dexie builds, so cross-app notification is not dependable, and it duplicates the store); TanStack Query for everything (stale-while-revalidate is wrong for a row another process rewrites); one nested meta-store (CLAUDE.md: stores stay flat).
+- **Consequences/tradeoffs:** Cross-app freshness is "on focus", not live. Two stores rather than one, because none of the shell state is in `appState`.
+- **Related files:** `web/src/state/*`, `web/src/db/chat-repo.ts`, `web/src/lib/query-client.ts`
+
+## ADR-040 — shadcn-style primitives on Tailwind, mapped to `tokens.css`; a lint rule forbids literal colours
+- **Status:** accepted 2026-10-04.
+- **Context:** Bug #022 (unreadable highlights in light mode) was a hardcoded colour. AGENTS.md says "never hardcode colors" but nothing enforced it, and `base.css` itself still hardcodes a few (the delete dialog's reds, the new-chat button gradient, the scrim).
+- **Decision:** `web/tailwind.config.ts` *replaces* Tailwind's palette with names that resolve to `var(--…)` tokens from `frontend/styles/tokens.css`, enumerated from the file. Sizes are limited to 12/13/14px (CLAUDE.md). `eslint.config.js` bans hex, `rgb()/rgba()` and `hsl()` literals in `web/src` with `no-restricted-syntax`, including inside template strings, and `tests/shell/no-literal-colours.test.ts` feeds it offenders so the rule cannot silently stop firing. The three themes are untouched: `data-theme` on `<html>`, with the pre-paint script copied from `frontend/index.html`. Radix `AlertDialog` and Sonner supply behaviour; colours come only from tokens.
+- **Token additions (the one change to a legacy file):** `--danger`, `--danger-soft`, `--danger-strong`, `--danger-border`, `--on-danger`, `--scrim` in `tokens.css`, constant across themes. Additive; no existing rule reads them. They exist because the legacy dialog's literals had no token to point at.
+- **Alternatives rejected:** a hex allowlist (the point is zero); keeping Tailwind's default palette (a `bg-red-500` is a literal by another name); copying `tokens.css` into `web/` (two copies drift; it moves at the P6 cutover).
+- **Consequences/tradeoffs:** `tokens.css` is imported by relative path across the project boundary, so Vite needs `server.fs.allow: ['..']`. The new-chat button is the inverse of the text colour (light on dark theme) rather than legacy's always-dark gradient, because that gradient is itself two literals.
+- **Related files:** `web/tailwind.config.ts`, `web/eslint.config.js`, `web/src/styles/app.css`, `frontend/styles/tokens.css`
+
+## ADR-039 — Dual-app coexistence: FastAPI dev-proxies `/web/*` to Vite; one origin per storage realm
+- **Status:** accepted 2026-10-04.
+- **Context:** IndexedDB is per origin, and `localhost:5173` is not `127.0.0.1:8765`. A React app on Vite's own port opens an empty database that looks exactly like data loss. Both apps must read and write the *same* `state` row.
+- **Decision:** With `NOTLINEAR_DEV_PROXY=1`, `backend/app/dev_proxy.py` forwards `/web/*` to `127.0.0.1:5173`: an httpx streaming passthrough plus a websocket pump that echoes Vite's `vite-hmr` subprotocol. Without the flag `/web` serves the built `web/dist` statically and the proxy code is never imported. `vite.config.ts` sets `base: '/web/'`, binds IPv4 explicitly, and takes the HMR port from `NOTLINEAR_PORT`. **Accepted fallback** if the pump proves flaky: leave the proxy off, run `vite build --watch`, and serve `web/dist`.
+- **Write discipline:** the legacy app rewrites the *whole* `state` row from memory on every save. So `chat-repo.ts` does each write as one read-modify-write inside a single `rw` transaction (IndexedDB serialises those across tabs), touches only the fields its mutator owns, and refuses to create a blank row while a legacy `nl_state_v2` localStorage import is still pending (it would shadow the user's data forever).
+- **Known limit:** a legacy tab holding a *stale* in-memory copy will overwrite a web change the next time it saves. That is inherent to two writers over a whole-row schema we are not allowed to change. Mitigated by focus-refresh in `/web/`; the real fix is the P6 cutover.
+- **Alternatives rejected:** CORS between two origins (separate databases); iframing legacy inside React (two apps in one document, shared globals); writing to a second database (the point is one dataset).
+- **Related files:** `backend/app/dev_proxy.py`, `backend/app/main.py`, `web/vite.config.ts`, `web/src/db/chat-repo.ts`, `tests/proxy/test_dev_proxy.py`
+
+## ADR-036 — Dexie schemas stay frozen; legacy `store.js` is the oracle; additive fields only
+- **Status:** accepted 2026-10-04.
+- **Context:** `web/` writes to the same two databases as the legacy app. A version bump or reshaped row is invisible to behavioural tests (a fresh test database opens at whatever version it is told to) and corrupts the other app on its next load.
+- **Decision:** `notlinear` stays at version 1 (`kv: 'key'`), `notlinear-notes` stays separate (ADR-007). `web/` adds no stores, no indices, no migration. New thread operations (`db/thread-ops.ts`) reproduce the exact object `startNewChat` builds and the exact tombstoning `deleteThread` does, and are tested field-for-field. `tests/schema/schema-invariants.test.ts` and the key-path golden remain the guard. A new persisted field must be additive and appear as a reviewable diff in the golden.
+- **Consequences/tradeoffs:** `web/` cannot use an index to query threads; it reads the one row. Fine at 91 threads.
+- **Related files:** `web/src/db/{chat,chat-repo,thread-ops}.ts`, `web/tests/schema/*`, `web/tests/shell/chat-repo.test.ts`
+
+## ADR-031 — A build step is accepted: React 18 + TypeScript + Vite (supersedes ADR-001)
+- **Status:** accepted 2026-10-04. Supersedes ADR-001 and the "no build step, no new runtime dependencies" rule in AGENTS.md *for `web/` only*.
+- **Context:** The no-build rule bought "open it and it runs" for a 7,500-line vanilla app. The refactor plan of record (P5 chat core, P6 Notes editor on BlockNote) needs a component model, a typed provider layer and npm libraries that this rule rules out.
+- **Decision:** `web/` is React 18, TypeScript (strict, `noUncheckedIndexedAccess`), Vite, Tailwind, Zustand, TanStack Query, Radix, Sonner, `lucide-react`. `frontend/` keeps its no-build rule until it is deleted at P6. Built output is served by the same Python server; during development it is proxied (ADR-039).
+- **Alternatives rejected:** staying vanilla (blocks P6 and P7); Next.js or Electron (CLAUDE.md forbids a backend or native shell).
+- **Consequences/tradeoffs:** `pnpm install` is now a contributor step. CI gains lint and a build before e2e.
+- **Related files:** `web/package.json`, `web/vite.config.ts`, `.github/workflows/ci.yml`
+
+---
+
 ## ADR-037 — One ChatProvider interface and a single TOOL_SPECS registry
 - **Status:** accepted 2026-10-04. **Extends ADR-029.**
 - **Context:** The same five tools are described in three places that must agree and have no way to enforce it: `buildTools()` (app.js:381, Anthropic `input_schema`), `buildDeepSeekTools()` (app.js:432, OpenAI `type:'function'`), and the availability rules restated as English prose inside `buildSystemPrompt()` (app.js:294-300). ADR-029 already recorded the cost — adding `offset`/`query` meant editing "all three provider tool-schema copies in app.js". Separately, each provider is invoked through `getLLMAdapter()` with eight ad-hoc callbacks that every call site must wire identically and none do.
