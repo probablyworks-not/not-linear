@@ -11,6 +11,7 @@ import { TabStrip } from './TabStrip';
 import { ConfirmDialog } from '../ui/ConfirmDialog';
 import { Toaster } from '../ui/toast';
 import { SettingsDialog } from '../settings/SettingsDialog';
+import { ModesDialog } from '../settings/ModesDialog';
 import { flags } from '../flags';
 
 export function AppShell() {
@@ -63,6 +64,7 @@ export function AppShell() {
         </main>
       </div>
       {flags.settings && <SettingsDialog />}
+      {flags.modes && <ModesDialog />}
       <ConfirmDialog />
       <Toaster />
     </div>

@@ -5,7 +5,7 @@ four hardening changes and the provider registry)** are committed on branch
 `refactor/p0-repo-hygiene`. **P3 (React shell) is implemented and automated-green but
 UNCOMMITTED and awaiting the human smoke test.** `main` is untouched at `ccf7504`.
 
-**P3 is committed (`cd5c67e`). P4.1a (Settings + API keys) is implemented, automated-green and committed after it; the user has not yet smoke-tested either. Next: P4.1b (Modes modal), then P4 items 2-7.**
+**P3 is committed (`cd5c67e`). P4.1a (Settings + API keys) and P4.1b (Modes manager) are implemented, automated-green and committed after it; the user has not yet smoke-tested any of P3/P4.1. Next: P4 item 2 (search palette), after the smoke test.**
 
 This file is the context a new session needs. Read it instead of re-deriving the
 state, then read `AGENTS.md` and `CLAUDE.md` for the standing rules.
@@ -54,8 +54,8 @@ which has no FastAPI. `--legacy` runs the old dependency-free server.
 NOTLINEAR_SERVER=fastapi .venv/bin/python -m pytest tests/contract   # 146 (earlier figures here were stale)
 NOTLINEAR_SERVER=legacy  .venv/bin/python -m pytest tests/contract   # 118 + 28 skipped
 .venv/bin/python -m pytest tests/proxy                               # 7
-cd web && pnpm test && pnpm typecheck && pnpm lint                   # 144
-cd web && pnpm e2e                                                   # builds, then 47 Playwright (15 legacy + 32 /web/)
+cd web && pnpm test && pnpm typecheck && pnpm lint                   # 167
+cd web && pnpm e2e                                                   # builds, then 56 Playwright (15 legacy + 41 /web/)
 ```
 
 Then the manual steps at `AGENTS.md` "Verification" that automation cannot cover:
@@ -142,6 +142,17 @@ port with a plain `bind()` and no `SO_REUSEADDR` (uvicorn sets that flag itself,
 stricter than the real server). One-line fix, deliberately not made (out of scope); until then
 wait for `TIME_WAIT` to clear: `until ! netstat -an | grep -q "\.8766 .*TIME_WAIT"; do sleep 3; done`.
 
+**Radix `aria-hidden`s everything behind an open dialog.** `getByRole('complementary')` (the
+sidebar) then reports "absent" whether or not it is open, so `toBeHidden()` on a role query is
+vacuous. Use a CSS locator (`aside[aria-label="Left pane"]`), and assert it visible first.
+
+**A fresh database has no `prefs.mode`/`tone`/`model`/`theme`.** Legacy defaults them in memory
+(`core/state.js`); `/web/` must apply the same default wherever it reads a pref. The Modes
+"Active" badge missed this.
+
+**Prompt text is generated, not retyped.** `settings/default-modes.ts` is emitted from
+`frontend/core/modes.js` (see its header). Do the same for any other prompt copy ported.
+
 **Never use `waitForTimeout` to wait for legacy to save.** It flaked 1 run in 3. Poll the
 persisted state (`expect.poll(() => readPersistedState(...))`) for the actual condition.
 
@@ -179,7 +190,7 @@ the one-session-per-phase cadence is not. P5 alone is four sessions.
 | P2a | FastAPI core, static allowlist | **done**, smoke-tested |
 | P2 | Hardening (a-d) + provider registry | **done**, verified live |
 | P3 | React shell | **done, uncommitted, smoke test pending** |
-| P4 | Leaf features | **in progress**: 4.1a Settings + keys done; 4.1b Modes modal next |
+| P4 | Leaf features | **in progress**: 4.1 Settings, keys and Modes done; item 2 (search palette) next |
 | P5 | Chat core (four sub-sessions) | |
 | P6 | Notes editor | |
 | P7 | Extension seams | |

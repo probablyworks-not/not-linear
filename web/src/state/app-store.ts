@@ -5,6 +5,7 @@ import { setPrefIn, type PrefKey } from '../db/prefs-ops';
 import { createDebouncedWriter } from '../lib/debounced-writer';
 import { connectKey, disconnectKey, readApiKeys } from '../lib/api-keys';
 import { applyTheme } from '../lib/theme';
+import { MODE_PREF_KEYS } from '../settings/modes';
 import type { PersistedPrefs, PersistedProject, PersistedState, PersistedThread } from '../db/types';
 
 // Mirrors frontend/core/state.js:31 `appState`, field for field, so a feature
@@ -75,6 +76,13 @@ export interface AppActions {
   setTheme(theme: string): Promise<void>;
   /** Writes any debounced pref edits now (blur, close, window hide, before a re-read). */
   flushPrefs(): Promise<void>;
+  /**
+   * Applies a mode edit (create/update/reset/delete). The edit runs on a working
+   * copy; memory takes the result at once and ONLY the mode-owned pref keys
+   * that changed are written, so a concurrent legacy edit to any other pref
+   * survives. Returns whatever the edit returns.
+   */
+  editModes<T>(edit: (prefs: PersistedPrefs) => T): Promise<T>;
   /** Re-reads localStorage.nl_api_keys, which the other app may have changed. */
   refreshApiKeys(): void;
   connectApiKey(provider: string, key: string): void;
@@ -179,6 +187,22 @@ export const useAppStore = create<AppState & AppActions>((set, get) => ({
     };
     if (opts?.debounce) prefWriter.schedule(key, write);
     else { prefWriter.cancel(key); await write(); }
+  },
+
+  async editModes(edit) {
+    const before = get().prefs;
+    const next: PersistedPrefs = { ...before };
+    const result = edit(next);
+    set({ prefs: next });
+    const changed = MODE_PREF_KEYS.filter(k => next[k] !== before[k]);
+    if (changed.length) {
+      try {
+        await updateChatState(st => { for (const k of changed) (st.prefs as Record<string, unknown>)[k] = next[k]; });
+      } catch (e) {
+        set({ error: e instanceof Error ? e.message : String(e) });
+      }
+    }
+    return result;
   },
 
   async setTheme(theme) {

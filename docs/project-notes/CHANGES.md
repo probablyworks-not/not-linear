@@ -1,5 +1,14 @@
 # CHANGES.md — internal work memory
 
+## 2026-10-04 — P4.1b: Modes manager in `/web/`
+- **Summary:** Port of `core/modes.js` + `views/modes-modal.js`: list, create, edit, reset and delete conversation modes, from Settings → "New / manage modes". Behind `flags.modes`.
+- **Files touched:** `web/src/settings/{modes,default-modes,ModesDialog}.tsx|ts`, `web/src/settings/SettingsDialog.tsx`, `web/src/state/{app-store,ui-store}.ts`, `web/src/shell/AppShell.tsx`, `web/src/flags.ts`, `web/tests/settings/{modes-differential,modes-store}.test.ts`, `web/tests/e2e/web-modes.spec.ts`; `web/tests/e2e/web-settings.spec.ts` (assertion fix).
+- **How it was kept faithful:** `default-modes.ts` is *generated* from the legacy module (prompt text is never retyped), and a differential test runs 8 seeded random sequences of 60 operations through the real `frontend/core/modes.js` and the port, comparing the three mode-owned prefs and every read function after each step. Mutation-tested: dropping the "deleting the active mode falls back to General" rule fails 4 tests; dropping the description-override rule fails 9.
+- **Addition beyond legacy:** a "Conversation modes" row in Settings, because legacy opens the manager only from the composer's mode menu, which is P5. Picking the *active* mode is likewise still done in the composer.
+- **Bugs found by my own tests:** (1) General was not marked Active on a fresh database - legacy defaults `prefs.mode` to `general` in memory, a fresh row has none; fixed with the same default. (2) The P4.1a Settings Esc test asserted the sidebar was hidden via `getByRole`, but Radix marks everything behind an open dialog `aria-hidden`, so that assertion could never fail. Now a CSS locator, paired with a visible-first check.
+- **Risks:** edits write only the mode-owned keys that changed (`modeOverrides`, `customModes`, `mode`), so a concurrent legacy edit to another pref survives; tested against a deliberately stale in-memory copy.
+- **Tests run:** 167 vitest, 56 Playwright (15 legacy + 18 shell + 14 settings + 9 modes), typecheck, lint, build. Human smoke test NOT run.
+- **Next steps:** P4 item 2 (search palette), after the smoke test.
 ## 2026-10-04 — P3: React shell
 - **Summary:** `/web/` renders a working shell on the same origin and the same IndexedDB row as the legacy app: sidebar with seed + dynamic threads, new chat, delete with the legacy confirm copy, tab strip persisted to `nl_tabs_v1`, topbar, Esc priority chain, three themes. No chat, no notes (P5, P6).
 - **Files touched:** `web/{index.html,tailwind.config.ts,postcss.config.js,eslint.config.js,vite.config.ts,package.json}`, `web/src/{main.tsx,styles,state,db/{chat-repo,thread-ops},lib,registry,shell,ui}/**`, `web/tests/{shell,e2e/web-shell.spec.ts}`, `backend/app/{dev_proxy,main,config}.py`, `tests/proxy/test_dev_proxy.py`, `frontend/styles/tokens.css` (+6 tokens), `.github/workflows/ci.yml`, ADR-031/036/039/040/041.

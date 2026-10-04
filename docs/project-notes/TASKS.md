@@ -4,6 +4,16 @@ Each entry: **ID · Status · Goal · Context · Files likely involved · Accept
 
 ---
 
+## TASK-P4.1b — Modes manager in `/web/`
+- **Status:** Done pending the human smoke test (automated gate green 2026-10-04).
+- **Goal:** create/edit/reset/delete modes in `/web/`, overrides-only (ADR-046), shared with legacy.
+- **Acceptance criteria:** behaviour identical to `core/modes.js` under random op sequences; modes made in either app appear in the other; editing a mode never touches another pref; delete uses the legacy wording and falls the active mode back to General.
+- **Verification:** RUNS.md 2026-10-04 TASK-P4.1b; ADR-046, ADR-048.
+
+---
+
+---
+
 ## TASK-P4.1a — Settings and API keys in `/web/`
 - **Status:** Done pending the human smoke test (automated gate green 2026-10-04).
 - **Goal:** Edit prefs and API keys from `/web/`, sharing storage with legacy, with live tool availability.
@@ -11,14 +21,6 @@ Each entry: **ID · Status · Goal · Context · Files likely involved · Accept
 - **Files likely involved:** `web/src/settings/*`, `web/src/lib/{api-keys,theme}.ts`, `web/src/state/app-store.ts`
 - **Acceptance criteria:** every pref round-trips between the apps; `nl_api_keys` keeps its shape and `notes.js` still reads it; keys never rendered unmasked, logged, or stored in IndexedDB; theme agrees in `prefs.theme` and `nl_theme`; option lists pinned to legacy; tool list derives from the registry.
 - **Verification:** RUNS.md 2026-10-04 TASK-P4.1a; ADR-048.
-
----
-
-## TASK-P4.1b — Modes modal and `core/modes.js` port
-- **Status:** Todo
-- **Goal:** Port the conversation-modes editor, overrides-only (ADR-046).
-- **Files likely involved:** `frontend/core/modes.js`, `frontend/views/modes-modal.js`, `web/src/settings/`
-- **Acceptance criteria:** create/edit/reset/delete a mode in `/web/` and see it in legacy and vice versa; `customModes`/`modeOverrides` untouched by every other Settings write.
 
 ---
 

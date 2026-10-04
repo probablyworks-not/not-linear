@@ -28,6 +28,10 @@ async function openLegacySettings(page: Page): Promise<void> {
   await expect(page.locator('#prefs')).toHaveClass(/show/);
 }
 
+// A CSS locator, not getByRole: while a Radix dialog is open everything behind it is
+// aria-hidden, so a role query reports the sidebar as absent whether or not it is open.
+const sidebar = (page: Page) => page.locator('aside[aria-label="Left pane"]');
+
 const prefsOf = async (page: Page) => ((await readPersistedState(page)) as { prefs: Record<string, unknown> } | null)?.prefs ?? {};
 
 test.describe('Settings dialog', () => {
@@ -48,8 +52,9 @@ test.describe('Settings dialog', () => {
   test('Esc follows the legacy chain: the sidebar closes before Settings, then Settings', async ({ page }) => {
     await openWeb(page);
     await openSettings(page);
+    await expect(sidebar(page)).toBeVisible(); // so the hidden check below is not vacuous
     await page.keyboard.press('Escape');
-    await expect(page.getByRole('complementary', { name: 'Left pane' })).toBeHidden();
+    await expect(sidebar(page)).toBeHidden();
     await expect(page.getByRole('dialog', { name: 'Settings' })).toBeVisible();
     await page.keyboard.press('Escape');
     await expect(page.getByRole('dialog', { name: 'Settings' })).toHaveCount(0);

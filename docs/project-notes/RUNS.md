@@ -4,6 +4,14 @@ Each entry: **date/time · task or bug ID · command category · result · impor
 
 ---
 
+## 2026-10-04 — TASK-P4.1b — full web gate — pass (automated only)
+- **Command category:** test / lint / build
+- **Result:** pass
+- **Output:** `pnpm test` 167 (19 files); typecheck and lint clean; `pnpm e2e` 56 (15 legacy, 18 shell, 14 settings, 9 modes). Differential test: 8 seeds x 60 ops each, port vs the real legacy module. Mutation checks both caught. Screenshot of the Modes dialog reviewed.
+- **Follow-up:** human smoke test: create a mode in `/web/`, then use it in the legacy composer's mode menu and confirm the system prompt actually changes behaviour (not automated - needs a real provider).
+
+---
+
 ## 2026-10-04 — TASK-P4.1a — full web gate — pass (automated only)
 - **Command category:** test / lint / build
 - **Result:** pass

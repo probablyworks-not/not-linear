@@ -5,6 +5,13 @@ All notable repository changes made by AI agents should be recorded here.
 ## 2026-10-04
 
 - Agent: Claude Sonnet 5.5
+- Summary: P4.1b — the Modes manager in `/web/`: create, edit, reset and delete conversation modes from Settings → "New / manage modes". Behind `flags.modes`.
+- Files changed: `web/src/settings/{modes.ts,default-modes.ts,ModesDialog.tsx,SettingsDialog.tsx}`, `web/src/state/*`, `web/src/shell/AppShell.tsx`, `web/src/flags.ts`, `web/tests/{settings,e2e}/*`, `docs/project-notes/*`, `FEATURES.md`, `docs/REFACTOR-HANDOFF.md`.
+- Behavior changes: none in legacy. `/web/` gains the manager; modes and edits are shared with legacy through `prefs.customModes` / `prefs.modeOverrides` (overrides-only, ADR-046). New Settings row to open it, since legacy's only entry point is the composer's mode menu (P5).
+- Observed: while testing, my own P4.1a Esc assertion turned out to be vacuous (Radix `aria-hidden`s everything behind a dialog, so a role query can't see the sidebar either way); fixed. A fresh database has no `prefs.mode`, while legacy defaults it to `general` in memory; the port applies the same default.
+- Verification: 167 vitest, 56 Playwright, typecheck, lint, build. The built-in mode text is generated from `frontend/core/modes.js`, and a seeded differential test runs the real legacy module against the port. Human smoke test NOT run.
+
+- Agent: Claude Sonnet 5.5
 - Summary: P4.1a — Settings and API keys in `/web/`: theme, names, tone, context, default model, API keys (masked), context ranking, SearXNG, plus a live list of which model tools are on and what turns the others on. Behind `flags.settings`.
 - Files changed: `web/src/{flags.ts,settings/*,lib/{api-keys,theme}.ts,db/prefs-ops.ts,state/*,shell/*,main.tsx}`, `web/tests/{settings,e2e}/*`, `docs/project-notes/*`, `FEATURES.md`, `docs/REFACTOR-HANDOFF.md`. New dependency `@radix-ui/react-dialog`.
 - Behavior changes: none in legacy. `/web/` gains a Settings dialog. Settings and legacy share `state.prefs` and `localStorage.nl_api_keys` (same shape, so `notes.js` still reads it); a change in either shows in the other after a reload or window focus.

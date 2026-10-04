@@ -3,4 +3,5 @@
 // rollback). Flip to false to hide the feature; its code and tests stay.
 export const flags = {
   settings: true,
+  modes: true,
 } as const;

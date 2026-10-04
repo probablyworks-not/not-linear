@@ -7,6 +7,7 @@ import { ESC_PRIORITY, useEscLayer } from '../lib/keyboard';
 import { MODELS, RANKING_OPTIONS, THEMES, TONES } from './options';
 import { INPUT, Section, Segmented } from './fields';
 import { ApiKeysSection } from './ApiKeysSection';
+import { flags } from '../flags';
 
 /**
  * Ports the Settings panel (index.html #prefs, app.js:4287). Defaults shown
@@ -58,6 +59,7 @@ function SettingsForm() {
   const setPref = useAppStore(s => s.setPref);
   const setTheme = useAppStore(s => s.setTheme);
   const flushPrefs = useAppStore(s => s.flushPrefs);
+  const setModesOpen = useUiStore(s => s.setModesOpen);
 
   const [folder, setFolder] = useState(prefs.folderName || 'Workspace');
   const [name, setName] = useState(prefs.name || '');
@@ -100,6 +102,17 @@ function SettingsForm() {
       <Section label="Default model">
         <Segmented label="Default model" value={prefs.model || 'sonnet'} choices={MODELS} columns={2} onChange={id => { void setPref('model', id); }} />
       </Section>
+
+      {flags.modes && (
+        <Section label="Conversation modes" help="Instructions added to the system prompt. Applies to every chat. Picking the active mode lives in the composer.">
+          <button
+            type="button" onClick={() => setModesOpen(true)}
+            className="w-full rounded-md border border-rule-2 bg-surface px-3 py-2 text-left text-sm text-text-2 hover:border-text-2 hover:bg-bg-2 hover:text-text"
+          >
+            New / manage modes
+          </button>
+        </Section>
+      )}
 
       <ApiKeysSection />
 
