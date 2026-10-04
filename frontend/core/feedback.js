@@ -134,7 +134,8 @@ export function initFeedback(){
   // Deliberately a plain fetch rather than core/api-client.js's loggedFetch —
   // see the file-level note above.
   async function post(url, body){
-    const res = await fetch(url, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body || {}) });
+    // X-Notlinear-Local is required by every /__notlinear_* endpoint (P2 hardening).
+    const res = await fetch(url, { method: 'POST', headers: { 'content-type': 'application/json', 'X-Notlinear-Local': '1' }, body: JSON.stringify(body || {}) });
     return res.json();
   }
 

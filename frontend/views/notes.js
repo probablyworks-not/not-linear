@@ -1733,7 +1733,7 @@ async function exportNoteMarkdown(note){
   }
   try {
     const res = await fetch('/__notlinear_save_file', {
-      method:'POST', headers:{ 'Content-Type':'application/json' },
+      method:'POST', headers:{ 'Content-Type':'application/json', 'X-Notlinear-Local': '1' },
       body: JSON.stringify({ filename, content: md }),
     });
     const json = await res.json();

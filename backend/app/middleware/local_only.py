@@ -24,6 +24,13 @@ from ..config import dev_proxy_enabled
 
 LEGACY_PREFIX = "/__notlinear_"
 
+# A custom request header the browser cannot send cross-origin without first
+# passing a preflight. Since the preflight only succeeds for a loopback origin,
+# requiring this header means a foreign page cannot reach these endpoints even
+# as a "simple" request that would otherwise skip CORS entirely. Defence in
+# depth behind the origin check, not a replacement for it.
+LOCAL_HEADER = "x-notlinear-local"
+
 
 def allowed_origins(port: int) -> set[str]:
     origins = {
@@ -73,8 +80,17 @@ class LocalOriginMiddleware(BaseHTTPMiddleware):
             preflight.headers["Vary"] = "Origin"
             preflight.headers["Access-Control-Allow-Origin"] = origin
             preflight.headers["Access-Control-Allow-Methods"] = "POST, OPTIONS"
-            preflight.headers["Access-Control-Allow-Headers"] = "Content-Type"
+            preflight.headers["Access-Control-Allow-Headers"] = "Content-Type, X-Notlinear-Local"
             return preflight
+
+        if is_legacy and request.method == "POST" and not request.headers.get(LOCAL_HEADER):
+            refused = PlainTextResponse(
+                '{"ok": false, "error": "missing X-Notlinear-Local header"}',
+                status_code=403,
+                media_type="application/json",
+            )
+            refused.headers["Vary"] = "Origin"
+            return refused
 
         response = await call_next(request)
         response.headers["Vary"] = "Origin"

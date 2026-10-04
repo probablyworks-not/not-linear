@@ -20,6 +20,8 @@ from typing import Any
 import pytest
 import requests
 
+from conftest import server_flavour
+
 TIMEOUT = 10
 
 # Every endpoint, with a body that is valid enough to reach the handler.
@@ -41,11 +43,18 @@ ALL_ENDPOINTS = [
 ]
 
 
+# Since the P2 hardening, every /__notlinear_* POST must carry this header.
+# A custom header cannot be sent cross-origin without a preflight, and the
+# preflight only succeeds for a loopback origin — so this blocks a foreign page
+# even on requests that would otherwise be "simple" and skip CORS entirely.
+LOCAL_HEADER = {"X-Notlinear-Local": "1"}
+
+
 def post(server: str, path: str, body: Any = None, **kwargs: Any) -> requests.Response:
     return requests.post(
         f"{server}{path}",
         data=json.dumps(body if body is not None else {}),
-        headers={"Content-Type": "application/json", **kwargs.pop("headers", {})},
+        headers={"Content-Type": "application/json", **LOCAL_HEADER, **kwargs.pop("headers", {})},
         timeout=TIMEOUT,
         **kwargs,
     )
@@ -105,6 +114,33 @@ class TestCorsContract:
             headers={"Origin": "https://evil.example"},
         )
         assert "Access-Control-Allow-Origin" not in response.headers
+
+    def test_a_post_without_the_local_header_is_refused(self, server: str) -> None:
+        """The whole point of the header: a drive-by request is rejected before
+        any handler runs, even if it somehow reached us without a preflight."""
+        if server_flavour() != "fastapi":
+            pytest.skip("header requirement is part of the P2 hardening")
+        response = requests.post(
+            f"{server}/__notlinear_runtime_logs",
+            data=json.dumps({"events": []}),
+            headers={"Content-Type": "application/json"},   # no X-Notlinear-Local
+            timeout=TIMEOUT,
+        )
+        assert response.status_code == 403
+
+    def test_preflight_advertises_the_local_header(self, server: str, origin: str) -> None:
+        if server_flavour() != "fastapi":
+            pytest.skip("header requirement is part of the P2 hardening")
+        response = requests.options(
+            f"{server}/__notlinear_open_files",
+            headers={
+                "Origin": origin,
+                "Access-Control-Request-Method": "POST",
+                "Access-Control-Request-Headers": "content-type,x-notlinear-local",
+            },
+            timeout=TIMEOUT,
+        )
+        assert "X-Notlinear-Local" in response.headers["Access-Control-Allow-Headers"]
 
     def test_same_origin_request_without_origin_header_still_works(self, server: str) -> None:
         """The app and the WKWebView shell are same-origin and send no Origin."""
@@ -178,7 +214,7 @@ class TestRuntimeLogs:
         response = requests.post(
             f"{server}/__notlinear_runtime_logs",
             data=json.dumps({"events": [{"msg": big}]}),
-            headers={"Content-Type": "application/json"},
+            headers={"Content-Type": "application/json", **LOCAL_HEADER},
             timeout=TIMEOUT,
         )
         assert response.status_code == 413
@@ -187,7 +223,7 @@ class TestRuntimeLogs:
         response = requests.post(
             f"{server}/__notlinear_runtime_logs",
             data="{not json",
-            headers={"Content-Type": "application/json"},
+            headers={"Content-Type": "application/json", **LOCAL_HEADER},
             timeout=TIMEOUT,
         )
         assert response.status_code == 400

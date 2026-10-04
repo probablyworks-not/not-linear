@@ -181,7 +181,7 @@ export async function saveTextFile(filename, content, mime = 'application/json')
   try {
     const res = await fetch('/__notlinear_save_file', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'X-Notlinear-Local': '1' },
       body: JSON.stringify({ filename, content }),
     });
     const json = await res.json();

@@ -141,18 +141,49 @@ test.describe('step 9 — in-app changelog viewer (BUGS #007)', () => {
   });
 });
 
-test.describe('P0 regression — CORS hardening stays in place', () => {
+test.describe('P0/P2 regression — the local trust boundary holds', () => {
   test('the app can still reach its own endpoints same-origin', async ({ page }) => {
     await openApp(page);
     const ok = await page.evaluate(async () => {
       const res = await fetch('/__notlinear_runtime_logs', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'X-Notlinear-Local': '1' },
         body: JSON.stringify({ events: [] }),
       });
       return res.ok;
     });
     expect(ok, 'the app lost access to its own backend').toBe(true);
+  });
+
+  test('a request without the local header is refused', async ({ page }) => {
+    await openApp(page);
+    // Asserted in a real browser, not just in pytest: this is the property that
+    // stops a page the user merely visits from driving the native file pickers.
+    const status = await page.evaluate(async () => {
+      const res = await fetch('/__notlinear_runtime_logs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },   // no X-Notlinear-Local
+        body: JSON.stringify({ events: [] }),
+      });
+      return res.status;
+    });
+    expect(status).toBe(403);
+  });
+
+  test('the app still syncs its runtime log through the real wrapper', async ({ page }) => {
+    // Exercises core/api-client.js's loggedFetch rather than a hand-written
+    // fetch, so a missed call site shows up here instead of in production.
+    await openApp(page);
+    const ok = await page.evaluate(async () => {
+      const mod = await import('/frontend/core/api-client.js');
+      const res = await mod.loggedFetch('/__notlinear_runtime_logs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ events: [{ level: 'info', msg: 'e2e probe' }] }),
+      });
+      return res.ok;
+    });
+    expect(ok, 'loggedFetch no longer reaches the backend').toBe(true);
   });
 });
 

@@ -759,7 +759,7 @@ import { appState } from './core/state.js';
       try {
         const res = await fetch('/__notlinear_save_file', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', 'X-Notlinear-Local': '1' },
           body: JSON.stringify({ filename, content: md }),
         });
         const json = await res.json();
@@ -5036,7 +5036,7 @@ import { appState } from './core/state.js';
     try {
       const resp = await fetch('/__notlinear_open_files', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'X-Notlinear-Local': '1' },
         body: JSON.stringify({ folder }),
       });
       if (resp.ok) {
@@ -5159,7 +5159,7 @@ import { appState } from './core/state.js';
     if (hit && (Date.now() - hit.fetchedAt) < PROJECT_SCAN_CACHE_TTL_MS) return hit.scan;
     try {
       const res = await fetch('/__notlinear_scan_project', {
-        method: 'POST', headers: { 'content-type': 'application/json' },
+        method: 'POST', headers: { 'content-type': 'application/json', 'X-Notlinear-Local': '1' },
         body: JSON.stringify({ path: p.path }),
       });
       if (!res.ok) return null;
@@ -5606,7 +5606,7 @@ import { appState } from './core/state.js';
     const p = projects[pid]; if (!p) return;
     let res;
     try {
-      res = await fetch('/__notlinear_pick_folder', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' });
+      res = await fetch('/__notlinear_pick_folder', { method: 'POST', headers: { 'content-type': 'application/json', 'X-Notlinear-Local': '1' }, body: '{}' });
     } catch { toast('Folder picker needs the local server (run backend/server.py)'); return; }
     if (res.status === 404 || res.status === 501) { toast('Restart the server — folder picker endpoint missing'); return; }
     let data; try { data = await res.json(); } catch { data = null; }

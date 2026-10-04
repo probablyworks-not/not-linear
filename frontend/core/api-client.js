@@ -254,7 +254,17 @@ export function summarizeMessagesForLog(messages = []){
 // tools.js) and the feature views for their calls to backend/server.py's
 // /__notlinear_* endpoints (feedback.js's own capture/save calls are the
 // documented exception — see the file-level note at the top of this file).
+// Header required by every /__notlinear_* endpoint since P2. Added here rather
+// than at each call site so a new backend call cannot forget it. Deliberately
+// NOT added to every request: loggedFetch is also used for api.anthropic.com
+// and the other provider APIs, and sending a custom header there would trigger
+// a pointless preflight (and leak that this app made the call).
+export const LOCAL_HEADER_NAME = 'X-Notlinear-Local';
+export const LOCAL_HEADER = { [LOCAL_HEADER_NAME]: '1' };
+export const isLocalEndpoint = (url) => typeof url === 'string' && url.startsWith('/__notlinear_');
+
 export async function loggedFetch(url, options = {}, meta = {}){
+  if (isLocalEndpoint(url)) options = { ...options, headers: { ...(options.headers || {}), ...LOCAL_HEADER } };
   const id = ++requestSeq;
   const startedAt = performance.now();
   const startedAtIso = new Date().toISOString();
