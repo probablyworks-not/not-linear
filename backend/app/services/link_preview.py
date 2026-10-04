@@ -13,6 +13,7 @@ import urllib.request
 from html.parser import HTMLParser
 from urllib.parse import urlparse
 from ..config import LINK_PREVIEW_MAX_BYTES, LINK_PREVIEW_TIMEOUT_S
+from .safe_fetch import BlockedURLError, fetch_text
 
 class _LinkPreviewParser(HTMLParser):
     """Pulls <title>, a description meta tag, and a favicon link out of an
@@ -57,26 +58,26 @@ def link_preview(url):
     ADR-023) — only the URL scheme is validated, no private-IP blocking.
     """
     parsed = urlparse(url)
-    # Only allow http(s) — blocks file://, javascript:, etc. from being
-    # handed to urlopen. This is the only input validation; per ADR-023 this
-    # server assumes a trusted single local user, so there is deliberately
-    # no SSRF/private-IP-range blocking here (a malicious note link could
-    # still make this server hit an internal address).
-    if parsed.scheme not in ("http", "https") or not parsed.netloc:
-        return {"ok": False, "error": "url must be http(s)"}
 
+    # Fetching goes through safe_fetch, which validates the scheme, resolves the
+    # host and rejects private/loopback/link-local/CGNAT addresses, pins the
+    # connection to the validated IP so DNS cannot rebind between check and
+    # connect, and re-validates every redirect hop. See ADR-035, which
+    # supersedes ADR-023's "no SSRF hardening by design".
+    #
+    # The failure contract is unchanged: any problem returns {"ok": False,
+    # "error": ...}, never raises, so views/notes.js:976 is untouched.
     try:
-        req = urllib.request.Request(url, headers={"User-Agent": "notlinear-link-preview/1"})
-        with urllib.request.urlopen(req, timeout=LINK_PREVIEW_TIMEOUT_S) as resp:
-            raw = resp.read(LINK_PREVIEW_MAX_BYTES)
-            charset = resp.headers.get_content_charset() or "utf-8"
-    except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError, ValueError) as exc:
+        html, _final_url = fetch_text(
+            url,
+            max_bytes=LINK_PREVIEW_MAX_BYTES,
+            timeout=LINK_PREVIEW_TIMEOUT_S,
+            user_agent="notlinear-link-preview/1",
+        )
+    except BlockedURLError as exc:
         return {"ok": False, "error": str(exc)}
-
-    try:
-        html = raw.decode(charset, errors="replace")
-    except LookupError:
-        html = raw.decode("utf-8", errors="replace")
+    except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError, ValueError, OSError) as exc:
+        return {"ok": False, "error": str(exc)}
 
     p = _LinkPreviewParser()
     try:
