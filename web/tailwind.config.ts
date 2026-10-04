@@ -24,6 +24,8 @@ export default {
       highlight: { DEFAULT: v('highlight'), soft: v('highlight-soft'), strong: v('highlight-strong') },
       danger: { DEFAULT: v('danger'), soft: v('danger-soft'), strong: v('danger-strong'), border: v('danger-border'), on: v('on-danger') },
       scrim: v('scrim'),
+      annotate: { DEFAULT: v('annotate'), faint: v('annotate-faint'), soft: v('annotate-soft'), line: v('annotate-line') },
+      success: v('success'),
       user: v('user-bub'),
       th: v('th-tint'),
       kbd: { bg: v('kbd-bg'), fg: v('kbd-color') },

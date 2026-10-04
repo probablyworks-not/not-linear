@@ -15,6 +15,8 @@ import { ModesDialog } from '../settings/ModesDialog';
 import { SearchPalette } from '../search/SearchPalette';
 import { ProjectsGrid } from '../projects/ProjectsGrid';
 import { ProjectPanel } from '../projects/ProjectPanel';
+import { FeedbackPanel } from '../feedback/FeedbackPanel';
+import { CapturePreview } from '../feedback/CapturePreview';
 import { flags } from '../flags';
 
 export function AppShell() {
@@ -71,6 +73,8 @@ export function AppShell() {
       {flags.search && <SearchPalette />}
       {flags.projects && <ProjectsGrid />}
       {flags.projects && <ProjectPanel />}
+      {flags.feedback && <FeedbackPanel />}
+      {flags.feedback && <CapturePreview />}
       <ConfirmDialog />
       <Toaster />
     </div>

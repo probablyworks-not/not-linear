@@ -61,11 +61,12 @@ async function openWeb(page: Page): Promise<void> {
   await expect(page.getByRole('button', { name: 'Open left pane' })).toBeVisible();
 }
 const sidebar = (p: Page) => p.locator('aside[aria-label="Left pane"]');
-// Keyed on aria-hidden, which flips the moment state changes; isVisible() stays true for the
-// 200ms the sidebar spends sliding out, and a helper that trusts it skips reopening it.
 const showSidebar = async (p: Page) => {
-  if ((await sidebar(p).getAttribute('aria-hidden')) !== 'false') await p.getByRole('button', { name: 'Open left pane' }).click();
-  await expect(sidebar(p)).toHaveAttribute('aria-hidden', 'false');
+  // Keyed on the `invisible` class, which flips with state at once. Not isVisible() (true for the 200ms
+  // slide-out) and not aria-hidden (Radix removes that attribute when a dialog closes, so null means nothing).
+  const closed = ((await sidebar(p).getAttribute('class')) ?? '').includes('invisible');
+  if (closed) await p.getByRole('button', { name: 'Open left pane' }).click();
+  await expect(sidebar(p)).not.toHaveClass(/invisible/);
 };
 const grid = (p: Page) => p.getByRole('dialog', { name: 'Projects' });
 const panel = (p: Page) => p.getByRole('dialog').filter({ has: p.getByLabel('Project name') });

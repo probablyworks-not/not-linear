@@ -10,6 +10,7 @@ import { useUiStore } from './state/ui-store';
 import { newChat, syncFromDisk } from './state/actions';
 import { viewForTab } from './shell/TabStrip';
 import { flags } from './flags';
+import { togglePanel } from './feedback/feedback-store';
 import './styles/app.css';
 
 registerView({ id: 'chat', label: 'Chat' });
@@ -25,6 +26,7 @@ async function boot(): Promise<void> {
   installGlobalKeys({
     newChat: () => { void newChat(); },
     toggleSearch: () => { if (flags.search) useUiStore.getState().setSearchOpen(!useUiStore.getState().searchOpen); },
+    toggleFeedback: () => { if (flags.feedback) togglePanel(); },
   });
   // The other app may have changed the shared row while this one was hidden.
   window.addEventListener('focus', () => { void syncFromDisk(); useAppStore.getState().refreshApiKeys(); });

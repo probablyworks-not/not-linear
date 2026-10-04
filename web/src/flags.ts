@@ -7,4 +7,5 @@ export const flags = {
   search: true,
   changelog: true,
   projects: true,
+  feedback: true,
 } as const;

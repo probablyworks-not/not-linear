@@ -75,6 +75,13 @@
   --tag-fix:oklch(55% 0.13 25);
   --tag-feature:oklch(48% 0.08 195);
   --tag-improvement:oklch(52% 0.10 55);
+  /* Feedback capture (core/feedback.js): the pen/annotation red and the "fixed" green,
+     previously literals in feedback.css. Constant across themes. Additive. */
+  --annotate:#E5534B;
+  --annotate-faint:rgba(229,83,75,0.10);
+  --annotate-soft:rgba(229,83,75,0.12);
+  --annotate-line:rgba(229,83,75,0.50);
+  --success:#4CAF7D;
   /* Elevation shadows for floating panels/drawers/dialogs. */
   --shadow-md:0 4px 20px rgba(0,0,0,0.60);
   --shadow-lg:0 12px 48px rgba(0,0,0,0.80);

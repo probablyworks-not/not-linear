@@ -9,6 +9,8 @@ import { useEffect } from 'react';
 // Higher number wins. The gaps are deliberate headroom. Surfaces not built yet
 // (P4-P5) are listed so their slot is fixed now rather than negotiated later.
 export const ESC_PRIORITY = {
+  // The capture preview wins over everything: legacy handles its Escape in the capture phase.
+  feedbackPreview: 170,
   branchCanvas: 150,
   storyPlayer: 140,
   searchPalette: 130,
@@ -51,10 +53,14 @@ export function handleEscape(): boolean {
 }
 
 /** Installs the single global keydown listener. Returns its teardown. */
-export function installGlobalKeys(handlers: { newChat(): void; toggleSearch(): void }): () => void {
+export function installGlobalKeys(handlers: { newChat(): void; toggleSearch(): void; toggleFeedback(): void }): () => void {
   const onKey = (e: KeyboardEvent): void => {
     if (e.key === 'Escape') {
       handleEscape();
+    } else if ((e.metaKey || e.ctrlKey) && ((e.shiftKey && e.key.toLowerCase() === 'b') || (!e.shiftKey && e.key.toLowerCase() === 'q'))) {
+      // Feedback: ⌘⇧B everywhere; ⌘Q works in the native shell (browsers reserve it for quit).
+      e.preventDefault();
+      handlers.toggleFeedback();
     } else if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
       e.preventDefault();
       handlers.toggleSearch();

@@ -9,6 +9,7 @@ import { INPUT, Section, Segmented } from './fields';
 import { ApiKeysSection } from './ApiKeysSection';
 import { flags } from '../flags';
 import { ChangelogSection } from '../changelog/ChangelogSection';
+import { FeedbackLog } from '../feedback/FeedbackLog';
 
 /**
  * Ports the Settings panel (index.html #prefs, app.js:4287). Defaults shown
@@ -141,6 +142,8 @@ function SettingsForm() {
       </Section>
 
       {flags.changelog && <ChangelogSection />}
+
+      {flags.feedback && <FeedbackLog />}
     </>
   );
 }
