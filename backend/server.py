@@ -543,27 +543,65 @@ class NotlinearHandler(SimpleHTTPRequestHandler):
         self.send_header("Cache-Control", "no-store, must-revalidate")
         super().end_headers()
 
+    # Returns the request's Origin if it is one this server should accept, else
+    # None. Used to decide whether to emit an Access-Control-Allow-Origin header.
+    #
+    # This used to send `Access-Control-Allow-Origin: *`, on the reasoning that
+    # binding to 127.0.0.1 made the server unreachable. That reasoning is wrong.
+    # Binding to loopback stops other *machines* from connecting; it does
+    # nothing about other *pages in this user's own browser*. With a wildcard,
+    # any website visited while Notlinear is running could POST to
+    # /__notlinear_open_files, have the preflight pass, get a native file
+    # picker opened, and read the chosen file's bytes out of the response —
+    # and likewise write files via /__notlinear_save_file or enumerate
+    # directories via /__notlinear_scan_project.
+    #
+    # Echoing only the exact loopback origins this server is bound to closes
+    # that: a foreign page's preflight no longer receives an allow header, so
+    # the browser blocks the request before any handler runs. Same-origin calls
+    # from the app (and from the WKWebView desktop shell, which loads the same
+    # http://127.0.0.1:<port> URL) are unaffected, because same-origin requests
+    # are not subject to CORS at all.
+    def _allowed_origin(self):
+        origin = self.headers.get("Origin")
+        if not origin:
+            return None
+        port = self.server.server_address[1]
+        allowed = {f"http://127.0.0.1:{port}", f"http://localhost:{port}", f"http://[::1]:{port}"}
+        return origin if origin in allowed else None
+
+    # Emits the CORS allow header only for a recognised loopback origin.
+    # `Vary: Origin` is always sent so a cache can never serve one origin's
+    # allow header to another.
+    def _send_cors_headers(self):
+        self.send_header("Vary", "Origin")
+        origin = self._allowed_origin()
+        if origin:
+            self.send_header("Access-Control-Allow-Origin", origin)
+        return origin
+
     # Small helper used by nearly every /__notlinear_* handler below to send
-    # a JSON response with the right headers. CORS header is permissive
-    # (Access-Control-Allow-Origin: *) since this server only ever binds to
-    # 127.0.0.1 for a single local user — see the trust-boundary note on
-    # link_preview above for the same reasoning applied elsewhere.
+    # a JSON response with the right headers.
     def _json(self, code, obj):
         body = json.dumps(obj).encode("utf-8")
         self.send_response(code)
         self.send_header("content-type", "application/json")
         self.send_header("content-length", str(len(body)))
-        self.send_header("Access-Control-Allow-Origin", "*")
+        self._send_cors_headers()
         self.end_headers()
         self.wfile.write(body)
 
     # Handles CORS preflight requests the browser sends before a POST with a
-    # JSON content-type to any /__notlinear_* endpoint.
+    # JSON content-type to any /__notlinear_* endpoint. An unrecognised origin
+    # gets a 403 with no allow header, so the browser refuses to send the POST.
     def do_OPTIONS(self):
-        self.send_response(200)
-        self.send_header("Access-Control-Allow-Origin", "*")
-        self.send_header("Access-Control-Allow-Methods", "POST, OPTIONS")
-        self.send_header("Access-Control-Allow-Headers", "Content-Type")
+        origin = self._allowed_origin()
+        self.send_response(200 if origin else 403)
+        self._send_cors_headers()
+        if origin:
+            self.send_header("Access-Control-Allow-Methods", "POST, OPTIONS")
+            self.send_header("Access-Control-Allow-Headers", "Content-Type")
+        self.send_header("content-length", "0")
         self.end_headers()
 
     # Routes every POST request. Triggered on any HTTP POST to this server;
@@ -925,6 +963,9 @@ class NotlinearHandler(SimpleHTTPRequestHandler):
         self.send_response(200)
         self.send_header("content-type", "application/json")
         self.send_header("content-length", str(len(response)))
+        # This handler builds its own response rather than going through
+        # _json(), so it needs the CORS headers applied explicitly to match.
+        self._send_cors_headers()
         self.end_headers()
         self.wfile.write(response)
 

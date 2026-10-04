@@ -4,6 +4,27 @@ All notable repository changes made by AI agents should be recorded here.
 
 ## 2026-10-04
 
+- Agent: Claude Opus 5
+- Summary: P0 repo and dev hygiene. Closed a live CORS hole, added `.gitignore`, untracked user content and build artifacts, removed every hardcoded `/Users/yash` path from the launchers, corrected docs pointing at a PRD that does not exist, and fixed a duplicate ADR ID.
+- Files changed: `backend/server.py`, `.gitignore` (new), `launchers/{Notlinear.command,build-macos-app.command,Notlinear.applescript,NotlinearNative.m,NotlinearNative.swift}`, `README.md`, `AGENTS.md`, `CLAUDE.md`, `plan.md`, `frontend/core/store.js`, `frontend/views/notes.js`, `docs/project-notes/DECISIONS.md`.
+- Behavior changes: `Access-Control-Allow-Origin: *` is gone. The server now echoes the allow header only for the exact loopback origin it is bound to, always sends `Vary: Origin`, and answers a preflight from any other origin with 403. Same-origin calls (the app, and the WKWebView shell) are unaffected. The shell and AppleScript launchers now locate the repo by walking up to `backend/server.py`; `Notlinear.app` takes its path from `NOTLINEAR_ROOT` (env, then compiled in by the build script, then a bundle walk).
+- Observed: the old wildcard was live and exploitable — any site visited while Notlinear ran could POST to `/__notlinear_open_files`, pass the preflight, open a native picker, and read the chosen file's bytes; `save_file` and `scan_project` were reachable the same way. The comment at `server.py:548` justified it by loopback binding, which only stops other machines, not other pages in the user's own browser. Also confirmed `notes_product.md` was never committed and is not on disk, though `AGENTS.md` and `CLAUDE.md` still told agents to read it.
+- Verification: `py_compile` + `node --check` + `zsh -n` + `osacompile` all clean; server boots and serves `/frontend/index.html`, `/notlinear.html`, `/CHANGELOG.md`, `/tools/export-data.html` (all 200); attacker-origin preflight 403, app-origin preflight 200; root discovery tested from a relocated copy, an orphaned copy and the real repo; `NotlinearNative.m` compiles both with and without `-DNOTLINEAR_ROOT`. Full 10-step human smoke test NOT yet run. `git gc` deliberately not run — awaiting approval.
+
+- Agent: Claude Opus 5
+- Summary: Backup tools corrected after the user found the desktop app and the browser show completely different data. The desktop app is a WKWebView whose storage lives in its own container, so it, Chrome and Safari each hold a separate copy of both databases despite all three loading `http://127.0.0.1:8765`.
+- Files changed: `tools/_backup-lib.js`, `tools/export-data.html`, `tools/import-data.html`, docs/project-notes.
+- Behavior changes: the export page now reports which storage realm it is running in, records it in the backup file, and warns on restore when a file came from a different realm. Saving now uses the same four-tier cascade as `frontend/app.js:738` (WKWebView bridge → `/__notlinear_save_file` → File System Access → blob), because a plain blob download does nothing inside the desktop app. Added a raw-JSON escape hatch for when every save route fails silently.
+- Observed: real data confirmed at `~/Library/WebKit/local.notlinear.app/WebsiteData/Default/<salt>/<salt>/IndexedDB/` (two hashed database dirs, 52 MB total). The shipped `Notlinear.app` binary loads `http://127.0.0.1:8765/notlinear.html` and sets no web inspector.
+- Verification: `node --check` clean; all three paths HTTP 200 on a test port. The desktop-app export path is NOT yet exercised — no backup has been taken in the app.
+
+- Agent: Claude Opus 5
+- Summary: Added `tools/export-data.html` and `tools/import-data.html` — a standalone backup/restore pair for both IndexedDB databases and all of localStorage. Phase P-1 of the React/FastAPI refactor plan; nothing else in that plan starts until a backup has been taken and restored once.
+- Files changed: `tools/_backup-lib.js` (new), `tools/export-data.html` (new), `tools/import-data.html` (new), docs/project-notes.
+- Behavior changes: none to the app. No app file was touched, no schema read or written outside the existing `kv` stores, and no Dexie version declared anywhere.
+- Observed: the repo had no export of any kind, so all chat threads, branches, highlights and notes existed only in one browser profile with no second copy.
+- Verification: `node --check` clean on all three scripts; all four paths served HTTP 200 on a test port with `_backup-lib.js` as `text/javascript`; `summarize`/`validateBackup` unit-checked headlessly (7/7 cases, counts correct against a synthetic app-shaped backup). Browser round-trip (export, then restore into a fresh profile) is a human step and is NOT yet done.
+
 - Agent: Claude Sonnet 5.5
 - Summary: README rewritten to document browser mode (macOS/Windows/Linux) alongside the macOS app, with platform differences, data location and troubleshooting. AGENTS.md "Manual" run line now points at `backend/server.py`.
 - Files changed: `README.md`, `AGENTS.md`, docs/project-notes.

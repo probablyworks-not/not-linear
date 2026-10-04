@@ -4,6 +4,30 @@ Each entry: **date/time · task or bug ID · command category · result · impor
 
 ---
 
+## 2026-10-04 — TASK-P0 — static + HTTP + security checks — pass (automated only)
+- **Command category:** static (`py_compile`, `node --check`, `zsh -n`, `osacompile`), HTTP serve + CORS probes on test port 8799, `clang` build check, launcher path-resolution tests
+- **Result:** pass
+- **Output:** all static checks clean. Server serves `/frontend/index.html`, `/notlinear.html`, `/CHANGELOG.md`, `/tools/export-data.html` (200). CORS: preflight from `https://evil.com` 403 with no allow header; from `http://127.0.0.1:8799` 200 with the exact origin echoed; `Vary: Origin` on both; a request with no `Origin` (same-origin) unaffected. Root discovery returned the right path from a copy relocated under a different tree, refused with exit 1 from an orphaned copy, and resolved correctly in the real repo — note the first attempt at this test was invalid because `$0` pointed at the extracted snippet, and it was re-run from the correct location. `NotlinearNative.m` compiles with `-DNOTLINEAR_ROOT` (path present in the binary) and without it (no hardcoded path). Tracked files 82 to 66; all removed files confirmed still on disk.
+- **Follow-up:** Full 10-step human smoke test NOT run. `git gc`/codex-ref deletion NOT run — irreversible, awaiting approval. The user's `Notlinear.app` binary still carries the old compiled-in path and needs a rebuild to pick up the source fix. P-1's export/restore round-trip is reported done by the user but was not observed here.
+
+---
+
+## 2026-10-04 — TASK-P-1 — storage-realm investigation — finding confirmed
+- **Command category:** filesystem inspection, `strings` on the shipped binary, static checks, HTTP serve
+- **Result:** user-reported discrepancy confirmed and root-caused
+- **Output:** `~/Library/WebKit/local.notlinear.app/WebsiteData/Default/<salt>/<salt>/IndexedDB/` holds two hashed database dirs (52 MB total); the legacy `WebsiteData/IndexedDB` path is empty. `strings` on `launchers/Notlinear.app/Contents/MacOS/Notlinear` shows it loads `http://127.0.0.1:8765/notlinear.html` (the ObjC build). No `isInspectable`/`WebKitDeveloperExtras` anywhere in `launchers/`, so the app has no web inspector. Direct sqlite inspection of the app's databases was attempted and denied — not pursued.
+- **Follow-up:** No backup has been taken in the desktop app, which is where the user's primary data lives. The browser backup path remains unexercised too. Reaching the tools inside the app requires temporarily repointing the `notlinear.html` redirect — awaiting the user's approval, as it edits a tracked file.
+
+---
+
+## 2026-10-04 — TASK-P-1 (backup tools) — static + headless + HTTP serve check — pass
+- **Command category:** static (`node --check`), headless unit check (node), HTTP serve (`curl` on test port 8799)
+- **Result:** pass (automated parts only)
+- **Output:** `node --check` clean on `_backup-lib.js` and both inlined page scripts. All four paths HTTP 200: `/tools/export-data.html`, `/tools/import-data.html`, `/tools/_backup-lib.js` (served as `text/javascript`, so the ES module import resolves), `/frontend/styles/tokens.css`. `summarize`/`validateBackup` 7/7 cases: synthetic app-shaped backup reported "3 thread(s), 2 branch(es), 4 highlight(s), 2 project(s)" and "2 note(s), 4 block(s)" correctly, and a missing database read as "not present" rather than as empty. All six CSS custom properties used by the pages cross-checked against `frontend/styles/tokens.css` (three initial guesses were wrong and were corrected to `--text-2`, `--rule`, `--surface`).
+- **Follow-up:** Human round-trip NOT done — export a real backup, restore it into a fresh browser profile, confirm threads and notes appear. The IndexedDB read/write paths (`dumpDatabase`, `restoreDatabase`, `listExistingDatabases`) have had no execution at all; only the pure functions were exercised. The Firefox `databaseExistsByProbing` fallback is entirely untested.
+
+---
+
 ## 2026-09-29 — Coding Projects removal — static + headless load check — pass
 - **Command category:** static (`node --check`, `py_compile`) + headless Playwright on `:8765`
 - **Result:** pass

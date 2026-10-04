@@ -232,13 +232,55 @@ static const long long kMaxTextBytes =  2 * 1024 * 1024;
     [NSThread sleepForTimeInterval:0.3];
 }
 
+// Resolves the repo root, in priority order:
+//   1. the NOTLINEAR_ROOT environment variable (lets you point a built app at
+//      a different checkout without rebuilding);
+//   2. NOTLINEAR_ROOT compiled in by launchers/build-macos-app.command, which
+//      knows the repo path at build time — this is what keeps the app working
+//      after it is copied to the Desktop, as the build script suggests;
+//   3. a walk up from the .app bundle looking for backend/server.py, for an
+//      app still sitting inside launchers/.
+// Returns nil if none of them find a checkout, so the caller can say so
+// instead of silently starting a server in the wrong directory.
+static NSString *NotlinearRepoRoot(void) {
+    NSString *fromEnv = NSProcessInfo.processInfo.environment[@"NOTLINEAR_ROOT"];
+    if (fromEnv.length && [NSFileManager.defaultManager fileExistsAtPath:
+            [fromEnv stringByAppendingPathComponent:@"backend/server.py"]]) {
+        return fromEnv;
+    }
+#ifdef NOTLINEAR_ROOT
+    NSString *compiled = @NOTLINEAR_ROOT;
+    if (compiled.length && [NSFileManager.defaultManager fileExistsAtPath:
+            [compiled stringByAppendingPathComponent:@"backend/server.py"]]) {
+        return compiled;
+    }
+#endif
+    NSString *dir = NSBundle.mainBundle.bundlePath;
+    while (dir.length > 1) {
+        if ([NSFileManager.defaultManager fileExistsAtPath:
+                [dir stringByAppendingPathComponent:@"backend/server.py"]]) {
+            return dir;
+        }
+        dir = dir.stringByDeletingLastPathComponent;
+    }
+    return nil;
+}
+
 - (void)startServerIfNeeded {
     [self killExistingServer];
 
     NSTask *task = [[NSTask alloc] init];
     task.launchPath = @"/usr/bin/python3";
+    NSString *repoRoot = NotlinearRepoRoot();
+    if (!repoRoot) {
+        NSAlert *alert = [[NSAlert alloc] init];
+        alert.messageText = @"Can't find the notlinear checkout";
+        alert.informativeText = @"Set NOTLINEAR_ROOT, or rebuild with launchers/build-macos-app.command so the path is compiled in.";
+        [alert runModal];
+        return;
+    }
     task.arguments = @[@"notlinear_server.py", @"--port", @"8765", @"--host", @"127.0.0.1"];
-    task.currentDirectoryPath = @"/Users/yash/Downloads/notlinear";
+    task.currentDirectoryPath = repoRoot;
     task.standardOutput = [NSFileHandle fileHandleWithNullDevice];
     task.standardError = [NSFileHandle fileHandleWithNullDevice];
 

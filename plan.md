@@ -1,7 +1,7 @@
 # plan.md — Open-sourcing the not-linear core
 
 **Status:** proposed (2026-07-09). **Owner:** Yash.
-**Decision record:** ADR-010 in `docs/project-notes/DECISIONS.md`.
+**Decision record:** ADR-032 in `docs/project-notes/DECISIONS.md` (filed as a second ADR-010; renumbered 2026-10-04).
 
 not-linear has grown from one product into several living in one repo: branching chat, Notes, Coding Projects, a feedback collector. This plan open-sources **only the core product** — threads, branching, chat projects, and the context engine — as its own repo, and defines how everything else stays separate from now on.
 
@@ -26,7 +26,7 @@ Server endpoints that ship: `__notlinear_pick_folder`, `__notlinear_scan_project
 
 ### Stays private (excluded from the OSS repo)
 
-- **Notes** — `frontend/views/notes.js`, `frontend/styles/notes.css`, `notes_product.md`, its Dexie db `notlinear-notes` (ADR-007 already isolates it; nothing in core references it except the `initNotes()` bootstrap line).
+- **Notes** — `frontend/views/notes.js`, `frontend/styles/notes.css`, `notes_new_feature.md` (the old `notes_product.md` PRD is not in the repo), its Dexie db `notlinear-notes` (ADR-007 already isolates it; nothing in core references it except the `initNotes()` bootstrap line).
 - **Coding Projects** — `frontend/views/coding-projects.js`, `frontend/styles/coding-projects.css`.
 - **Feedback collector** — `frontend/core/feedback.js`, `frontend/styles/feedback.css`, `feedback/`, the three `__notlinear_feedback_*` server routes.
 - **Working memory & scratch** — `docs/project-notes/`, `logs.md` contents, `uploads/`, `BUGS.md` history (see §4 — a *curated* fragile-areas doc ships instead), `notlinear.html` (the legacy monolith), `frontend/{index-design,debug-keys,mind-garden-icons}.html`, `tweaks-panel.jsx`, `.claude/`.

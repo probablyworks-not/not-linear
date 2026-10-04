@@ -1,6 +1,16 @@
 #!/bin/zsh
 
-APP_DIR="/Users/yash/Downloads/notlinear"
+# Find the repo root by walking up from this script until backend/server.py
+# appears, rather than hardcoding a path. Works wherever the repo is cloned,
+# and survives this launcher being moved deeper or shallower in the tree.
+APP_DIR="$(cd "$(dirname "$0")" && pwd)"
+while [ ! -f "${APP_DIR}/backend/server.py" ] && [ "${APP_DIR}" != "/" ]; do
+  APP_DIR="$(dirname "${APP_DIR}")"
+done
+if [ ! -f "${APP_DIR}/backend/server.py" ]; then
+  echo "notlinear: could not locate backend/server.py above $(dirname "$0")" >&2
+  exit 1
+fi
 PORT="8765"
 HOST="127.0.0.1"
 URL="http://${HOST}:${PORT}/frontend/index.html"

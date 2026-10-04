@@ -6,7 +6,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
     private var webView: WKWebView!
     private var serverProcess: Process?
 
-    private let appDirectory = "/Users/yash/Downloads/notlinear"
+    // See NotlinearRepoRoot() in NotlinearNative.m for the same logic and the
+    // reasoning. NOTLINEAR_ROOT in the environment wins; otherwise walk up from
+    // the bundle looking for backend/server.py. (This Swift variant is not what
+    // launchers/build-macos-app.command compiles — that builds the .m file.)
+    private let appDirectory: String? = {
+        let fm = FileManager.default
+        let hasCheckout = { (dir: String) in
+            fm.fileExists(atPath: (dir as NSString).appendingPathComponent("backend/server.py"))
+        }
+        if let fromEnv = ProcessInfo.processInfo.environment["NOTLINEAR_ROOT"], hasCheckout(fromEnv) {
+            return fromEnv
+        }
+        var dir = Bundle.main.bundlePath
+        while dir.count > 1 {
+            if hasCheckout(dir) { return dir }
+            dir = (dir as NSString).deletingLastPathComponent
+        }
+        return nil
+    }()
     private let port = "8765"
     private let host = "127.0.0.1"
 
@@ -30,6 +48,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/python3")
         process.arguments = ["backend/server.py", "--port", port, "--host", host]
+        guard let appDirectory else {
+            NSLog("notlinear: no checkout found — set NOTLINEAR_ROOT")
+            return
+        }
         process.currentDirectoryURL = URL(fileURLWithPath: appDirectory)
         process.standardOutput = FileHandle.nullDevice
         process.standardError = FileHandle.nullDevice

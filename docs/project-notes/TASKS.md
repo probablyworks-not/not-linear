@@ -4,6 +4,26 @@ Each entry: **ID · Status · Goal · Context · Files likely involved · Accept
 
 ---
 
+## TASK-P0 — Repo and dev hygiene (phase 0 of the React/FastAPI refactor)
+- **Status:** Done pending human smoke test; `git gc` step deliberately not run (irreversible, awaiting approval)
+- **Goal:** Make the working tree and dev setup safe and portable before any refactor: close the CORS hole, stop tracking user content and build artifacts, remove hardcoded paths, and correct docs that point at things that do not exist.
+- **Context:** P0 of the approved nine-phase plan. The CORS fix was pulled forward from P2 because it closes a live, exploitable hole and needs no FastAPI.
+- **Files likely involved:** `backend/server.py`, `.gitignore`, `launchers/*`, `README.md`, `AGENTS.md`, `CLAUDE.md`, `plan.md`, `frontend/core/store.js`, `frontend/views/notes.js`, `docs/project-notes/DECISIONS.md`
+- **Acceptance criteria:** No `/Users/yash` in any tracked file outside historical logs. No duplicate ADR IDs and no entries outside the mandated format. A cross-origin preflight to any `/__notlinear_*` endpoint is refused while the app's own origin is allowed. Every untracked file remains on disk. The app still loads and all 10 smoke steps pass.
+- **Verification:** static checks across Python/JS/zsh/AppleScript; HTTP serve; CORS probes from both an attacker origin and the app origin; launcher path resolution from a relocated copy, an orphan and the real repo; then the human smoke test.
+
+---
+
+## TASK-P-1 — Data backup/restore tools (precondition for the React/FastAPI refactor)
+- **Status:** Done (user reports the desktop-app export and the restore round-trip succeeded; not observed by the agent). Mid-task finding: storage is per-realm, not per-origin — see ADR-047 amendment.
+- **Goal:** A standalone way to dump both Dexie databases plus localStorage to one JSON file and restore it, so every later refactor phase has a rollback for data rather than only for code.
+- **Context:** P-1 of the approved refactor plan (`.claude/plans/` — React 18 + Vite frontend, FastAPI backend, nine phases). The repo had no export of any kind. P5 dual-writes into existing `state` rows and P6 rewrites note content, so a backup is a hard precondition. Plan: P0 does not start until the restore round-trip passes.
+- **Files likely involved:** `tools/_backup-lib.js`, `tools/export-data.html`, `tools/import-data.html` (all new; no app file touched)
+- **Acceptance criteria:** Export produces a JSON file whose summary counts match the live app. Restoring it into a fresh browser profile reproduces threads, branches, highlights, notes, API keys and theme. Neither page can run over `file://` or silently read the wrong origin. No Dexie version is ever declared, so no schema upgrade can be triggered.
+- **Verification:** `node --check`; HTTP 200 on all paths; headless unit check of the pure functions; then the human round-trip in a fresh browser profile.
+
+---
+
 ## TASK-BUG-043 — Make Notes pages open as separate tabs
 - **Status:** Done (static checks + targeted headless browser flow passed; desktop app smoke pending)
 - **Goal:** Opening a second note should create/focus that note's own tab, leaving the previous note tab open and switchable.

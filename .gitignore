@@ -1,0 +1,36 @@
+# macOS
+.DS_Store
+
+# Python
+__pycache__/
+*.py[cod]
+
+# Node / Vite (arriving with the web/ app in P1+)
+node_modules/
+web/dist/
+.vite/
+
+# Runtime log — written by POST /__notlinear_runtime_logs on every session,
+# so tracking it means a diff after merely opening the app.
+logs.md
+
+# User content, not source. These stay on disk; they are simply not the
+# repo's business, and they are the main thing that must never reach a
+# public mirror.
+uploads/
+feedback/media/
+
+# Local agent settings (already ignored globally; made explicit so a fresh
+# clone inherits it rather than relying on ~/.config/git/ignore)
+.claude/settings.local.json
+
+# Design handoffs and their zips — large binary drops, not source
+*.zip
+design-system-improvements*/
+design_handoff_notlinear_redesign*/
+Design Docs/
+Claude outputs/
+
+# Compiled macOS launcher binary — a build artifact of
+# launchers/build-macos-app.command, not source. Rebuild it with that script.
+launchers/Notlinear.app/Contents/MacOS/

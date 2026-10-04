@@ -44,7 +44,12 @@ Another copy is probably running (or something else holds port 8765). Either ope
 
 Double-click `Notlinear.app` (built from `launchers/`). It starts the same local server and opens Notlinear in its own window, so you never need to open the URL yourself. A lighter alternative is `launchers/Notlinear.command`, which starts the server and opens your default browser.
 
-The launchers contain the repo path hard-coded (`/Users/yash/Downloads/notlinear`). If you move the folder, rebuild with `launchers/build-macos-app.command`.
+The shell and AppleScript launchers find the repo themselves, by walking up from their own
+location until they see `backend/server.py`, so moving or cloning the folder anywhere works.
+
+`Notlinear.app` is the exception: it is meant to be copied to your Desktop, away from the repo,
+so the repo path is compiled into it by `launchers/build-macos-app.command`. Rebuild with that
+script after moving the folder, or set `NOTLINEAR_ROOT` to override it without rebuilding.
 
 ## Platform differences
 

@@ -5,7 +5,7 @@
 ## Claude-specific behavior
 
 - **Plan mode for risky changes.** Anything touching branches, persistence/IndexedDB, the server, or the migration: present a plan first, including the call sites you grepped and verified, before editing.
-- **Notes feature persistence is deliberately separate.** Notes (`frontend/views/notes.js`, PRD `notes_product.md`) stores to its own Dexie db `notlinear-notes`, intentionally *not* the chat `notlinear` db (ADR-007). When a task touches Notes persistence, keep the two dbs separate and don't bump the chat schema for Notes.
+- **Notes feature persistence is deliberately separate.** Notes (`frontend/views/notes.js`; PRD `notes_product.md` is **missing from the repo** — see `FEATURES.md` → Notes and `notes_new_feature.md`) stores to its own Dexie db `notlinear-notes`, intentionally *not* the chat `notlinear` db (ADR-007). When a task touches Notes persistence, keep the two dbs separate and don't bump the chat schema for Notes.
 - **Summarize the diff** you intend to make before applying it.
 - **Ask before destructive or irreversible actions** — deleting files, clearing IndexedDB, rewriting git history, or any destructive command. Don't do them on assumption.
 - **Follow `MIGRATION.md` for the modularization.** Do **one phase per session** and stop for the human to run the smoke test between phases. Do not bundle phases.

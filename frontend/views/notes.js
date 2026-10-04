@@ -1,7 +1,8 @@
-/* Notes — Notion-style notebook view (per notes_product.md, implemented
+/* Notes — Notion-style notebook view (per the original notes_product.md PRD,
+   which is no longer in the repo; see FEATURES.md → Notes. Implemented
    against the design-bundle reference notes-editor.js + Notes.html).
 
-   WHAT THIS FEATURE IS (see notes_product.md / AGENTS.md "FEATURE — Notes"):
+   WHAT THIS FEATURE IS (see FEATURES.md / AGENTS.md "FEATURE — Notes"):
    A personal notebook, entered from a top-level sidebar section, that opens
    a full-screen overlay page editor. Pages are made of typed "blocks"
    (text/headings/lists/todo/toggle/quote/callout/divider/code/equation/
@@ -986,7 +987,7 @@ async function fetchBookmark(b, url){
 
 // ---------- block render / rendering (block model) ----------
 // Builds the DOM for a single block, dispatching on b.type — this is the
-// heart of the block model described in notes_product.md. Every block gets
+// heart of the block model described in FEATURES.md → Notes. Every block gets
 // a shared gutter (add-below / drag-grip) and a `.content` slot whose inner
 // markup depends on the type (contentEditable "editor" for rich-text types,
 // or bespoke widget markup for image/table/media/file/bookmark/embed/cols/

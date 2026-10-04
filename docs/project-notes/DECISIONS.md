@@ -4,6 +4,15 @@ Each entry: **Decision ID · status · context · decision · alternatives rejec
 
 ---
 
+## ADR-047 — Backup/restore lives in standalone `tools/` pages using raw IndexedDB, not Dexie
+- **Status:** accepted 2026-10-04.
+- **Context:** The approved refactor plan writes to live `kv:'state'` rows from phase P5 and rewrites note content in P6, but the repo had no export of any kind — all chat and note data existed in one browser profile with no second copy. A backup tool must therefore work before, during and after the refactor, including while the frontend is half-migrated.
+- **Decision:** Two dependency-free pages under `tools/`, sharing `tools/_backup-lib.js`, using the raw IndexedDB API. Opening a database with no version attaches to whatever version exists and can never fire `onupgradeneeded`, so the tool cannot mutate the schema AGENTS.md calls sacred; it also removes the CDN dependency, so a backup works offline. Object stores are enumerated from `db.objectStoreNames` instead of hardcoding `kv`, and the whole of localStorage is dumped rather than the two known keys, so a store or key added later is captured instead of silently omitted. Restore is `put`-per-record with no `clear()`, and a store present in the backup but absent live is reported rather than created.
+- **Alternatives rejected:** reusing the Dexie CDN build (declaring a version risks an upgrade, and a backup tool must not depend on the network); adding an export button inside the app (couples the backup to the code being refactored, and would be unavailable exactly when the app is broken); dumping only the known keys (a partial backup that reports success is worse than none); `clear()`-then-restore (lets a stale file destroy data it never knew about).
+- **Consequences/tradeoffs:** The backup file contains API keys and full note text in plain text, so it must be stored outside the repo — both pages say so. Restoring replaces the entire `state` row, so a profile holding newer work than the file loses it; mitigated by a typed `RESTORE` confirmation and a pre-restore summary. Because IndexedDB is origin-scoped, both pages refuse `file://` and warn when the current origin has no notlinear database — `localhost` and `127.0.0.1` are different origins with different data. ADR-031 through ADR-046 are reserved by the refactor plan, hence ADR-047.
+- **Amended 2026-10-04 (storage realms):** Origin does not identify the data. `Notlinear.app` is a WKWebView on the default `WKWebsiteDataStore`, stored in the app container at `~/Library/WebKit/local.notlinear.app/`; Chrome and Safari each have their own. All three load `http://127.0.0.1:8765`, so the same origin string maps to three separate copies of `notlinear` and `notlinear-notes`, and a backup covers only the realm it was taken in. The tools therefore detect the realm, display it, record it in the backup, and warn on a cross-realm restore. Saving also had to change: WKWebView ignores a blob `<a download>` without a `WKDownloadDelegate`, which this app does not implement, so `saveTextFile()` reuses the four-tier cascade at `frontend/app.js:738` (WKWebView bridge, then `/__notlinear_save_file`, then File System Access, then blob) with a raw-JSON textarea as a last resort.
+- **Related files:** `tools/_backup-lib.js`, `tools/export-data.html`, `tools/import-data.html`, `frontend/core/store.js`, `frontend/views/notes.js`, `launchers/NotlinearNative.m`, `notlinear.html`.
+
 ## ADR-030 — Coding Projects removed; scan/pick-folder endpoints and picker CSS kept
 - **Status:** accepted 2026-09-29.
 - **Context:** User asked to remove Coding Projects entirely. Grep showed chat Projects' folder-context feature calls `/__notlinear_scan_project` and `/__notlinear_pick_folder`, and `core/emoji.js` uses `.cp-*`/`.mg-*` classes defined in `coding-projects.css`.
@@ -92,11 +101,18 @@ Each entry: **Decision ID · status · context · decision · alternatives rejec
 
 ## ADR-023 — Link-preview endpoint trusts its input scheme only; no SSRF/private-IP hardening (TASK-NT08)
 
+> **Amended 2026-10-04.** The premise — "a threat model that doesn't exist in this deployment"
+> because the server binds to `127.0.0.1` — is wrong, and the same reasoning had been applied to
+> `Access-Control-Allow-Origin: *`. Loopback binding stops other *machines*; it does nothing about
+> other *pages in the user's own browser*, which could reach every `/__notlinear_*` endpoint. The
+> CORS half was fixed in P0 (see `backend/server.py` `_allowed_origin`). The SSRF half is still
+> open and is scheduled as ADR-035 in the refactor plan.
+
 - **Status:** accepted (2026-07-25 — plan reviewed and approved before implementation)
 - **Context:** A6 (bookmark blocks) needs a title/description/favicon preview for a pasted URL, which the frontend can't fetch itself (no CORS access to arbitrary sites). This requires a new backend endpoint, `/__notlinear_link_preview`, that makes an **outbound** network request to a URL supplied by the user — the first endpoint in `backend/server.py` to do so. A server that fetches an attacker-influenced URL is a classic SSRF vector in a multi-tenant or internet-exposed deployment (an attacker could point it at internal-only services, cloud metadata endpoints, etc.).
 - **Decision:** Validate only that the URL parses as `http://` or `https://` (reject everything else — no `file://`, no other schemes); apply a short fetch timeout (~6s) and a capped read (~512KB) to bound resource use. Deliberately **do not** add private-IP/localhost blocking or DNS-rebinding defenses. This server is local-first, single-user, and bound to `127.0.0.1` (per project memory and `AGENTS.md`'s architecture) — there is no other user or tenant on the other side of this request, and no privileged network the operator doesn't already have direct access to themselves. The classic SSRF threat model (an external attacker tricking a shared server into reaching internal infrastructure on the attacker's behalf) doesn't apply here.
 - **Alternatives rejected:**
-  - **Block RFC1918/loopback/link-local ranges before fetching:** the standard hardening for this class of endpoint, but adds real complexity (DNS resolution before connect, redirect-chain re-validation to prevent rebinding) for a threat model that doesn't exist in this deployment. Would revisit immediately if this server is ever exposed beyond `127.0.0.1` or gains multi-user concepts (see `plan.md`'s ADR-010 OSS trajectory).
+  - **Block RFC1918/loopback/link-local ranges before fetching:** the standard hardening for this class of endpoint, but adds real complexity (DNS resolution before connect, redirect-chain re-validation to prevent rebinding) for a threat model that doesn't exist in this deployment. Would revisit immediately if this server is ever exposed beyond `127.0.0.1` or gains multi-user concepts (see ADR-032, the OSS trajectory).
   - **No endpoint at all — client-side-only degrade to a plain link:** rejected because A6 explicitly asks for a real preview (title/domain/favicon), which is the whole point of a bookmark block versus a plain link block already covered elsewhere.
 - **Consequences/tradeoffs:** If this server's trust boundary ever changes (exposed beyond localhost, multi-user), this endpoint needs revisiting before that ships — flagged here explicitly so it isn't mistaken for an oversight later. Today, the worst a malicious pasted URL can do is make the local server fetch it (same as the user's own browser could already do by visiting it directly) — no new capability is granted.
 - **Related files:** `backend/server.py` (`link_preview` helper, `do_POST` route), `frontend/views/notes.js` (A6 bookmark block)
@@ -388,9 +404,17 @@ Each entry: **Decision ID · status · context · decision · alternatives rejec
 
 ---
 
-## ADR-010 — Open-source the core in a fresh repo; private features become plugins
+## ADR-032 — Open-source the core in a fresh repo; private features become plugins
 
-- **Status:** proposed
+> **Renumbered 2026-10-04.** This was filed as a second ADR-010, colliding with the
+> accepted "Project folder scan cache" ADR-010 above. Renumbered to ADR-032, the ID the
+> refactor plan reserves for this decision.
+
+- **Status:** superseded 2026-10-04 by the React/FastAPI refactor plan — the core is still
+  published as a fresh squashed repo, but as the React (`web/`) + FastAPI (`backend/app/`)
+  rewrite rather than the no-build-step ES-module app this entry assumed. See ADR-031
+  (build step accepted). Superseded for the *architecture*; the fresh-repo and
+  private-plugins decisions still stand.
 - **Context:** The repo now hosts several products (branching chat, Notes, Coding Projects, feedback collector). The maintainer wants to open-source only the core — threads + branching + Projects + context — and keep the rest separate going forward, with a VS Code branching extension as the next milestone. Options: (A) open-source this repo as-is; (B) scrub this repo's git history and flip it public; (C) extract the core into a fresh public repo with a clean initial commit, and restructure the private repo to consume the core plus private plugins.
 - **Decision:** Option C, per `plan.md`. New public repo carries `backend/server.py` (minus feedback routes), `frontend/` minus `views/{notes,coding-projects}.js`, `core/feedback.js` and their CSS, plus curated docs (README, LICENSE MIT, SECURITY, CONTRIBUTING, FRAGILE, curated AGENTS + skills). Separation boundary going forward: core never references private features by name; private features live under `plugins/` and self-register via `core/registry.js` (optional dynamic import); one Dexie db per feature (generalizing ADR-007). After launch, core development happens in the public repo; the private repo pulls core via git subtree. A DOM-free `frontend/engine/` layer (model/context/providers) is extracted so the VS Code extension reuses the engine, not the UI.
 - **Alternatives rejected:**
@@ -399,8 +423,20 @@ Each entry: **Decision ID · status · context · decision · alternatives rejec
 - **Consequences/tradeoffs:** Two repos to maintain and a subtree sync cost; public repo loses granular history (acceptable). The plugin seam requires a small core change (optional `plugins/` loader) logged as its own task. Public contributions demand automated smoke coverage (Playwright) before PRs open — called out as the highest-leverage prerequisite in `plan.md` §OSS-04.
 - **Related files:** `plan.md`, `frontend/core/registry.js`, `frontend/app.js`, `backend/server.py`
 
-## 2026-10-03 — Model choice is per composer, not global
-Each chat branch stores `modelPref` (inherited from parent/main at creation, then independent). Main keeps `prefs.model`. Thinking toggle stays global; Notes branch panels still follow main (revisit if wanted).
+## ADR-045 — Model choice is per composer, not global
 
-## 2026-10-04 — Modes: overrides-only storage in the prefs blob
-Built-in modes stay in code (`core/modes.js`); user edits are stored as per-field overrides (`prefs.modeOverrides`) and user-created modes in `prefs.customModes`. Merged at read time so improved defaults still reach users who never edited a mode, and reset = delete override. Lives in the existing `kv:'state'` blob, so no Dexie version bump. A mode is only a system prompt (no tool/model settings). Global, not per-chat.
+- **Status:** accepted 2026-10-03. *(Reformatted 2026-10-04 from an undated freeform entry into the format this file mandates.)*
+- **Context:** A single global model setting forced every branch to use whatever the main thread was set to, so exploring a tangent on a cheaper or faster model meant changing it for everything.
+- **Decision:** Each chat branch stores its own `modelPref`, inherited from its parent (or main) at creation and independent afterwards. Main keeps using `prefs.model`.
+- **Alternatives rejected:** keeping one global model (the problem); a per-thread rather than per-branch setting (too coarse — branches are where model choice actually varies).
+- **Consequences/tradeoffs:** The thinking toggle stays global, and Notes branch panels still follow main — both revisitable. `modelPref` is an additive field inside the existing `kv:'state'` blob, so no Dexie version bump.
+- **Related files:** `frontend/app.js`, `frontend/core/state.js`, `frontend/core/store.js`
+
+## ADR-046 — Modes: overrides-only storage in the prefs blob
+
+- **Status:** accepted 2026-10-04. *(Reformatted 2026-10-04 from an undated freeform entry into the format this file mandates.)*
+- **Context:** Conversation modes became user-editable. Storing each edited mode as a full copy would freeze the built-in text at the moment of editing, so later improvements to a default would never reach anyone who had touched that mode.
+- **Decision:** Built-in modes stay in code (`core/modes.js`). User edits are stored as per-field overrides in `prefs.modeOverrides`, user-created modes in `prefs.customModes`, and the two are merged at read time. Resetting a mode is simply deleting its override. A mode is only a system prompt — no tool or model settings — and the setting is global, not per-chat.
+- **Alternatives rejected:** storing edited modes as full copies (defaults would never improve for edited modes); a new Dexie store for modes (unnecessary — the data is small and prefs-shaped).
+- **Consequences/tradeoffs:** Lives in the existing `kv:'state'` blob, so no Dexie version bump. A built-in mode renamed or removed in code leaves an orphaned override, which the read-time merge must tolerate.
+- **Related files:** `frontend/core/modes.js`, `frontend/views/modes-modal.js`, `frontend/core/store.js`, `frontend/providers/tools.js`

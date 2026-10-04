@@ -6,7 +6,8 @@
 // This is the persistence layer for the main chat/threads/projects Dexie
 // database, named "notlinear". It is deliberately a SEPARATE database from
 // the Notes feature's own "notlinear-notes" db (see frontend/views/notes.js
-// and PRD notes_product.md) — that split is intentional, per ADR-007 in
+// and the Notes PRD, which is no longer in the repo — see FEATURES.md)
+//  — that split is intentional, per ADR-007 in
 // docs/project-notes/DECISIONS.md, so Notes persistence and the chat schema
 // below can evolve independently. Do not add Notes data into this db, and do
 // not bump this db's schema version for Notes-only changes.
