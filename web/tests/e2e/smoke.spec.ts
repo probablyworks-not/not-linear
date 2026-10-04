@@ -175,7 +175,9 @@ test.describe('P0/P2 regression — the local trust boundary holds', () => {
     // fetch, so a missed call site shows up here instead of in production.
     await openApp(page);
     const ok = await page.evaluate(async () => {
-      const mod = await import('/frontend/core/api-client.js');
+      // Resolved by the browser at runtime, not by the TS project — the path
+      // is a served URL, not a module specifier TypeScript can see.
+      const mod = await import(/* @vite-ignore */ '/frontend/core/api-client.js' as string);
       const res = await mod.loggedFetch('/__notlinear_runtime_logs', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
