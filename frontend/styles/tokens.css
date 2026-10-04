@@ -1,40 +1,99 @@
 /* ---- Design tokens: CSS custom properties + theme overrides ---- */
+/*
+ * This file is the single source of truth for theming across the whole app
+ * (chat shell, Notes, Feedback panel, etc). Every other
+ * stylesheet in frontend/styles/ is expected to consume these custom
+ * properties via var(--...) rather than hardcoding colors, spacing, or
+ * fonts — hardcoding a color directly in a component stylesheet instead of
+ * pulling from a token here was the root cause of bug #022, so that
+ * "consume tokens.css" convention is deliberate, not incidental.
+ *
+ * Structure:
+ *   - :root holds the default theme ("dark-mono") token values.
+ *   - html[data-theme="grey"] and html[data-theme="light"] below redefine
+ *     the same custom-property names to switch the whole app's look via a
+ *     single attribute on <html> — components never branch on theme
+ *     themselves, they just read the current value of a token.
+ *   - Not every token is redefined per theme (e.g. --branch/--highlight
+ *     accent hues and layout sizing tokens stay constant across themes;
+ *     only the ones that need to change for contrast/readability are
+ *     overridden below).
+ */
 
 :root{
+  /* ---------- color tokens: default theme ("dark-mono") ---------- */
+  /* Background surfaces, layered from base canvas (--bg) to raised
+     surfaces (--surface, --surface-2) used for cards/panels/inputs. */
   --bg:#0A0A0A;
   --bg-2:#111111;
   --bg-3:#191919;
   --surface:#0E0E0E;
   --surface-2:#141414;
+  /* Hairline borders/dividers, from subtle (--rule) to more visible (--rule-2). */
   --rule:#222222;
   --rule-2:#2E2E2E;
+  /* Text colors, from primary body text (--text) down to the most muted
+     tertiary text (--text-3, e.g. placeholders/disabled labels). */
   --text:#D8D8D8;
   --text-2:#787878;
   --text-3:#444444;
+  /* Accent (the "spice" color per CLAUDE.md) — used sparingly for active
+     states, primary actions, and emphasis. --accent-soft is a translucent
+     wash of the same hue for backgrounds/hover states. */
   --accent:#A0A0A0;
   --accent-2:#C8C8C8;
   --accent-soft:rgba(160,160,160,0.12);
+  /* Branch color — identifies branch/thread UI (drawer, connector lines,
+     branched-text highlight) distinctly from the general accent color. */
   --branch:#58A6FF;
   --branch-soft:rgba(88,166,255,0.16);
   --branch-strong:rgba(88,166,255,0.28);
+  /* Highlight color — used for user text-selection highlights, distinct
+     from both --accent and --branch so the three interaction affordances
+     (select, branch, highlight) stay visually distinguishable. */
   --highlight:#F4B83B;
   --highlight-soft:rgba(244,184,59,0.28);
   --highlight-strong:rgba(244,184,59,0.42);
   --user-bub:#1A1A1A;
+  /* Elevation shadows for floating panels/drawers/dialogs. */
   --shadow-md:0 4px 20px rgba(0,0,0,0.60);
   --shadow-lg:0 12px 48px rgba(0,0,0,0.80);
+  /* Scrollbar + kbd-badge + subtle-tint tokens used across panels. */
   --scrollbar-thumb:rgba(255,255,255,0.08);
   --kbd-bg:rgba(255,255,255,0.10);
   --kbd-color:rgba(255,255,255,0.60);
   --surface-tint:rgba(255,255,255,0.015);
   --th-tint:rgba(255,255,255,0.025);
+  /* ---------- typography tokens ---------- */
   --font:'Space Grotesk',-apple-system,system-ui,sans-serif;
   --mono:'Space Mono',ui-monospace,Menlo,monospace;
+  /* ---------- layout/spacing tokens ---------- */
+  /* Fixed widths for the persistent chrome (sidebar) and floating panels
+     (branch drawer in chat.css, Notes' own branch drawer in notes.css —
+     kept as a separate --nt-drawer-w token so Notes' panel width never
+     collides with chat's --drawer-w) plus the gap used around them. */
   --sidebar-w:264px;
   --drawer-w:420px;
   --nt-drawer-w:420px;
   --drawer-gap:16px;
+  /* ---------- syntax-highlight tokens (fenced code blocks) ---------- */
+  /* The rest of the palette is deliberately monochrome (per CLAUDE.md, the
+     accent is "a spice, not a base"), but code is unreadable without real
+     color differentiation between tokens — so code blocks get their own
+     small, muted hue set, tuned per theme below like every other token here. */
+  --syn-keyword:#C792EA;
+  --syn-string:#89C77D;
+  --syn-number:#E5A76B;
+  --syn-comment:#6A6A6A;
+  --syn-function:#7FB8E0;
+  --syn-tag:#E58AA5;
+  --syn-attr:#D8C077;
 }
+/* ---------- per-theme overrides: "grey" theme ---------- */
+/* Same token names as :root above, redefined for the mid-contrast grey
+   theme. Only tokens that actually change value for this theme are
+   listed — anything not redefined here (e.g. --branch, --highlight,
+   --font, --sidebar-w) falls through to the :root default. */
 html[data-theme="grey"]{
   --bg:#1C1C1C;
   --bg-2:#232323;
@@ -57,7 +116,19 @@ html[data-theme="grey"]{
   --kbd-color:rgba(255,255,255,0.60);
   --surface-tint:rgba(255,255,255,0.018);
   --th-tint:rgba(255,255,255,0.028);
+  --syn-keyword:#C398DE;
+  --syn-string:#8FC77A;
+  --syn-number:#DDA36E;
+  --syn-comment:#787878;
+  --syn-function:#7EB4DB;
+  --syn-tag:#DE8CA6;
+  --syn-attr:#D3BD6E;
 }
+/* ---------- per-theme overrides: "light" theme ---------- */
+/* Same pattern as the grey theme above — light backgrounds/surfaces, dark
+   text, and shadow/tint values re-tuned for a light background so they
+   still read correctly (a shadow tuned for a near-black page looks wrong
+   on white, hence the different rgba alpha values here vs. :root). */
 html[data-theme="light"]{
   --bg:#F8F8F8;
   --bg-2:#F0F0F0;
@@ -80,4 +151,11 @@ html[data-theme="light"]{
   --kbd-color:rgba(0,0,0,0.55);
   --surface-tint:rgba(0,0,0,0.025);
   --th-tint:rgba(0,0,0,0.035);
+  --syn-keyword:#9A3FB0;
+  --syn-string:#227A3D;
+  --syn-number:#B5620A;
+  --syn-comment:#8A8A8A;
+  --syn-function:#1B5E8C;
+  --syn-tag:#B03A63;
+  --syn-attr:#8A6D1C;
 }

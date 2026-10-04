@@ -759,3 +759,58 @@ None currently tracked.
 - Files touched: `frontend/app.js` (`bcLayout`, `bcRender`, node click handler), `BUGS.md`, `CHANGELOG.md`, `docs/project-notes/{CHANGES,RUNS}.md`.
 - Test case (see RUNS.md for the automated headless run that exercised this): open a thread with branches that include at least one nested (branch-of-a-branch) child and at least one branch that hasn't been reopened since a reload; open Hierarchy and count/nesting of branch rows; open the Branches canvas and confirm the same count of node cards, same nesting depth (root branches at depth 1, nested children offset one column right), and one connector edge per non-root card.
 - Related: none.
+
+### #048 — Fenced code blocks in chat rendered as unreadable flat-gray text, no syntax colors
+- Date discovered: 2026-09-06
+- Date fixed: 2026-09-06
+- Agent: Claude Sonnet 5
+- Symptom: User reported code rendered in the UI was "very broken and unable to read."
+- Root cause: `renderMarkdown()` (`frontend/core/markdown.js`) escaped fenced-code content straight into a plain `<pre><code>`, with chat.css styling the whole block as one flat `color:var(--text-2)` gray — no syntax highlighting at all, despite `hljs` already being loaded globally (via CDN in `index.html`) and already used by Notes' own code-block *editor* (`highlightCodeEditor` in `views/notes.js`). It had simply never been wired into the shared `renderMarkdown()` path used by chat, Notes' AI-branch replies, and the Coding Projects file preview.
+- Fix: `renderMarkdown()` now wraps each fence in a `.code-block` with a header (language label + Copy button); new exported `highlightCodeIn(el)` in `core/markdown.js` runs `hljs.highlightElement` over rendered blocks (same optional-dependency/fail-safe pattern as the existing `renderMermaidIn`), called from every render site across `app.js`/`views/notes.js`/`views/coding-projects.js`. Added a dedicated `--syn-*` syntax-color palette to `tokens.css` per theme (the rest of the app's palette is intentionally near-monochrome) and mapped `hljs-*` classes to it in `chat.css`/`notes.css`/`coding-projects.css`.
+- Files touched: `frontend/core/markdown.js`, `frontend/app.js`, `frontend/views/notes.js`, `frontend/views/coding-projects.js`, `frontend/styles/tokens.css`, `frontend/styles/chat.css`, `frontend/styles/notes.css`, `frontend/styles/coding-projects.css`, `BUGS.md`, `CHANGELOG.md`, `FEATURES.md`, `docs/project-notes/{CHANGES,RUNS}.md`.
+- Test case (see RUNS.md for the automated headless run that exercised this): send a chat message that gets a fenced-code-block reply; confirm the block shows a header with the fence's language and a Copy button, code has distinct colors for keywords/strings/comments/numbers (not flat gray), and clicking Copy copies the code and briefly shows "Copied". Repeat in a Notes "Ask AI" branch reply and in a Coding Projects file preview with a code fence.
+- Related: none.
+
+### #049 — Notes: indented sub-bullets silently dropped from ⌘C copy and Markdown export
+- Date discovered: 2026-09-18
+- Date fixed: 2026-09-18
+- Agent: Claude Sonnet 5
+- Symptom: User reported that copying a Notes page (mindgarden.xyz page, "Products" section with a nested list of sub-bullets like "Notlinear", "GYST", "Interview feedback") only copied the top-level bullets — indented children were missing from the clipboard text entirely.
+- Root cause: `blocksToText()` and `blocksToMarkdown()` (`frontend/views/notes.js`) only recursed into `b.children` inside the `toggle`-type branch. But per the existing comment at the `renderBlock` call site ("Any block type can gain nested children via Tab-indent, not just toggles"), any block — including a plain `bullet` — can carry indented children via `indentBlock`. Those children were rendered fine on screen but never walked by the two serializers, so ⌘C copy and the "export as .md" feature both silently dropped them.
+- Fix: moved the children recursion out of the toggle-specific branch into a type-agnostic step run for every block (skipping `cols`, which already recurses into its own column arrays), so indented children are always emitted regardless of the parent block's type.
+- Files touched: `frontend/views/notes.js` (`blocksToText`, `blocksToMarkdown`), `BUGS.md`, `CHANGELOG.md`, `docs/project-notes/{CHANGES,RUNS}.md`.
+- Test case (see RUNS.md for a scripted-logic check that exercised this): build a bullet block with nested bullet children two levels deep (mirroring the mindgarden.xyz "Products" list), run it through `blocksToText`, confirm every nested bullet appears with one extra level of indent per depth. Manually: in the app, create a bullet, Tab-indent a child bullet under it, select the page (⌘A ⌘A) and copy (⌘C), paste into a plain-text field and confirm the child bullet is present.
+- Related: none.
+
+### #050 — Branch composer: model/mode not visibly changeable
+- Date discovered: 2026-09-29
+- Date fixed: 2026-09-29
+- Agent: Claude Sonnet 5.5
+- Symptom: In a chat branch panel the model chip had no chevron (looked static) and there was no mode picker at all, unlike the main composer.
+- Root cause: `branchModelChipContents()` rendered the chip with `chevron:false`, and the branch composer template in `frontend/app.js` never included a mode chip.
+- Fix: branch chip now shows the chevron; added `.branch-mode-chip` (reuses `#mode-menu`, shared global `prefs.mode`/`prefs.model`, kept in sync via `renderModeUI`/`renderModelUI`); opening one menu closes the other.
+- Files touched: `frontend/app.js`, `BUGS.md`.
+- Test case: open a branch, click the model chip and the mode chip, pick a different option; both chips (and the main composer's) update and the next branch reply uses them. Not click-tested in a browser this session.
+- Related: none.
+
+### #051 — Changing the model in a branch changed the main chat (and vice versa)
+- Date discovered: 2026-10-03
+- Date fixed: 2026-10-03
+- Agent: Claude Sonnet 5.5
+- Symptom: Model chips in branches and the main composer were one shared setting.
+- Root cause: single global `prefs.model` read/written by the shared `#model-menu`, painted on every `.branch-model-chip`, and used by `sendBranchMsg`.
+- Fix: per-branch `b.modelPref` (inherited from parent/main at creation, saved in branch snapshot as `modelPref`); `openModelMenu(anchor, branchId)` targets one composer; `sendBranchMsg` uses `branchModelPref(b)`. Supersedes the "shared prefs.model" note in #050.
+- Files touched: `frontend/app.js`.
+- Test case: set main=Haiku, branch A=Sonnet, branch B=DeepSeek; each chip keeps its own label, replies use their own provider, and it survives reload/chat switch. Not click-tested this session.
+- Related: #050.
+
+### #052 — OpenAI calls fail with 400 `max_tokens` unsupported
+- Date discovered: 2026-10-04
+- Date fixed: 2026-10-04
+- Agent: Claude Sonnet 5.5
+- Symptom: Selecting an OpenAI model (e.g. gpt-5.6-terra) failed immediately with "Unsupported parameter: 'max_tokens'... Use 'max_completion_tokens'".
+- Root cause: `callOpenAICompatible` always sent `max_tokens:8192`.
+- Fix: send `max_completion_tokens` when `providerLabel === 'openai'`; Gemini's compat endpoint keeps `max_tokens`.
+- Files touched: `frontend/providers/openai.js`, `BUGS.md`, `CHANGELOG.md`.
+- Test case: send a prompt with an OpenAI model; request returns 200 and streams. Not click-tested this session.
+- Related: none.

@@ -1,29 +1,69 @@
+<!--
+  index.html — the real, live app shell.
+
+  This is the file backend/server.py serves (as `../frontend/index.html`) and
+  the one users actually run via Notlinear.app / `python3 backend/server.py`.
+  It is post-MIGRATION.md modularization: markup only, plus a tiny inline
+  theme-flash-prevention snippet — all real behavior lives in ES modules
+  loaded via `<script type="module" src="./app.js">` at the bottom (app.js
+  bootstraps, then core/registry.js wires up self-registering views under
+  frontend/views/, core/state.js + core/store.js hold state/persistence,
+  etc. — see AGENTS.md "Repo map").
+
+  Sibling files in this directory, for context (not loaded by this file):
+  - index-design.html — a redesign-in-progress *reference/draft* variant of
+    this shell (single-file, inline CSS, trimmed-down markup/JS-less). It is
+    NOT wired up, NOT linked from here, and NOT served in the normal flow —
+    per FEATURES.md section 8 ("Workspace redesign — in progress"), it's a
+    prototype some already-landed redesign work (tab strip, floating panels,
+    icon set, etc.) was drafted against. Treat divergences between the two
+    files as "index-design.html is stale/aspirational," not as bugs here.
+  - debug-keys.html — an unrelated standalone local dev utility for
+    inspecting the `nl_api_keys` localStorage entry; not part of the app flow.
+  - mind-garden-icons.html — a static reference sheet of the hand-drawn
+    "Mind Garden" icon set (see core/mind-garden.js) used as default
+    project/thread/note icons; not part of the app flow either.
+
+  Relative paths note (AGENTS.md "Do not touch"): the in-app changelog
+  viewer (#changelog-view below) fetches root-level CHANGELOG.md, and
+  backend/server.py syncs runtime events into root-level logs.md. Both rely
+  on this file's location (frontend/index.html) for their relative path
+  resolution — moving this file changes those paths, so it isn't done here.
+-->
 <!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
 <title>notlinear — v6 Dark Mono</title>
+<!-- Google Fonts: Space Grotesk (UI sans) + Space Mono (labels/kbd/mono UI), per AGENTS.md tech stack. Preconnect hints speed up the actual stylesheet fetch below. -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<!-- Tabler Icons webfont (CDN) — the `ti ti-*` icon classes used throughout this file and every view. -->
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.0.0/dist/tabler-icons.min.css">
 <link rel="icon" href="logo.svg">
+<!-- Mermaid (CDN) — renders ```mermaid fenced code blocks in chat/notes markdown into diagrams. `defer` so it doesn't block initial paint. -->
 <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js" defer></script>
 <!-- Notes v2 (TASK-NT04): syntax highlighting (JS only, no theme CSS — colors come from tokens.css) + LaTeX rendering -->
+<!-- KaTeX (CDN) — renders LaTeX/math notation (e.g. the Notes "equation" block and inline Σ) into typeset math. -->
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
 <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js" defer></script>
+<!-- highlight.js (CDN) — syntax-highlights code blocks in chat/notes; loaded without its own theme CSS since colors are meant to come from styles/tokens.css instead. -->
 <script src="https://cdn.jsdelivr.net/npm/@highlightjs/cdn-assets@11.9.0/highlight.min.js" defer></script>
+<!-- Inline theme-flash guard: applies the saved theme (`nl_theme` in localStorage) to <html data-theme> before first paint, so light/grey users don't see a flash of the default dark theme while app.js loads. Deliberately tiny/synchronous and kept inline (not a module) for this reason. -->
 <script>(function(){var t=localStorage.getItem('nl_theme')||'light';if(t==='light'||t==='grey')document.documentElement.setAttribute('data-theme',t);})();</script>
+<!-- App stylesheets, local (not CDN) — tokens.css defines the CSS custom-property theme, base.css is shell/layout, the rest are per-feature stylesheets scoped to their view (chat, coding-projects, notes, feedback). -->
 <link rel="stylesheet" href="styles/tokens.css">
 <link rel="stylesheet" href="styles/base.css">
 <link rel="stylesheet" href="styles/chat.css">
-<link rel="stylesheet" href="styles/coding-projects.css">
+<link rel="stylesheet" href="styles/emoji-picker.css">
 <link rel="stylesheet" href="styles/notes.css">
 <link rel="stylesheet" href="styles/feedback.css">
 </head>
 <body>
 
+<!-- Hidden SVG sprite defining the app logo mark once, referenced elsewhere via <use href="#logo-mark"/> (sidebar brand, etc.). -->
 <svg width="0" height="0" style="position:absolute" aria-hidden="true">
   <defs>
     <symbol id="logo-mark" viewBox="0 0 36 36">
@@ -35,9 +75,11 @@
   </defs>
 </svg>
 
+<!-- #edges: SVG overlay used to draw connector lines between doc and branch panels; #pane-scrim: dim backdrop shown while the left sidebar is open on narrow layouts. -->
 <svg class="edges-svg" id="edges"></svg>
 <div class="pane-scrim" id="pane-scrim"></div>
 
+<!-- Top-level app shell: fixed left sidebar (.sidebar) + main content column (.main). -->
 <div class="app">
   <aside class="sidebar" id="sidebar" aria-label="Left pane" aria-hidden="true">
     <div class="brand">
@@ -47,15 +89,16 @@
     </div>
 
     <div class="side-scroll">
+    <!-- Search (⌘K) and New chat (⌘N) — the two always-visible top-level actions above the collapsible sections. -->
     <button class="side-item" id="search-btn"><i class="ti ti-search"></i><span>Search</span><span style="margin-left:auto;font-family:var(--mono);font-size:10px;color:var(--text-3)">⌘K</span></button>
     <button class="new-chat-btn" id="new-chat"><span class="new-chat-icon"><i class="ti ti-edit"></i></span><span class="new-chat-label">New chat</span><span class="new-chat-kbd">⌘N</span></button>
 
+    <!-- Projects — collapsible section listing chat "projects" (grouped threads + shared rules/files). #projects-list is populated at runtime; the grid icon opens the full Projects grid view (#projects-view further down). -->
     <div class="side-section side-section-row collapsible" data-section="projects"><span class="side-sec-label"><i class="ti ti-chevron-down side-caret"></i>Projects</span><span style="display:flex;gap:2px"><button class="side-section-add" id="projects-view-open" type="button" title="View all projects"><i class="ti ti-layout-grid"></i></button><button class="side-section-add" id="new-project" type="button" title="New project"><i class="ti ti-plus"></i></button></span></div>
     <div id="projects-list" class="side-collapse-body"></div>
 
-    <div class="side-section side-section-row cp-side-toggle" id="cp-side-head"><span><i class="ti ti-chevron-down cp-caret"></i>coding projects</span><button class="side-section-add" id="cp-add-project" type="button" title="Add coding project"><i class="ti ti-plus"></i></button></div>
-    <div id="cp-side-list"></div>
 
+    <!-- Threads — the main chat-document list (each row is a top-level "doc"/thread, not a branch). The rows below are static markup placeholders shown before app.js populates real state; data-thread/data-title/data-icon carry the seed values. -->
     <div class="side-section side-section-row collapsible" data-section="threads"><span class="side-sec-label"><i class="ti ti-chevron-down side-caret"></i>Threads</span></div>
     <div id="threads-list" class="side-collapse-body">
       <div class="side-item thread-row active" data-thread="doc-main" data-title="Non-linear chat system" data-icon="ti-file-text"><button type="button" class="thread-open"><span class="thread-emoji" role="button" tabindex="0" title="Set emoji"><i class="ti ti-file-text"></i></span><span class="thread-title">Non-linear chat system</span></button></div>
@@ -64,6 +107,7 @@
       <div class="side-item thread-row" data-thread="planning" data-title="Q3 planning notes" data-icon="ti-file"><button type="button" class="thread-open"><span class="thread-emoji" role="button" tabindex="0" title="Set emoji"><i class="ti ti-file"></i></span><span class="thread-title">Q3 planning notes</span></button></div>
     </div>
 
+    <!-- Notes — sidebar entry for the Notes feature (frontend/views/notes.js), persisted separately in the `notlinear-notes` Dexie db per ADR-007 (see AGENTS.md/CLAUDE.md). #nt-side-tree renders the note page tree; the full editor opens as the #nt-screen overlay further down. -->
     <div class="side-section side-section-row" id="nt-side-head"><span><i class="ti ti-chevron-down nt-caret"></i>Notes</span><div class="nt-side-head-actions"><button class="side-section-add" id="nt-side-clear" type="button" title="Delete all notes" aria-label="Delete all notes"><i class="ti ti-trash"></i></button><button class="side-section-add" id="nt-side-add" type="button" title="New note" aria-label="New note"><i class="ti ti-plus"></i></button></div></div>
     <div id="nt-side-tree"></div>
 
@@ -74,10 +118,12 @@
       <button type="button" class="side-item" id="updates-story-open"><i class="ti ti-sparkles"></i><span>Product story</span></button>
     </div>
 
+    <!-- Recent branches — quick-jump list of recently opened branch panels across all threads/notes; #recent-branches is populated at runtime. -->
     <div class="side-section side-section-row collapsible" data-section="recent"><span class="side-sec-label"><i class="ti ti-chevron-down side-caret"></i>Recent branches</span></div>
     <div class="recent-branches side-collapse-body" id="recent-branches"></div>
     </div>
 
+    <!-- Sidebar footer — clicking opens the Settings/Personalization drawer (#prefs further down). -->
     <div class="side-foot" id="open-prefs">
       <div class="avatar">A</div>
       <div class="name">Alex Chen</div>
@@ -85,13 +131,15 @@
     </div>
   </aside>
 
+  <!-- Main content column: tab strip, topbar/breadcrumbs, the doc/chat surface, and the composer (composer is a sibling further down, fixed to viewport bottom). -->
   <div class="main">
     <!-- Tab strip (notlinear Redesign TASK-RD09) — Doc is pinned/non-closable;
-         Notes/Coding Projects can be opened as additional closable tabs. -->
+         Notes can be opened as additional closable tabs. -->
     <div class="tab-strip" id="tab-strip">
       <div class="tab-strip-list" id="tab-strip-list"></div>
       <button type="button" class="tab-strip-add" id="tab-strip-add" title="New tab"><i class="ti ti-plus"></i></button>
     </div>
+    <!-- Topbar: sidebar-open toggle (shown when sidebar is collapsed) + breadcrumb trail for the current doc/branch depth. -->
     <div class="topbar" id="topbar">
       <button class="ic-btn" id="sidebar-toggle" title="Open left pane" aria-label="Open left pane" aria-expanded="false"><i class="ti ti-layout-sidebar-left-expand"></i></button>
       <div class="crumbs">
@@ -109,11 +157,11 @@
         <button type="button" class="bte-btn" id="bte-new-chat"><i class="ti ti-message-circle-plus"></i><span>New chat</span></button>
         <button type="button" class="bte-btn" id="bte-existing-chat"><i class="ti ti-arrow-forward-up"></i><span>Existing chat</span></button>
         <button type="button" class="bte-btn" id="bte-projects"><i class="ti ti-folder-plus"></i><span>Projects</span></button>
-        <button type="button" class="bte-btn" id="bte-coding-projects"><i class="ti ti-folder-code"></i><span>Coding projects</span></button>
         <button type="button" class="bte-btn" id="bte-notes"><i class="ti ti-notebook"></i><span>Notes</span></button>
       </div>
     </div>
 
+    <!-- The doc/chat surface: a single contenteditable article that holds both the static seed content (product pitch copy below) and, at runtime, the live chat stream (#chat-stream) appended as messages arrive. -->
     <div class="doc-wrap">
       <article class="doc" id="doc" contenteditable="true" spellcheck="false">
         <p class="eyebrow" contenteditable="false">Working draft · Updated 2h ago</p>
@@ -134,6 +182,7 @@
           </div>
         </div>
 
+        <!-- Static seed/placeholder copy shown for the default "Non-linear chat system" doc — pitches the product itself as sample content. Real user docs replace this. -->
         <div id="doc-content">
         <p>A canvas for non-linear thinking. The premise: most tools force a single thread, but real thinking forks constantly — a sentence sparks a tangent, the tangent has its own life, and you want to chase it without losing the spine.</p>
 
@@ -173,6 +222,7 @@
         </ul>
         </div>
 
+        <!-- Live chat message stream — app.js appends user/assistant messages here as the conversation progresses; kept non-editable within the otherwise-editable doc. -->
         <div id="chat-stream" class="chat-stream" contenteditable="false"></div>
       </article>
     </div>
@@ -196,6 +246,7 @@
   </div>
 </div>
 <!-- hidden file inputs (opacity/position instead of display:none so .click() works in WebKit) -->
+<!-- Two pairs (main composer + branch composer) so file/folder picking works independently in either context; folder inputs use webkitdirectory to let the OS "add folder" picker recurse. -->
 <input type="file" id="file-input-main" multiple style="opacity:0;position:absolute;left:-9999px;width:1px;height:1px;pointer-events:none">
 <input type="file" id="folder-input-main" webkitdirectory multiple style="opacity:0;position:absolute;left:-9999px;width:1px;height:1px;pointer-events:none">
 <input type="file" id="file-input-branch" multiple style="opacity:0;position:absolute;left:-9999px;width:1px;height:1px;pointer-events:none">
@@ -207,7 +258,7 @@
   <button data-act="branch"><i class="ti ti-git-branch"></i><span>Attach branch</span></button>
 </div>
 
-<!-- model picker -->
+<!-- model picker: dropdown of every supported LLM across providers (Anthropic/DeepSeek/OpenAI-compatible incl. Gemini, per AGENTS.md tech stack), plus an "extended thinking" toggle for models that support it. -->
 <div class="menu" id="model-menu" role="menu" aria-label="Select model" style="min-width:210px">
   <button data-model="opus" role="menuitem">
     <i class="ti ti-crown"></i>
@@ -294,42 +345,30 @@
   <p class="menu-thinking-note" id="thinking-note">Deeper reasoning. Adds 3–8s. Opus and Sonnet only.</p>
 </div>
 
-<!-- mode picker -->
+<!-- mode picker: canned system-prompt "conversation modes" (General/Research/Coding/PM/CTO/Critic) that steer the assistant's persona/behavior for the current thread. -->
 <div class="menu" id="mode-menu" role="menu" aria-label="Select conversation mode" style="min-width:210px">
-  <button data-mode="general" role="menuitem">
-    <i class="ti ti-message-2"></i>
-    <span>General<span class="desc">Balanced default</span></span>
-    <i class="ti ti-check model-check"></i>
-  </button>
-  <button data-mode="research" role="menuitem">
-    <i class="ti ti-telescope"></i>
-    <span>Research<span class="desc">Search-heavy, cited</span></span>
-    <i class="ti ti-check model-check"></i>
-  </button>
-  <button data-mode="coding" role="menuitem">
-    <i class="ti ti-code"></i>
-    <span>Coding<span class="desc">Code-focused, precise</span></span>
-    <i class="ti ti-check model-check"></i>
-  </button>
-  <div class="menu-sep"></div>
-  <button data-mode="pm" role="menuitem">
-    <i class="ti ti-users"></i>
-    <span>PM<span class="desc">User &amp; business focus</span></span>
-    <i class="ti ti-check model-check"></i>
-  </button>
-  <button data-mode="cto" role="menuitem">
-    <i class="ti ti-cpu"></i>
-    <span>CTO<span class="desc">Build &amp; execute</span></span>
-    <i class="ti ti-check model-check"></i>
-  </button>
-  <button data-mode="critic" role="menuitem">
-    <i class="ti ti-sword"></i>
-    <span>Critic<span class="desc">Devil's advocate</span></span>
-    <i class="ti ti-check model-check"></i>
+  <div id="mode-list"></div>
+  <div class="div"></div>
+  <button id="mode-manage" role="menuitem">
+    <i class="ti ti-plus"></i>
+    <span>New / manage modes<span class="desc">Edit prompts and instructions</span></span>
   </button>
 </div>
 
-<!-- Selection popover -->
+<!-- Modes manager: list/create/edit conversation modes (system-prompt instructions). Logic in views/modes-modal.js. -->
+<div class="modes-scrim" id="modes-modal" aria-hidden="true">
+  <div class="modes-dialog" role="dialog" aria-modal="true" aria-labelledby="modes-title">
+    <div class="modes-head">
+      <h3 id="modes-title">Modes</h3>
+      <button class="modes-new" id="modes-new"><i class="ti ti-plus"></i>New mode</button>
+      <button class="modes-close" id="modes-close" aria-label="Close"><i class="ti ti-x"></i></button>
+    </div>
+    <p class="modes-sub">Instructions added to the system prompt. Applies to every chat.</p>
+    <div class="modes-list" id="modes-list"></div>
+  </div>
+</div>
+
+<!-- Selection popover — appears when text is highlighted in the doc; "Branch" (⌘/keyboard shortcut B) is the core product gesture (see product.md), the rest (highlight/ask/bold/italic/link) are secondary actions. -->
 <div class="pop" id="pop" role="toolbar">
   <button class="primary" data-act="branch"><i class="ti ti-git-branch"></i> Branch <span class="kbd">B</span></button>
   <span class="div"></span>
@@ -342,10 +381,10 @@
   <button data-act="link" title="Link"><i class="ti ti-link"></i></button>
 </div>
 
-<!-- Branch stack (floating right) -->
+<!-- Branch stack (floating right) — container for open branch panels spawned from the doc; app.js appends one panel per open branch, stacked. -->
 <div class="branch-stack" id="branch-stack"></div>
 
-<!-- Branch menu -->
+<!-- Branch menu — per-branch overflow menu (promote to main thread, copy as quote, close, or delete). -->
 <div class="menu" id="branch-menu">
   <button data-act="promote">
     <i class="ti ti-arrow-up-circle"></i>
@@ -366,11 +405,12 @@
   </button>
 </div>
 
-<!-- Toast -->
+<!-- Toast — generic transient success/status message shown at the bottom of the screen. -->
 <div class="toast" id="toast"><i class="ti ti-check"></i><span id="toast-text">Done</span></div>
+<!-- "New update — refresh" — the file-watch mechanism (AGENTS.md "Do not touch"): shown when the entrypoint changes on disk during dev, prompting a reload. Do not rename/remove without deliberately updating that watch. -->
 <button class="update-refresh" id="update-refresh" type="button"><i class="ti ti-refresh"></i><span>New update - refresh</span></button>
 
-<!-- Confirm delete -->
+<!-- Confirm delete — shared destructive-action confirmation dialog (currently used for chat deletion; text is filled in per-use via #delete-confirm-name/-desc). -->
 <div class="confirm-scrim" id="delete-confirm" aria-hidden="true">
   <div class="confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="delete-confirm-title" aria-describedby="delete-confirm-desc">
     <div class="confirm-head">
@@ -387,7 +427,7 @@
   </div>
 </div>
 
-<!-- Context panel -->
+<!-- Context panel — right-edge drawer showing the branch/doc hierarchy (#ctx-tree) and files attached to the current page (#ctx-page-files). Opened via the "Context & files" doc-meta icon button. -->
 <div class="scrim" id="ctx-scrim"></div>
 <aside class="ctx-panel" id="ctx-panel" aria-label="Context and files">
   <div class="ctx-top">
@@ -409,7 +449,7 @@
   </div>
 </aside>
 
-<!-- Highlights panel -->
+<!-- Highlights panel — right-edge drawer listing saved highlights for the current doc (per bug #022, text must stay readable in light mode via theme tokens, not hardcoded colors). -->
 <div class="scrim" id="highlight-scrim"></div>
 <aside class="highlight-panel" id="highlight-panel" aria-label="Highlights">
   <div class="highlight-top">
@@ -422,7 +462,7 @@
   </div>
 </aside>
 
-<!-- Thread Map panel -->
+<!-- Thread Map panel — right-edge drawer visualizing the branch tree for navigation (distinct from the newer Spatial branch canvas below — this is the older linear/list-style map). -->
 <aside class="thread-map-panel" id="thread-map-panel" aria-label="Thread Map">
   <div class="tm-top">
     <h3>Thread Map</h3>
@@ -431,7 +471,7 @@
   <div class="tm-body" id="thread-map-body"></div>
 </aside>
 
-<!-- Context Ranking popover -->
+<!-- Context Ranking popover — per-chat override for how files are selected as context in a project with a linked folder (global default lives in Settings > Context Ranking further down); hidden by default (ctx-ranking-btn that opens it is itself display:none above). -->
 <div class="popover" id="ctx-ranking-popover" style="display:none">
   <div class="popover-content">
     <div class="popover-header">
@@ -450,7 +490,7 @@
   </div>
 </div>
 
-<!-- Search palette -->
+<!-- Search palette — ⌘K command-palette-style modal for finding threads/branches by title/content; #search-results is populated as the user types. -->
 <div class="search-scrim" id="search-scrim"></div>
 <div class="search-palette" id="search-palette" role="dialog" aria-modal="true" aria-label="Search">
   <div class="search-palette-input-row">
@@ -460,7 +500,7 @@
   <div class="search-results" id="search-results"></div>
 </div>
 
-<!-- Personalization -->
+<!-- Personalization / Settings — right-edge drawer covering appearance, workspace identity, AI tone/model defaults, API keys, context ranking, web search config, and the changelog/feedback/runtime-log viewers. Opened from the sidebar footer (#open-prefs). -->
 <div class="scrim" id="scrim"></div>
 <aside class="prefs" id="prefs">
   <div class="prefs-top">
@@ -468,6 +508,7 @@
     <button class="ic-btn" id="prefs-close"><i class="ti ti-x"></i></button>
   </div>
   <div class="prefs-body">
+    <!-- Appearance: theme choice, persisted to `nl_theme` in localStorage and read by the inline theme-flash guard in <head>. -->
     <div class="prefs-section">
       <div class="prefs-label">Appearance</div>
       <div class="seg" id="seg-theme">
@@ -520,6 +561,7 @@
         <button data-v="gemini-pro"><span class="t">Gemini 2.5 Pro</span>Best reasoning.</button>
       </div>
     </div>
+    <!-- API Keys: per-provider key entry, stored locally (never logged, per AGENTS.md security rules) and sent only to that provider's API. #api-key-list renders currently-connected providers at runtime. -->
     <div class="prefs-section">
       <div class="prefs-label">API Keys</div>
       <div id="api-key-list"></div>
@@ -538,6 +580,7 @@
       </div>
       <p class="prefs-help">Stored locally in your browser. Keys are only sent to their respective APIs (Anthropic, Serper, Firecrawl, etc.).</p>
     </div>
+    <!-- Context Ranking: global default for how files are selected as chat context in a project with a linked folder — free keyword matching, or a DeepSeek-backed rerank (needs a DeepSeek key above). Per-chat override lives in #ctx-ranking-popover. -->
     <div class="prefs-section">
       <div class="prefs-label">Context Ranking</div>
       <select class="input" id="ranking-llm-select">
@@ -546,11 +589,13 @@
       </select>
       <p class="prefs-help">Controls how files are selected when chatting in a project with a linked folder. DeepSeek requires a DeepSeek API key.</p>
     </div>
+    <!-- Web Search: URL of a self-hosted SearXNG instance (must allow CORS) used to back web-search tool calls; left blank disables the feature entirely. -->
     <div class="prefs-section">
       <div class="prefs-label">Web Search (SearXNG)</div>
       <input class="input" type="url" id="searxng-url" placeholder="http://localhost:8888" autocomplete="off" />
       <p class="prefs-help">URL of your SearXNG instance. Must have CORS enabled (<code>cors: true</code> in settings.yml). Leave blank to disable web search.</p>
     </div>
+    <!-- Changelog viewer — fetches root-level CHANGELOG.md relative to this file's served location (AGENTS.md "Do not touch" — relative paths to root docs); falls back to a bundled copy if the file can't be reached (bug #007). -->
     <div class="prefs-section">
       <div class="prefs-label">Changelog</div>
       <button class="prefs-action" id="changelog-toggle" type="button" aria-expanded="false" aria-controls="changelog-view">
@@ -567,6 +612,7 @@
       </div>
       <p class="prefs-help">Reads from <code>CHANGELOG.md</code> when the app can access the local file.</p>
     </div>
+    <!-- Feedback: viewer for bugs/ideas logged via the global ⌘⇧B shortcut; entries are saved to feedback/FEEDBACK.md for a coding agent to pick up later. -->
     <div class="prefs-section">
       <div class="prefs-label">Feedback</div>
       <button class="prefs-action" id="fb-log-toggle" type="button" aria-expanded="false" aria-controls="fb-log-view">
@@ -583,6 +629,7 @@
       </div>
       <p class="prefs-help">Logged anywhere with ⌘⇧B. Saved to <code>feedback/FEEDBACK.md</code> for the coding agent.</p>
     </div>
+    <!-- Runtime logs: viewer for request/response events synced by backend/server.py into root-level logs.md (another relative-path dependency on this file's location — AGENTS.md "Do not touch"). Auth headers are redacted before logging. -->
     <div class="prefs-section">
       <div class="prefs-label">Runtime logs</div>
       <button class="prefs-action" id="logs-toggle" type="button" aria-expanded="false" aria-controls="logs-view">
@@ -710,28 +757,7 @@
   </div>
 </div>
 
-<!-- Coding Projects overlay (full-screen, like .project-screen — see ADR-006) -->
-<div class="cp-screen" id="cp-screen">
-  <div class="cp-bar">
-    <button class="ic-btn" id="cp-back" title="Back to chat" aria-label="Back to chat"><i class="ti ti-arrow-left"></i></button>
-    <div class="cp-crumb"><i class="ti ti-folder-code"></i><span class="cp-crumb-here" id="cp-crumb">coding projects</span></div>
-  </div>
-  <div class="cp-scroll" id="cp-scroll">
-    <div class="cp-inner" id="cp-inner"></div>
-  </div>
-  <!-- file preview drawer (read-only) -->
-  <aside class="cp-drawer" id="cp-drawer" aria-hidden="true">
-    <div class="cp-drawer-head">
-      <span class="cp-drawer-path" id="cp-drawer-path"></span>
-      <span class="cp-drawer-size" id="cp-drawer-size"></span>
-      <button class="ic-btn" id="cp-drawer-reveal" title="Reveal in Finder"><i class="ti ti-external-link"></i></button>
-      <button class="ic-btn" id="cp-drawer-close" title="Close"><i class="ti ti-x"></i></button>
-    </div>
-    <div class="cp-drawer-body" id="cp-drawer-body"></div>
-  </aside>
-</div>
-
-<!-- Notes overlay (full-screen, notlinear notebook view) -->
+<!-- Notes overlay (full-screen, notlinear notebook view) — the Notes feature's page editor; persists to its own `notlinear-notes` Dexie db, deliberately separate from the chat `notlinear` db (ADR-007, see AGENTS.md/CLAUDE.md). Strictly additive — must not affect chat/threads/branches/coding-projects. -->
 <div class="nt-screen" id="nt-screen">
   <div class="nt-topbar" id="nt-topbar">
     <div class="nt-crumbs" id="nt-crumbs"></div>
@@ -740,13 +766,13 @@
   <div class="nt-pgwrap"><div class="nt-pg" id="nt-page"></div></div>
 </div>
 
-<!-- Notes slash menu (caret-anchored) -->
+<!-- Notes slash menu (caret-anchored) — the "/" block-type picker (heading, list, todo, toggle, quote, callout, divider, code, equation, image, table, columns, page-link) inserted at the text caret while editing a note. -->
 <div id="nt-slash" tabindex="-1"></div>
 
-<!-- Notes @-mention menu (caret-anchored) -->
+<!-- Notes @-mention menu (caret-anchored) — page-link autocomplete when typing "@" inside a note. -->
 <div id="nt-mention" tabindex="-1"></div>
 
-<!-- Notes floating format toolbar -->
+<!-- Notes floating format toolbar — appears on text selection inside a note; mirrors the doc's selection popover (#pop) but with Notes-specific block-formatting commands (turn-into, color/highlight pickers, equation, branch). -->
 <div id="nt-ftoolbar" role="toolbar">
   <button data-cmd="bold" title="Bold (⌘B)"><b>B</b></button>
   <button data-cmd="italic" title="Italic (⌘I)"><i>I</i></button>
@@ -795,7 +821,7 @@
   <button data-cmd="branch" title="Branch"><i class="ti ti-git-branch"></i></button>
 </div>
 
-<!-- Notes branch stack (floating right, mirrors #branch-stack) -->
+<!-- Notes branch stack (floating right, mirrors #branch-stack) — lets a note's text be branched into AI side-conversations the same way the main doc can, but scoped to the note. -->
 <div class="branch-stack" id="nt-branch-stack"></div>
 <div class="menu branch-menu" id="nt-branch-menu">
   <button data-act="copy">
@@ -813,7 +839,9 @@
   </button>
 </div>
 
+<!-- Dexie (CDN) — thin wrapper around IndexedDB; backs all local persistence (the `notlinear` chat/threads/projects db via core/store.js, and the separate `notlinear-notes` db via views/notes.js). Loaded as a plain global script (not a module) so it's available before app.js's modules run. -->
 <script src="https://cdn.jsdelivr.net/npm/dexie@4/dist/dexie.min.js"></script>
+<!-- App entry point/bootstrap — an ES module, so it and everything it imports (core/registry.js, core/state.js, core/store.js, providers/*, views/*) load natively with no build step, per AGENTS.md tech stack. Do not call the Anthropic/other provider SDKs directly from markup or a component; all of that logic lives behind this module graph. -->
 <script type="module" src="./app.js"></script>
 </body>
 </html>

@@ -4,6 +4,48 @@ Each entry: **date/time · task or bug ID · command category · result · impor
 
 ---
 
+## 2026-09-29 — Coding Projects removal — static + headless load check — pass
+- **Command category:** static (`node --check`, `py_compile`) + headless Playwright on `:8765`
+- **Result:** pass
+- **Output:** no console/page errors; `#cp-screen`, `#cp-side-list`, `#bte-coding-projects` absent; blank tab shows 4 tiles; Notes opens.
+- **Follow-up:** Human smoke test (icon picker styling, chat Projects folder scan) not yet run.
+
+---
+
+## 2026-09-24 (2) — Context panel grouped by main-chat turn — static check + live Playwright E2E — pass
+- **Command category:** static (`node --check`) + live headless Playwright against the real running `:8765` dev server, with `page.route()` intercepting `https://api.anthropic.com/v1/messages` (protocol-correct mocked SSE, zero real API calls/cost).
+- **Result:** pass
+- **Output:** `node --check` clean on `app.js`. Drive script: created a new chat thread, sent two real main-composer messages ("What is topic one about?" / "What is topic two about?", each getting a distinct mocked reply), confirmed both turns rendered with distinct `data-turn-id` values. Selected text inside turn 1's response and used the real selection-popover Branch action to create a branch, sent a message in it; repeated for turn 2's response. Opened the Context panel: rendered tree had turn 2's `.ctx-turn` header ("What is topic two about?") above turn 1's, each followed by a `.ctx-turn-branches` wrapper containing exactly that turn's branch, correct turn-count badges ("2 turns" each), and `title` attributes carrying the full (untruncated) turn prompt text. Re-ran against the original demo thread (`doc-main`, 2 legacy branches with no `mainTurnId`, from the earlier same-day session) and confirmed they still render correctly with no turn header — the "no turn" fallback path works. Zero console/page errors in both runs. Screenshot reviewed for turn-2-on-top visual ordering.
+- **Follow-up:** None required. Human can spot-check with a longer real conversation (many turns, some with multiple branches) to eyeball spacing/readability at scale, but the grouping/ordering logic is confirmed correct.
+
+## 2026-09-24 — Context panel turn counts / nested tree / collapse — static check + live Playwright E2E — pass
+- **Command category:** static (`node --check`) + live headless Playwright against the real running `:8765` dev server (found already running under another process; left it running, did not start a second instance or kill it), with `page.route()` intercepting `https://api.anthropic.com/v1/messages` to return a hand-built but protocol-correct SSE stream — no real Anthropic API calls or cost.
+- **Result:** pass
+- **Output:** `node --check` clean on `app.js`. Drive script: set a fake key in `localStorage['nl_api_keys']` (never sent anywhere real, since the network call was mocked), selected real text in the main doc via the Range API + `selectionchange`, clicked the selection popover's Branch action, typed + sent a message in the resulting branch composer (mocked reply streamed in via the intercepted route), then selected text inside that branch's own response to create a nested sub-branch and sent a message there too — all through the actual UI code paths, not synthetic state injection (an earlier attempt to seed `branchSnapshots`/`branchRecents` directly via raw IndexedDB was abandoned after confirming the app's own render/normalization pass discards branch state that wasn't created through the live `openBranch()`/`captureBranchSnapshot()` flow — not a bug, just not a valid shortcut for this kind of test). Opened the Context panel: parent row showed "2 turns" and a chevron (has a child), child row was correctly nested inside a `.ctx-branch-children` wrapper with a visible connecting guide line and showed "2 turns" with no chevron (no children); the two pre-existing zero-message demo branches still rendered with no turn badge. Clicking the turn-count badge showed an inline preview with correct "You"/"Assistant" truncated text; clicking the chevron set the children wrapper's computed `display` to `none`; re-expanding and using the composer's attach-branch menu afterward still worked. Zero console/page errors across the whole run. Screenshots reviewed at each step.
+- **Follow-up:** None required — human can spot-check the visual polish (guide-line color/spacing) in the real browser at leisure, but the logic and rendering are confirmed correct end-to-end.
+
+## 2026-09-18 — Bug #049 (Notes nested-bullet copy/export) — static check + scripted logic check — pass
+- **Command category:** static (`node --check`) + scripted logic check (standalone node script, not the real app — `stripHtml`/`getNote` stubbed out since the real implementation needs a browser DOM)
+- **Result:** pass
+- **Output:** `node --check` clean on `frontend/views/notes.js`. Scripted check: fed the patched `blocksToText` recursion logic a 3-level nested bullet list (Products → "Products that I have worked on" → Notlinear/GYST/Interview feedback/ETC, matching the user's reported screenshot) and confirmed every level printed with one extra `  ` indent per depth — previously the two inner levels would have been dropped entirely.
+- **Follow-up:** Human: start the dev server, in a real Notes page Tab-indent a bullet under another bullet, ⌘A ⌘A → ⌘C, paste into a plain-text field and confirm the child bullet is present; also spot-check the "export as .md" path on the same nested structure.
+
+## 2026-09-06 — Syntax-highlighted code blocks (chat/Notes/Coding Projects) — static check + headless Chromium against live :8765 — pass
+- **Command category:** static (`node --check`) + pure-function sanity (`node -e`) + headless-browser smoke (Playwright, `:8765` — the user's already-running server, not a throwaway port)
+- **Result:** pass
+- **Output:** `node --check` clean on `frontend/core/markdown.js`, `frontend/app.js`, `frontend/views/notes.js`, `frontend/views/coding-projects.js`. `node -e` against `renderMarkdown()` confirmed the new `.code-block`/header/copy-button HTML shape for a fenced code block. Installed `playwright-core` into the scratchpad (browsers already cached at `~/Library/Caches/ms-playwright`, no `chromium-cli` available in this environment) and drove the live `:8765` page: injected a synthetic assistant message with a Python code fence through the app's own `renderMarkdown`/`highlightCodeIn` functions (bypassing the need for a live LLM API key), confirmed `.code-block`, `.code-copy-btn`, a `python` language label, and 7 `hljs-keyword`/`hljs-string`/`hljs-comment` spans (real syntax coloring) all present; clicking Copy flipped the button label to "Copied" (needed `context.grantPermissions(['clipboard-write'])` for headless Chromium's Clipboard API). Screenshots reviewed in both light and dark-mono themes — colors read clearly in both, header bar and Copy button both legible. One pre-existing unrelated console 404 seen, not investigated (not caused by this change).
+- **Follow-up:** None required. Did not exercise this through a real streamed LLM response (used a synthetic injected message instead, since testing the render path itself doesn't need a live model) — human can do one real chat turn with a code-block-producing prompt as a final sanity check if desired.
+
+---
+
+## 2026-09-06 — fetch_url/firecrawl_scrape pagination + shared cache — static check + server smoke — pass (partial)
+- **Command category:** static (`node --check`) + live-server sanity (`:8765`, already running)
+- **Result:** pass on what was checked; full manual smoke not run
+- **Output:** `node --check` clean on `frontend/providers/tools.js`, `frontend/providers/claude.js`, `frontend/app.js`. `curl :8765/frontend/index.html` → 200; fetched the live-served `app.js` from the running server and re-ran `node --check` against it to confirm the server is handing out the edited file with no syntax errors.
+- **Follow-up:** No live `fetch_url`/`firecrawl_scrape` tool call was exercised this session (would need a real chat turn triggering the tool against a genuinely long page, plus a Firecrawl key for that half). Human: ask the app to fetch a long page, confirm the `[showing chars X-Y of TOTAL...]` note appears and a follow-up call with `offset` continues correctly; try a `query` term and confirm the window centers on it.
+
+---
+
 ## 2026-08-07 — Model provider upgrade + picker expansion (BUGS #044–#047) — static checks + headless Chromium (throwaway :8799, 4 runs) — pass
 
 - **Command category:** static (`node --check`) + curl + headless Playwright against a throwaway server on `:8799` (never the user's live `:8765` session — their real IndexedDB data was untouched throughout).
@@ -437,3 +479,9 @@ Each entry: **date/time · task or bug ID · command category · result · impor
 - **Result:** pass (full-screen flows); area flows pending human smoke test (native macOS picker can't be driven headlessly)
 - **Output:** `py_compile` + `node --check` clean. Upload/discard routes reject path traversal (`backend/server.py`, `../…`) and accept `feedback/media/` paths. E2E: capture-mode menu shows 2 options; full-screen shot → preview overlay → pen stroke drawn → "Add to report" rewrote the PNG (1,125,593 → 1,170,972 bytes) and added the chip; second capture → Discard deleted the file with no chip; 2.5s full-screen recording → stop → `<video>` preview → Add → chip; zero console errors. Overlay screenshot reviewed (annotation visible). Test media removed; user's own capture kept.
 - **Follow-up:** Human: restart :8765, test both "Select area" flows (shot + recording), annotate, Add, then Save a bug and confirm entry + media in Settings → Feedback.
+
+## 2026-10-03 — per-branch model
+`node --check frontend/app.js` OK. Manual smoke test not run by agent; pending human.
+
+## 2026-10-04 — editable modes
+`node --check` clean on all touched JS. Playwright (headless): 6 menu items → modal opens → create "Teacher" → 7 items → select → chip shows Teacher → persisted in IndexedDB and restored after reload; zero console errors. `core/modes.js` node test: override/reset/delete/fallback OK. Human GUI check of edit/reset/delete pending.

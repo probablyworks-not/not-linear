@@ -20,9 +20,9 @@ This is the canonical list of **what the product does**, organized by area, at t
 - Send button doubles as a **Stop** button while streaming (aborts the in-flight request via `AbortController`); disabled when there's no text and no attachments.
 - **Paste an image** into the textarea auto-attaches it as a file instead of pasting as text.
 - **Attach menu** (`+` chip): Add files, Add folder (recursive, native picker when available), Attach branch (switches the Context panel into a "click a branch to attach/detach" picker mode, with its own toast prompt).
-- **Model picker** (chip + menu), 9 models across 4 providers — see §5.
+- **Model picker** (chip + menu), 9 models across 4 providers — see §5. Per composer: the main chat and each chat branch hold their own model (a branch inherits from its parent/main at creation, then is independent; saved with the branch). Notes branch panels follow the main model.
 - **Extended thinking toggle** — inside the model menu, gated to Sonnet and DeepSeek R1 (see §5 for exact behavior and a reload-persistence quirk).
-- **Conversation mode picker** — General ("Balanced default"), Research ("Search-heavy, cited"), Coding ("Code-focused, precise"), PM ("User & business focus"), CTO ("Build & execute"), Critic ("Devil's advocate"). Each injects a distinct system-prompt persona (Research forces proactive search + a References section; PM closes with Impact/Effort/Open-questions; CTO with Recommendation/Key risks/Open decisions; Critic steel-mans then attacks with a Proceed/Revise/Scrap verdict).
+- **Conversation mode picker** — global (all chats) system-prompt personas. Built-ins: General ("Balanced default"), Research (forces proactive search + a References section), Coding, PM (closes with Impact/Effort/Open-questions), CTO (Recommendation/Key risks/Open decisions), Critic (steel-mans, then Proceed/Revise/Scrap verdict). The menu ends with **New / manage modes**, which opens a modal: list all modes, click a row to edit name / short description / instructions, **+ New mode**, **Reset to default** (edited built-ins), **Delete** (custom only; deleting the active mode falls back to General). A mode is only a system prompt. Stored in `prefs.customModes` / `prefs.modeOverrides` (`core/modes.js`).
 - **"Tools" chip** exists in the composer row but is inert — no click handler wired (visual only).
 - **Attachment chips** — images get a thumbnail + click-to-fullscreen-preview (Escape/click-outside to dismiss); non-image files show name/size/type icon; a branch attached as context shows its quote + turn count; every chip has a remove (×).
 - **Per-turn response actions**: Copy (markdown → clipboard, flips to "Copied!" for 2s), Download .md (native WKWebView save → local-server save dialog → browser File System Access API → `<a download>` blob fallback, in that order), a Sources/References bar when tool results or project-folder context were used, and a Continue button when a reply was cut off by the max-tokens limit (caps at 3 continuations, then "Max continuations reached").
@@ -65,9 +65,10 @@ Appears on any text selection in the doc or a branch body:
 
 ### Context / files panel
 
-- **Hierarchy tree**: Workspace → project (if any) → thread pages → nested branches (indented by depth), each row opens/focuses its branch and has its own delete button.
+- **Hierarchy tree**: Workspace → project (if any) → thread pages → **main-chat turn groups** → nested branches, each row opens/focuses its branch and has its own delete button. A top-level branch created by highlighting inside a live main-chat reply is linked to that specific turn and rendered under a `.ctx-turn` header (truncated user prompt visible, full prompt on hover) — turn groups are ordered most-recent-turn-first, and branches within a turn (and within every nested sub-branch level) are sorted most-recently-touched-first. Branches with no recorded turn (highlighted from the static doc, or created before this linkage existed) render ungrouped below any turn groups. Sub-branches render inside a real nested container per parent (`.ctx-branch-children`) with a continuous left guide-line per depth level, rather than flat rows with per-row indentation.
+- **Branch row detail**: each branch shows a live turn-count badge (e.g. "4 turns", from `branches[id].messages` falling back to the persisted snapshot — hidden entirely for a branch with no turns yet). Clicking the badge expands an inline preview of the branch's last up to 2 turn-pairs (labeled You/Assistant, truncated to ~200 chars each) directly under the row; click again to collapse. A branch with sub-branches gets a chevron toggle (session-only, resets on reload) to collapse/expand that subtree; toggling, previewing, and deleting are independent of the row's own attach/open click.
 - **Page files section** — files attached to the current thread, with size + remove; "Add files to this page" button.
-- **Attach-a-branch picker mode** (entered from the composer's attach menu) — toast "Click a branch to add it as context — click again to remove"; clicking rows toggles them into the composer's attachment list.
+- **Attach-a-branch picker mode** (entered from the composer's attach menu) — toast "Click a branch to add it as context — click again to remove"; clicking rows (not the turn-count/toggle/delete controls) toggles them into the composer's attachment list. Attaching is always whole-branch — no per-turn selection.
 - **Context Ranking popover** (brain icon, only visible when the thread belongs to a project with a linked folder) — per-chat override: Global setting (inherit) / Off / Keywords only / DeepSeek (smart).
 
 ### Thread map
@@ -79,7 +80,6 @@ Appears on any text selection in the doc or a branch body:
 
 - Search (⌘K hint), New chat (⌘N hint).
 - **Projects section** — collapsible; "View all projects" grid icon, "New project" +; rows show emoji/icon (click → picker), name, "…" settings (opens the project panel).
-- **Coding projects section** — separate collapsible header, own "+ Add coding project".
 - **Threads section** — collapsible; each row has an icon button (click/Enter/Space → picker), title, delete (except pinned `doc-main`); threads that belong to a project are hidden from this flat list.
 - **Notes section** — collapsible, "Delete all notes" and "New note" icon buttons.
 - **Product story entry** ("✨ Product story") — opens the fullscreen changelog player.
@@ -92,8 +92,8 @@ Appears on any text selection in the doc or a branch body:
 
 ### Tab strip
 
-- Every open thread is its own closable tab (Notion-style); every open note page is its own closable `note:<id>` tab; Notes index / Coding projects / a blank "New tab" are singleton tabs.
-- `+` opens a blank tab with quick actions: New chat, Existing chat (search palette), Projects, Coding projects, Notes.
+- Every open thread is its own closable tab (Notion-style); every open note page is its own closable `note:<id>` tab; Notes index / a blank "New tab" are singleton tabs.
+- `+` opens a blank tab with quick actions: New chat, Existing chat (search palette), Projects, Notes.
 - Closing the active tab falls back to the next-most-recent, or `doc-main` if none remain.
 - Open tabs and the active tab id persist to `localStorage` (`nl_tabs_v1`).
 
@@ -155,7 +155,7 @@ Appears on any text selection in the doc or a branch body:
 | `⌘N` / `Ctrl+N` | global | new chat |
 | `⌘⇧B` / `Ctrl+Shift+B` | global | toggle Feedback panel |
 | `⌘Q` / `Ctrl+Q` | native shell only | toggle Feedback panel (browsers reserve ⌘Q) |
-| `Escape` | global | prioritized close-stack: branch canvas → story player → search palette → delete-confirm → project panel → projects grid → sidebar (mobile) → context-ranking popover → model menu → mode menu → branch "…" menu → context panel → prefs → else hide selection popover |
+| `Escape` | global | prioritized close-stack: branch canvas → story player → search palette → delete-confirm → modes modal → project panel → projects grid → sidebar (mobile) → context-ranking popover → model menu → mode menu → branch "…" menu → context panel → prefs → else hide selection popover |
 | `Enter` | delete-confirm, Delete focused | confirm |
 | `↑`/`↓` + `Enter` | search palette | navigate / select |
 | `⌘B`/`⌘I`/`⌘U` | Notes floating toolbar | Bold/Italic/Underline (see §2) |
@@ -289,50 +289,7 @@ The actual comment/thread system is AI-chat branches, not plain comments. The pa
 
 ## 3. Coding Projects
 
-Notion-style dashboard over real local folders, own registry in `localStorage`.
-
-### Navigation
-
-- Full-screen overlay launched from a collapsible sidebar section (own "+" add button, collapse state in `nl_cp_side_collapsed_v1`).
-- Breadcrumb: "coding projects" `/` `<project name>`; Back button and Escape both step back one level at a time (popover → drawer → project page → list → chat).
-- Sidebar mirrors the registry live for direct-open.
-
-### List view
-
-- **List/gallery toggle** (session-sticky, not persisted across reload), **rescan** (clears the in-memory scan cache and re-scans everything), **"+ add folder"**.
-- No text search/sort — order is most-recently-added first.
-- Each row: icon (emoji, Mind Garden token, or folder fallback), name + an **attention dot** (bugs.md missing, OR open bugs and stale >14 days, OR >1 of the 4 convention docs missing), path, an LLM-generated (DeepSeek, if configured) or heuristic **status sentence** ("what shipped · next: <task>", ~18 words, cached per path+mtime in `nl_cp_status_cache_v1`), 🐛 bug count (unchecked `- [ ]` in bugs.md), relative last-updated, 💬 comment count.
-- Gallery mode: same data as a responsive card grid, status clamped to 2 lines.
-- Empty state: "add a folder to start, or point notlinear at one root folder and all your projects show up" — "add folder" (active) and "set root" (disabled, "coming later").
-
-### Adding a project
-
-- Popover: folder path input + native-picker "browse…" button, optional display name (defaults to the folder's last path segment), icon picker; footer Cancel / Add project (disabled until a path is entered). Toast "added <name>".
-- **No delete-project action exists** — projects can be renamed/re-iconed but not removed from the UI.
-
-### Project detail page
-
-- Header: large icon, editable title (blur/Enter renames, toast "renamed"), path.
-- Meta strip: `<N> md files · <X>/4 convention docs · <N> open bugs · updated <relTime> · manual`.
-- **Files block**: 2-column grid, one cell per discovered markdown file (icon, path, size or "too large"), click opens the preview drawer; empty state "no markdown files found"; truncation notice at 200 files.
-- **Notes & comments block**: live count badge, composer (⌘/Ctrl+Enter to post), thread newest→oldest, empty state "no notes yet — capture a thought, a TODO, anything."
-- There is **no separate rendered bug-list/task-list/changelog/overview** — those 4 convention docs only drive the meta-strip counts, the bug badge, and the status sentence; they appear as regular cells in the same file grid as every other `.md` file.
-
-### File preview drawer
-
-- Right-side slide-in: full path, size (or "too large to preview"), a "reveal in Finder" button that currently just toasts **"reveal in finder — coming later"** (not implemented), close button.
-- Renders via the shared markdown renderer; closes via close button, Escape, outside click, or navigating back.
-
-### Comments
-
-- Two surfaces, one `localStorage` store (`nl_cp_comments_v1`): a popover from the list-row 💬 chip (oldest→newest, auto-scrolled to bottom) and the project-page thread (newest→oldest).
-- Composer: auto-grow textarea (caps ~120px), ⌘/Ctrl+Enter or a send button; author = `prefs.name` (default "You"), gradient-circle avatar initial.
-- Hover-reveal delete (×) per comment, toast "comment deleted"; counts sync live between both surfaces.
-
-### Editing title / icon
-
-- Title: inline input, blur/Enter persists + syncs sidebar, toast "renamed".
-- Icon: shared emoji/Mind-Garden picker on both the list row and the detail header, immediate persist, toast "icon updated".
+**Removed 2026-09-29.** See `docs/coding-projects-archive.md` for what it did and how to restore it.
 
 ---
 
@@ -422,16 +379,20 @@ Every chat and every branch can independently choose its own model. Selecting on
 | Tool | What it does | Requires | Timeout | Notable limits/errors |
 |---|---|---|---|---|
 | `wikipedia_search` | Searches Wikipedia, fetches the top hit's summary + 2 related titles | — | 12s | "No Wikipedia results found for: \<query\>" |
-| `fetch_url` | Reads a URL via Jina Reader (`r.jina.ai`) | — | 8s | truncated to 4000 chars; Claude-only per-session cache by URL |
+| `fetch_url` | Reads a URL via Jina Reader (`r.jina.ai`) | — | 8s | windowed to 4000 chars per call; model can pass `offset` (resume position) or `query` (jump to a match) to read further; shared per-session cache by URL across all providers |
 | `web_search` | Google-style search via self-hosted SearXNG | SearXNG URL in Settings | 12s | fatal if unconfigured: "Web search is not configured. Add a SearXNG URL in Settings, or add a Serper key." |
 | `serper_search` | Google search via Serper.dev, incl. a direct-answer box | Serper API key | 12s | fatal if missing key; 429 → "Serper search is rate limited. Wait a moment and try again." |
-| `firecrawl_scrape` | Full-page scrape to markdown via Firecrawl | Firecrawl API key | 24s (longest) | truncated to 6000 chars; fatal if missing key |
+| `firecrawl_scrape` | Full-page scrape to markdown via Firecrawl | Firecrawl API key | 24s (longest) | windowed to 6000 chars per call; model can pass `offset` or `query` to read further; fatal if missing key |
 
 Non-fatal tool errors are fed back to the model as `Tool error (<name>): <message>` so it can try something else; *fatal* tool errors (missing required config/key) abort the whole turn and show the message directly to the user.
+
+`fetch_url`/`firecrawl_scrape` never dump a whole long page at once: each result is a bounded window into the page ending with a `[showing chars X-Y of TOTAL. Call again with offset:Y to continue, or query:"term" to jump to a match.]` note when there's more to read, so the model can page through a page longer than one window or jump straight to a relevant section instead of only ever seeing the head of the document (see ADR-029).
 
 ### Markdown rendering (chat/branch responses)
 
 Bold/italic, inline code, markdown + auto-linked bare URLs, full GFM-style pipe tables (with column alignment), fenced code blocks, **Mermaid diagrams** (dark-themed, `securityLevel:'loose'`, rendered client-side, graceful fallback while a fence is still streaming/unclosed), headings, horizontal rules, ordered/unordered lists, and two LLM-output-specific heuristics: "label lines" (`Label: value` → styled as a mini definition line) and auto-inserted paragraph breaks before common field labels (`Model:`, `Status:`, `References:`, `Source(s):`, etc.) so compact/glued model output still displays as separate lines. **No LaTeX/math rendering** in chat (that's Notes-only, via KaTeX).
+
+**Fenced code blocks** render with real `hljs` syntax coloring (a dedicated `--syn-*` color palette per theme, since the rest of the app's tokens are deliberately monochrome) and a header bar showing the fence's language plus a **Copy** button (copies the code, label flips to "Copied" briefly). The same treatment applies to Notes' AI-branch replies and the Coding Projects markdown file preview, since all three share `core/markdown.js`'s `renderMarkdown()`/`highlightCodeIn()`.
 
 ---
 
@@ -441,7 +402,7 @@ Bold/italic, inline code, markdown + auto-linked bare URLs, full GFM-style pipe 
 - **Delete confirm dialog** — generic reusable modal (Promise-based); focus starts on Cancel (safe default against a stray Enter), restores focus to whatever triggered it on close.
 - **Emoji/icon picker** — despite the name and a 210-entry curated emoji list still present in code, the actual picker popover **no longer offers emoji at all**; it's Mind-Garden-icons-only (comment in code: "Mind Garden is the single source of glyphs across the app"). The raw emoji list is still used directly elsewhere (e.g. the inline add-project quick-grid). Picker: live keyword search, an 11-color tint palette, Escape closes, Enter picks the first filtered icon, outside-click closes; fixed 300×380px popover, viewport-clamped.
 - **Mind Garden icon system** — 251 hand-drawn SVG icons across 21 sections, parsed once from a design sheet (`frontend/mind-garden-icons.html`) and cached for the session, each renderable at any size in `currentColor` or one of **11 fixed tint colors** (default/black/gray/brown/mustard/orange/green/blue/purple/pink/red). Sections: Flowers, Trees, Leaves & Greenery, Fruits & Seeds, Birds, Helpful Creatures, Snakes & Weeds, Mind & Philosophy, Elements & Weather, Objects of the Garden, UI, Heroes, Water Garden, Night Garden, Seasons, Valleys, Mountains, Rivers, Numbers, Hindi Vowels, Hindi Consonants. The last two sections are literal Devanagari-script glyphs (Google Fonts "Kalam", loaded via a second `<link>` in the sheet's `<head>`) rather than hand-drawn line art — each is a bare `<text fill="currentColor">` wrapped in `<g>` (the sheet's loader in `frontend/core/mind-garden.js` only picks up `svg > g`, so every entry, glyph or line-art, needs that wrapper) so they still tint through the same `currentColor`/hex-override path as every other icon. Token format: `icon:<id>` or `icon:<id>:<hex>`.
-- **View registry / top-level navigation** — a single-active-view Map controller. Registered views: `chat` (default canvas, inline), `blank` (New tab empty state), `notes` (overlay), `coding-projects` (overlay). Settings, Product story, and the Projects grid are deliberately outside this registry/tab system (separate modal/panel UI).
+- **View registry / top-level navigation** — a single-active-view Map controller. Registered views: `chat` (default canvas, inline), `blank` (New tab empty state), `notes` (overlay). Settings, Product story, and the Projects grid are deliberately outside this registry/tab system (separate modal/panel UI).
 - **Autosave timing** — every save writes the whole state blob to IndexedDB immediately (no user-visible error surfaced on save failure, just a console warning); most interactions (delete/rename/prefs/theme/model changes, etc.) save synchronously on the action; only high-frequency updates — live-streaming AI text — are debounced (350ms) so the DB isn't hit on every token.
 
 ---
@@ -453,7 +414,7 @@ Python stdlib only (`ThreadingHTTPServer`, `127.0.0.1:8765`), serves the whole r
 | Endpoint | User-facing capability | Limits |
 |---|---|---|
 | `/__notlinear_pick_folder` | Native folder-choose dialog | 120s timeout |
-| `/__notlinear_scan_project` | Recursive read-only scan for Coding Projects (shallow top-level listing, README/CHANGELOG/BUGS/TASKS by stem, every markdown file, plus a code+config file list for LLM context) | listing capped at 500 entries; any single file read capped at 1MB (`tooBig` beyond that); markdown files capped at 200 (truncation flag); context files capped at 300 (own truncation flag); skips `.git`/`node_modules`/`dist`/etc.; all reads path-confined to inside the given folder |
+| `/__notlinear_scan_project` | Recursive read-only scan used by chat Projects' linked-folder context (shallow top-level listing, README/CHANGELOG/BUGS/TASKS by stem, every markdown file, plus a code+config file list for LLM context) | listing capped at 500 entries; any single file read capped at 1MB (`tooBig` beyond that); markdown files capped at 200 (truncation flag); context files capped at 300 (own truncation flag); skips `.git`/`node_modules`/`dist`/etc.; all reads path-confined to inside the given folder |
 | `/__notlinear_open_files` | Native file **or** folder multi-select attach picker | 20MB per-file cap (base64-encoded), oversized files listed as `tooBig` with no content |
 | `/__notlinear_save_file` | Native Save dialog for AI-generated content | forces a `.md` extension if the chosen name lacks one |
 | `/__notlinear_feedback_shot` | Screenshot capture (`screencapture -x -t png`); `-i` for interactive area select | 240s (area) / 30s (full) timeout; permission errors surfaced as a Screen Recording permission hint |
@@ -487,8 +448,6 @@ Worth tracking separately since these look clickable but currently do nothing (o
 
 - Composer **"Tools" chip** — no click handler.
 - Selection popover **Bold / Italic / Link** buttons — no handler, just close the popover.
-- Coding Projects **"reveal in Finder"** drawer button — toasts "coming later".
-- Coding Projects **"set root"** (scan-a-root-folder-for-all-projects) — disabled, tooltip "coming later"; only manual per-project add exists today.
 - Branch-canvas edge-connector drawing function exists in code but is force-disabled (`showEdges = false`) — not user-reachable.
 - `prefs.thinking` (Extended thinking) is saved but forcibly reset to `false` on every reload — behaves as if it doesn't persist.
 
@@ -498,9 +457,9 @@ Worth tracking separately since these look clickable but currently do nothing (o
 
 - **Dexie `notlinear`** — chat/thread/project/branch state, single `kv` store, one `state` record holding the whole serialized app state. One-time migration from legacy `localStorage` key `nl_state_v2` on first load. Static built-in thread ids: `doc-main`, `pricing`, `onboarding`, `planning`.
 - **Dexie `notlinear-notes`** — Notes only, single `kv` store, deliberately separate (ADR-007). One-time migration from legacy `nl_notes_v1` localStorage payload.
-- **`localStorage` keys**: `nl_side_collapsed_v1` (sidebar section collapse), `nl_tabs_v1` (open tabs), `nl_cp_side_collapsed_v1` (Coding Projects sidebar collapse), `nl_cp_projects_v1` (Coding Projects registry), `nl_cp_comments_v1` (Coding Projects comments), `nl_cp_status_cache_v1` (status-sentence cache), API keys (per-provider, plain).
+- **`localStorage` keys**: `nl_side_collapsed_v1` (sidebar section collapse), `nl_tabs_v1` (open tabs), API keys (per-provider, plain).
 - **Filesystem** — `feedback/FEEDBACK.md` + `feedback/media/` (Feedback capture, ADR-013), `logs.md` (runtime log sync), `CHANGELOG.md` (Product story / Settings changelog source). None of these touch Dexie.
 
 ---
 
-*Last compiled 2026-08-02 by direct codebase inspection (`frontend/app.js`, `frontend/views/notes.js`, `frontend/views/coding-projects.js`, `frontend/core/*.js`, `frontend/providers/*.js`, `backend/server.py`, `index.html`, `redesign_product.md`, `BUGS.md`, `AGENTS.md`). If you land a feature and don't see it here, add it in the same session — see the update rule at the top of this file.*
+*Last compiled 2026-08-02 by direct codebase inspection (`frontend/app.js`, `frontend/views/notes.js`, `frontend/core/*.js`, `frontend/providers/*.js`, `backend/server.py`, `index.html`, `redesign_product.md`, `BUGS.md`, `AGENTS.md`). If you land a feature and don't see it here, add it in the same session — see the update rule at the top of this file.*

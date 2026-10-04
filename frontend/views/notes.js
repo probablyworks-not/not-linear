@@ -1,6 +1,42 @@
 /* Notes — Notion-style notebook view (per notes_product.md, implemented
    against the design-bundle reference notes-editor.js + Notes.html).
 
+   WHAT THIS FEATURE IS (see notes_product.md / AGENTS.md "FEATURE — Notes"):
+   A personal notebook, entered from a top-level sidebar section, that opens
+   a full-screen overlay page editor. Pages are made of typed "blocks"
+   (text/headings/lists/todo/toggle/quote/callout/divider/code/equation/
+   image/table/columns/page-link, plus media/file/bookmark/embed) that the
+   user assembles with a "/" slash menu, and can format inline text with a
+   floating selection toolbar. This view is registered with the rest of the
+   app's view system (core/registry.js, view id 'notes') and is strictly
+   ADDITIVE — it must never change chat/threads/branches.
+
+   DOM STRUCTURE this module drives (declared in frontend/index.html, styled
+   in frontend/styles/notes.css scoped under .nt-screen):
+   - #nt-side-head / #nt-side-tree — the persistent sidebar section (page
+     tree, add/duplicate/delete affordances) that lives outside the overlay
+     so users see their notes without opening Notes.
+   - #nt-screen — the full-screen overlay that hosts the page editor itself
+     (crumbs, page title/tags/cover, the block list).
+   - #nt-slash — the "/" slash-command menu for inserting/turning blocks.
+   - #nt-mention — the "@" mention menu for inline note/chat references.
+   - #nt-ftoolbar — the floating format toolbar shown on text selection.
+   - #nt-branch-stack / #nt-branch-menu — floating "ask AI" branch panels
+     anchored to note text (see "note branches" section below).
+   - an emoji/icon popover (core/emoji.js) for page icons and callout emoji.
+   All of the above use an `nt-*` id/class prefix specifically so they can
+   never collide with the main chat shell's ids/classes.
+
+   PERSISTENCE (ADR-007 — deliberate, not accidental):
+   Notes is intentionally NOT stored in the main chat `notlinear` Dexie db
+   (frontend/core/store.js). It opens its own separate Dexie database,
+   `notlinear-notes`, with a single `kv` key/value store (see the
+   "persistence" section below). This keeps Notes' schema fully decoupled
+   from chat/threads/projects so it can evolve (or be removed) without ever
+   touching the chat schema, and vice versa. Do NOT fold Notes into the
+   `notlinear` db or bump its `db.version` for Notes' sake — see ADR-007 in
+   docs/project-notes/DECISIONS.md.
+
    Differences from the PRD:
    - Persistence is Dexie (IndexedDB), not localStorage. We open a separate
      `notlinear-notes` db so the existing `notlinear` db schema is untouched.
@@ -10,13 +46,33 @@
    - Toast comes from core/ui.js; emoji popover stays local because the
      PRD specifies the 8-col grid + random/remove affordance. */
 
+// registerView/mountView wire this module into the shared view-switcher (the
+// mechanism any view, chat included, uses to become the active full-screen
+// surface); openChatTab/openNoteTab/refreshOpenTabs let Notes open/refresh
+// tabs in the shared tab strip without reaching into chat's own state.
 import { registerView, mountView, openChatTab, openNoteTab, refreshOpenTabs } from '../core/registry.js';
+// Shared UI helpers used by chat too — toast (transient status message) and
+// confirmDeleteItem (the shared "are you sure" dialog); wireTabInsertsTab
+// makes Tab insert a literal tab character in the branch composer textareas
+// instead of shifting focus.
 import { toast, confirmDeleteItem, wireTabInsertsTab } from '../core/ui.js';
+// Shared emoji/icon popover (page icons, callout icons) — kept in core so
+// chat and Notes both get the same picker UI without duplicating it.
 import { openEmojiPicker, closeEmojiPicker } from '../core/emoji.js';
+// Mind Garden icon set — lets a page/callout icon be a themed SVG token
+// ("icon:<id>[:<hex>]") instead of only a plain emoji glyph.
 import { loadMindGarden, renderIconSvg, parseIconToken } from '../core/mind-garden.js';
-import { renderMarkdown } from '../core/markdown.js';
+// Shared Markdown-to-HTML renderer, used only for AI branch replies (note
+// body text itself is NOT markdown-rendered — it's stored/edited as rich
+// contentEditable HTML in `b.text`).
+import { renderMarkdown, highlightCodeIn } from '../core/markdown.js';
+// Shared fetch wrapper (adds logging/timeout) used for the link-preview
+// (bookmark) backend call.
 import { loggedFetch, readResponseBody } from '../core/api-client.js';
+// Read-only access to chat's in-memory thread list, used only to populate
+// the "@mention a chat" candidates — Notes never writes to appState/chat state.
 import { appState } from '../core/state.js';
+import { providerForModelPref, modelIdForModelPref, modeSystemPromptParts } from '../providers/tools.js';
 
 // Render a Mind Garden icon token ("icon:<id>[:<hex>]"), a custom uploaded
 // image token ("img:<dataURL>"), or a plain emoji glyph. Returns HTML —
@@ -35,21 +91,34 @@ function glyphHTML(value, fallback = '📄', size = 22){
   return escapeHtml(value);
 }
 
+// Tiny local DOM/format helpers — scoped to this module only (not shared
+// with chat's own `$`/`$$` helpers in app.js, to keep the two views decoupled).
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
 const clamp = (n, min, max) => Math.min(Math.max(n, min), max);
 const truncate = (s, n = 70) => (s || '').length > n ? (s || '').slice(0, n - 1).trim() + '…' : (s || '');
 
 // ---------- persistence (Dexie, separate db so we don't touch chat schema) ----------
+// ADR-007: Notes deliberately opens its OWN Dexie database (`notlinear-notes`)
+// rather than sharing frontend/core/store.js's `notlinear` db used by chat.
+// This is an intentional architectural boundary, not an oversight — it means
+// Notes' schema can change freely without a chat db.version bump, and chat's
+// persistence (a documented bug-cluster area) is never put at risk by Notes
+// work. The db has a single `kv` store (key -> value blob), holding three
+// top-level keys defined below rather than one row per note.
 // eslint-disable-next-line no-undef
 const db = new Dexie('notlinear-notes');
 db.version(1).stores({ kv: 'key' });
 
-const STORE_KEY = 'nl_notes_v1';
-const SEL_KEY = 'nl_notes_selected_v1';
-const OPEN_KEY = 'nl_notes_open_v1';
+const STORE_KEY = 'nl_notes_v1';    // the full notes array (every page + its blocks)
+const SEL_KEY = 'nl_notes_selected_v1'; // last-open note id, restored on reload
+const OPEN_KEY = 'nl_notes_open_v1';    // set of sidebar-tree ids currently expanded
 
 let saveTimer = null;
+// Debounced save (~180ms), matching the repo-wide pattern of "typed content
+// is debounced, not written on every keystroke." Every block/title/tag edit
+// calls save() (not writeState() directly) so rapid typing coalesces into a
+// single Dexie write instead of one per keystroke.
 function writeState(){
   return Promise.all([
     db.kv.put({ key: STORE_KEY, value: state.notes }),
@@ -70,6 +139,9 @@ function touchSelected(){
   const n = getNote(state.selectedId);
   if (n) n.updatedAt = Date.now();
 }
+// Bypasses the debounce for save sites that need the write to land
+// immediately (e.g. deletion) rather than possibly being lost to a page
+// unload before the 180ms timer fires.
 async function saveNow(){
   if (saveTimer){
     clearTimeout(saveTimer);
@@ -86,6 +158,10 @@ async function saveNow(){
 function uid(p='b'){ return p + '_' + Math.random().toString(36).slice(2,9); }
 function escapeHtml(s){ return (s || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 
+// Single in-memory source of truth for the whole feature — notes (pages +
+// their block trees), which note/tab is open, which sidebar rows are
+// expanded, and whether the index (overview) is showing instead of a page.
+// Mutated directly by the functions below, then persisted via save()/saveNow().
 const state = {
   notes: [],
   selectedId: null,
@@ -94,6 +170,11 @@ const state = {
   showIndex: false,
 };
 
+// Reads the three kv keys from the notlinear-notes db into `state`, with a
+// one-time fallback: if this is the very first load after the feature
+// shipped (no `nl_notes_v1` row in Dexie yet), migrate any pre-existing
+// localStorage payload from the original PRD-specified storage and clear it
+// so the migration only ever runs once.
 async function loadState(){
   try {
     const [rawNotes, rawSel, rawOpen] = await Promise.all([
@@ -129,10 +210,18 @@ async function loadState(){
 }
 
 // ---------- tree helpers ----------
+// Notes form two independent trees: the sidebar page tree (n.parent, walked
+// by kidsOf/pathOf) and each page's own block tree (b.children/b.cols,
+// walked by findBlock and friends below). Both are plain arrays of plain
+// objects — there is no normalized/indexed store, so every lookup here is a
+// linear scan; fine at notebook scale, not meant to scale to thousands of pages.
 function getNote(id){ return state.notes.find(n => n.id === id); }
 function kidsOf(pid){ return state.notes.filter(n => n.parent === pid); }
 function pathOf(id){ const out = []; let cur = getNote(id); while (cur){ out.unshift(cur); cur = cur.parent ? getNote(cur.parent) : null; } return out; }
 function noteTabId(id){ return 'note:' + id; }
+// Recursively locates a block by id anywhere in a page's block tree —
+// straight children, toggle/indent `.children`, or `.cols` (column) arrays —
+// returning its containing list/index/path so callers can splice it in place.
 function findBlock(blocks, id, path = []){
   for (let i = 0; i < blocks.length; i++){
     const b = blocks[i];
@@ -196,11 +285,18 @@ function openEmojiPop(target, anchor){
 function closeEmojiPop(){ closeEmojiPicker(); }
 
 // ---------- sidebar tree ----------
+// Renders the persistent #nt-side-tree (in the app's always-visible sidebar,
+// not the #nt-screen overlay) so the page tree is visible even when Notes
+// isn't the active view. Rebuilt wholesale on every call — simple, and cheap
+// enough at notebook scale.
 function renderSidebar(){
   const host = $('#nt-side-tree'); if (!host) return;
   host.innerHTML = '';
   kidsOf(null).forEach(n => host.appendChild(renderRow(n, 0)));
 }
+// Builds one sidebar row (expand caret, icon, title, add/duplicate/delete
+// actions) plus its expanded children, recursively. depth drives indent via
+// inline padding-left rather than nested CSS, since tree depth is unbounded.
 function renderRow(n, depth){
   const wrap = document.createElement('div');
   const row = document.createElement('div');
@@ -239,11 +335,17 @@ function renderRow(n, depth){
   return wrap;
 }
 
+// Gathers a note and every descendant subpage id — used before deletion so
+// the whole subtree is removed together, not just the clicked page.
 function collectNoteIds(noteId){
   const collect = id => { const ids = [id]; kidsOf(id).forEach(c => ids.push(...collect(c.id))); return ids; };
   return collect(noteId);
 }
 
+// Shared delete path for both "delete one note (+ subpages)" and "delete all
+// notes" — filters the ids out of state, fixes up openIds/selectedId, then
+// flushes immediately with saveNow() (not the debounced save()) since a
+// deletion should never be silently lost to an unload racing the 180ms timer.
 async function deleteNoteIds(ids, message){
   closeAllNoteBranches();
   const idSet = new Set(ids);
@@ -322,6 +424,11 @@ function newPage(parentId){
 }
 
 // ---------- duplicate page (deep copy, fresh ids, subpages included) ----------
+// Deep-clones a block list via JSON round-trip (cheap and safe since blocks
+// are plain JSON-serializable data, never DOM nodes or functions), then
+// assigns every block a fresh id so the copy shares no identity with the
+// original — required because ids are used as branch anchors, drag targets,
+// and DOM dataset keys.
 function deepCopyBlocks(list){
   return (list || []).map(b => {
     const c = JSON.parse(JSON.stringify(b));
@@ -331,6 +438,9 @@ function deepCopyBlocks(list){
     return c;
   });
 }
+// Recursively copies a page and all its sidebar-tree subpages under a new
+// parent, preserving the subtree shape (each child gets its own fresh copy
+// parented to the corresponding copy above it, not all flattened under one node).
 function duplicateSubtree(sourceId, newParentId){
   const src = getNote(sourceId); if (!src) return null;
   const now = Date.now();
@@ -339,6 +449,10 @@ function duplicateSubtree(sourceId, newParentId){
   kidsOf(sourceId).forEach(c => duplicateSubtree(c.id, copy.id));
   return copy;
 }
+// Duplicates a page (and subpages) then splices the top-level copy directly
+// after the original in state.notes purely for a nicer sidebar ordering —
+// array order elsewhere doesn't matter since rendering is driven by
+// n.parent, not array position.
 function duplicatePage(noteId){
   const src = getNote(noteId); if (!src) return;
   const copy = duplicateSubtree(noteId, src.parent);
@@ -352,6 +466,10 @@ function duplicatePage(noteId){
 }
 
 // ---------- drag-to-reparent (sidebar tree) ----------
+// Native HTML5 drag-and-drop (dragstart/dragover/drop) reparents a sidebar
+// row onto another row (nest under it) or onto the tree background (move to
+// top level, wired in wireSidebar() below). sideDragCtx tracks the in-flight
+// drag's source id across the drag/dragover/drop event sequence.
 let sideDragCtx = null;
 function clearSideDropMarks(){
   $$('#nt-side-tree .nt-nrow.drop-into').forEach(x => x.classList.remove('drop-into'));
@@ -363,6 +481,9 @@ function reparentNote(id, newParentId){
   save(); renderSidebar();
   toast(newParentId ? `moved into ${getNote(newParentId).title || 'Untitled'}` : 'moved to top level');
 }
+// Attaches the drag handlers to one sidebar row. Guards against dropping a
+// note onto its own descendant (collectNoteIds(sideDragCtx.id).includes(n.id))
+// which would otherwise create a cycle in the parent tree.
 function wireSideDrag(row, n){
   row.draggable = true;
   row.addEventListener('dragstart', e => {
@@ -417,6 +538,8 @@ function downscaleImage(file, { maxW, maxH = Infinity, square = false, mime = 'i
     fr.readAsDataURL(file);
   });
 }
+// Downscales and stores a chosen file as the page's cover photo (dataURL,
+// inline in the note object — see downscaleImage's size-budget note above).
 async function applyCoverFile(n, f){
   if (!f) return;
   try {
@@ -426,6 +549,13 @@ async function applyCoverFile(n, f){
 }
 
 // ---------- page render ----------
+// The single "render the whole open page" function — cover, icon, title,
+// tags, meta line, the block list, the trailing click-to-add-block spacer,
+// and the bottom "ask AI about this note" CTA. Called after essentially
+// every mutation (renderPage() is the feature's re-render, not a diffed
+// virtual-DOM update) — acceptable at notebook scale, and it keeps every
+// other function in this file simple: mutate `state`, call save(), call
+// renderPage().
 function renderPage(){
   const pageEl = $('#nt-page'); const crumbsEl = $('#nt-crumbs');
   if (!pageEl || !crumbsEl) return;
@@ -476,6 +606,10 @@ function renderPage(){
     rmBtn.addEventListener('click', e => { e.stopPropagation(); delete n.cover; n.updatedAt = Date.now(); save(); renderPage(); });
     repoBtn.addEventListener('click', e => {
       e.stopPropagation();
+      // Vertical-drag-to-reposition: update the cover's CSS object-position
+      // live on every mousemove for immediate visual feedback, but only call
+      // save() once on mouseup — position changes save on drag-end, same as
+      // block/branch drag elsewhere in this file, so a drag doesn't spam Dexie.
       const startY = e.clientY; const startPos = n.cover.posY ?? 50;
       const rect = coverWrap.getBoundingClientRect();
       const onMove = mv => {
@@ -522,6 +656,9 @@ function renderPage(){
   iconWrap.appendChild(iconActs);
   pageEl.appendChild(iconWrap);
 
+  // Page title is its own contentEditable (not a block) — Enter moves focus
+  // into the first block's editor instead of inserting a newline, matching
+  // Notion's "title is a single line" behavior.
   const title = document.createElement('div'); title.className = 'pg-title'; title.contentEditable = 'true';
   title.textContent = n.title || '';
   title.dataset.empty = n.title ? 'false' : 'true';
@@ -576,7 +713,10 @@ function renderPage(){
   });
   pageEl.appendChild(tail);
 
-  // bottom CTA — ask AI about this note
+  // bottom CTA — ask AI about this note.
+  // This creates a note-wide branch (quote:null, blockId:null) rather than a
+  // text-anchored one — see the "note branches" section far below for how
+  // text-anchored vs. note-wide branches differ.
   const cta = document.createElement('div'); cta.className = 'nt-branch-cta';
   const ctaIcon = document.createElement('i'); ctaIcon.className = 'ti ti-sparkles'; cta.appendChild(ctaIcon);
   const ctaInp = document.createElement('div'); ctaInp.className = 'nt-branch-cta-inp'; ctaInp.contentEditable = 'true'; ctaInp.dataset.ph = 'Ask AI about this note…';
@@ -596,6 +736,9 @@ function renderPage(){
   pageEl.appendChild(cta);
 }
 
+// Cheap targeted DOM patch (vs. a full renderPage()) for the one case where
+// only the breadcrumb trail's current-page label needs to change — typing
+// in the title on every keystroke.
 function updateCurrentCrumbLabel(){
   const n = getNote(state.selectedId);
   const lab = $('#nt-crumbs .nt-crumb.current .nt-lab');
@@ -603,6 +746,8 @@ function updateCurrentCrumbLabel(){
 }
 
 // ---------- index render (overview of all pages) ----------
+// Human-relative timestamp ("3 minutes ago") for the sidebar/index "updated"
+// meta line; falls back to an absolute date once it's more than a few weeks old.
 function timeAgo(ts){
   if (!ts) return '';
   const diff = Date.now() - ts;
@@ -774,6 +919,9 @@ function renderBentoCard(n, idx){
 }
 
 // ---------- media/file/bookmark/embed helpers (A4-A7) ----------
+// Sniffs a pasted URL into a playable media kind (YouTube/Vimeo get an
+// embeddable player URL synthesized; direct .mp4/.mp3-style links get a
+// native <video>/<audio> tag; anything else falls back to a plain link card).
 function classifyMediaUrl(url){
   const yt = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([\w-]+)/);
   if (yt) return { kind:'youtube', embedSrc:'https://www.youtube.com/embed/' + yt[1] };
@@ -817,6 +965,11 @@ function transformEmbedUrl(url){
   const match = EMBED_ALLOWLIST.find(e => e.test.test(url));
   return match ? match.embed(url) : null;
 }
+// Fetches a link-preview (title/description/domain/favicon) for a bookmark
+// block from the backend proxy (avoids CORS/leaking the request from the
+// client directly to arbitrary third-party sites). On any failure, marks the
+// block fetchFailed so renderBlock falls back to a plain link card rather
+// than getting stuck on a permanent loading state.
 async function fetchBookmark(b, url){
   try {
     const res = await loggedFetch('/__notlinear_link_preview', {
@@ -831,7 +984,16 @@ async function fetchBookmark(b, url){
   touchSelected(); save(); renderPage();
 }
 
-// ---------- block render ----------
+// ---------- block render / rendering (block model) ----------
+// Builds the DOM for a single block, dispatching on b.type — this is the
+// heart of the block model described in notes_product.md. Every block gets
+// a shared gutter (add-below / drag-grip) and a `.content` slot whose inner
+// markup depends on the type (contentEditable "editor" for rich-text types,
+// or bespoke widget markup for image/table/media/file/bookmark/embed/cols/
+// toc/page-link). Recurses into b.children (toggle contents, or any
+// Tab-indented block) and b.cols (multi-column layout) to render nested
+// block trees. Called once per block from renderPage() and recursively from
+// itself for nested content.
 function renderBlock(b, parentList, note){
   const el = document.createElement('div'); el.className = 'b ' + b.type; el.dataset.bid = b.id;
   if (b.type === 'toggle' && b.headingLevel) el.classList.add('is-h' + b.headingLevel);
@@ -923,6 +1085,9 @@ function renderBlock(b, parentList, note){
       const handle = document.createElement('div'); handle.className = 'img-resize-handle'; handle.title = 'drag to resize';
       handle.addEventListener('mousedown', e => {
         e.preventDefault(); e.stopPropagation();
+        // Live-resize the <img> width on every mousemove; only persist
+        // (touchSelected + save) once on mouseup — the drag-ends-then-saves
+        // pattern used throughout this file for size/position changes.
         const startX = e.clientX; const startW = img.getBoundingClientRect().width;
         const maxW = content.clientWidth || slot.clientWidth || 800;
         const onMove = mv => { img.style.width = Math.max(120, Math.min(startW + (mv.clientX - startX), maxW)) + 'px'; };
@@ -1149,6 +1314,10 @@ function renderBlock(b, parentList, note){
     });
     content.appendChild(ed);
   } else {
+    // Default/fallback path — every plain rich-text block type (text,
+    // h1-h4, bullet, numbered, todo, toggle's own label, quote, callout)
+    // renders as one contentEditable "editor" div whose innerHTML IS the
+    // persisted b.text; see attachEditor() for the input/keydown wiring.
     const ed = document.createElement('div'); ed.className = 'editor'; ed.contentEditable = 'true'; ed.dataset.ph = phFor(b);
     ed.innerHTML = b.text || '';
     attachEditor(ed, b, parentList, false, note);
@@ -1185,6 +1354,7 @@ function renderBlock(b, parentList, note){
   return el;
 }
 
+// Placeholder text shown (via CSS ::before on data-ph) when a block's editor is empty.
 function phFor(b){
   if (b.type === 'h1') return 'Heading 1';
   if (b.type === 'h2') return 'Heading 2';
@@ -1198,15 +1368,26 @@ function phFor(b){
   return "Type '/' for commands";
 }
 
+// Focuses a block's editor by id and places the caret at its end — used
+// after every structural block operation (insert/split/indent/outdent) that
+// is immediately followed by `setTimeout(() => focusBlock(id), ~20)`. The
+// small delay lets the just-triggered renderPage() finish rebuilding the DOM
+// first, since the target element doesn't exist yet during the same tick.
 function focusBlock(id){
   const ed = $('#nt-page')?.querySelector('[data-bid="' + id + '"] .editor');
   if (ed){ ed.focus(); placeCaretEnd(ed); }
 }
+// Collapses the browser Selection to the end of an element's content —
+// the standard DOM Range recipe for "put the caret at the end" since there's
+// no simpler native API for contentEditable elements.
 function placeCaretEnd(el){
   const r = document.createRange(); r.selectNodeContents(el); r.collapse(false);
   const s = window.getSelection(); s.removeAllRanges(); s.addRange(r);
 }
 
+// Lightweight per-block actions menu, triggered from the grip icon — uses a
+// native prompt() rather than a styled dropdown, a deliberately minimal
+// implementation (grip's primary job is drag; this covers delete/duplicate).
 function blockMenu(b, parentList){
   const choice = prompt('block actions: type "del" to delete, "dup" to duplicate, or cancel', 'dup');
   if (choice === 'del'){ removeBlock(parentList, b.id); if (parentList.length === 0) parentList.push({ id:uid(), type:'text', text:'' }); touchSelected(); save(); renderPage(); }
@@ -1214,12 +1395,21 @@ function blockMenu(b, parentList){
 }
 
 // ---------- drag-to-reorder ----------
+// Native HTML5 drag-and-drop, initiated only from a block's grip handle
+// (not the whole block, so text selection inside the editor isn't hijacked
+// into a drag). dragCtx tracks the block+list being dragged across the
+// dragstart/dragover/drop sequence, mirroring sideDragCtx for the sidebar tree.
 let dragCtx = null;
 
 function clearDropMarks(){
   $$('#nt-page .b.drop-above, #nt-page .b.drop-below, #nt-page .b.drop-into').forEach(x => x.classList.remove('drop-above', 'drop-below', 'drop-into'));
 }
 
+// Wires one block's grip as a drag source and the block itself as a drop
+// target. Dropping on the left 2/3 of a toggle block reorders as a sibling
+// (drop-above/drop-below); dropping on its right third nests the dragged
+// block inside the toggle as a new child (drop-into) — the array splice
+// happens immediately on drop, then saves + re-renders.
 function wireBlockDrag(el, grip, b, parentList){
   grip.draggable = true;
   grip.addEventListener('dragstart', e => {
@@ -1295,6 +1485,10 @@ function clearBlockSel(){
 // We detect the crossing and fall back to our own highlight + text copy.
 let blockDragCtx = null; // { list, startId, startIdx }
 
+// Maps a DOM node under the mouse back to its top-level block + index in the
+// page's own `n.blocks` array (only top-level; nested toggle/column children
+// return null and are excluded from range-select, since a range spanning
+// mixed nesting levels has no well-defined selection semantics here).
 function topLevelBlockAt(el){
   const wrap = el?.closest?.('#nt-page .b'); if (!wrap) return null;
   const id = wrap.dataset.bid;
@@ -1304,6 +1498,8 @@ function topLevelBlockAt(el){
   return { id, idx, list: n.blocks };
 }
 
+// Highlights every block between indices i0 and i1 (inclusive, any order)
+// with the `.bsel` class and records the selected id set for later copy.
 function paintBlockRange(list, i0, i1){
   const lo = Math.min(i0, i1), hi = Math.max(i0, i1);
   const ids = new Set(list.slice(lo, hi + 1).map(x => x.id));
@@ -1312,6 +1508,10 @@ function paintBlockRange(list, i0, i1){
   blockSelAll = false;
 }
 
+// Installs the mousedown/mousemove/mouseup listeners on #nt-page that detect
+// a mouse drag crossing from one block's editor into another and switch to
+// the custom cross-block highlight (see the comment above blockDragCtx for
+// why the browser's native Selection can't do this itself).
 function wireBlockRangeDrag(){
   const page = $('#nt-page'); if (!page) return;
   page.addEventListener('mousedown', e => {
@@ -1338,6 +1538,10 @@ function stripHtml(html){
 }
 
 // ---------- table of contents block (derived, nothing extra persisted) ----------
+// The 'toc' block type has no persisted content of its own — it's rebuilt
+// from the page's current headings every render (buildTocBody) and patched
+// live on edit (refreshToc), so a toc block never goes stale relative to the
+// headings around it.
 function collectHeadings(list, out = []){
   for (const b of list || []){
     if (['h1','h2','h3','h4'].includes(b.type)) out.push({ id:b.id, level:Number(b.type[1]), text:stripHtml(b.text) });
@@ -1363,17 +1567,24 @@ function buildTocBody(note){
   });
   return body;
 }
+// Scrolls a TOC entry's target heading into view and briefly flashes it so
+// the user can visually locate the jump target.
 function jumpToBlock(id){
   const el = $('#nt-page [data-bid="' + id + '"]'); if (!el) return;
   el.scrollIntoView({ behavior:'smooth', block:'center' });
   el.classList.add('jump-flash');
   setTimeout(() => el.classList.remove('jump-flash'), 900);
 }
+// Called from attachEditor's input handler whenever a heading block changes,
+// so any toc block(s) on the page update without a full renderPage().
 function refreshToc(note){
   if (!note) return;
   $$('#nt-page .b.toc .toc-body').forEach(old => old.replaceWith(buildTocBody(note)));
 }
 
+// Plain-text serialization of a block list (recursively), used for
+// clipboard copy (⌘C on a page/range selection) — strips all HTML, unlike
+// blocksToMarkdown() below which is used for file export and keeps Markdown syntax.
 function blocksToText(list, depth = 0){
   const ind = '  '.repeat(depth);
   const out = [];
@@ -1389,10 +1600,7 @@ function blocksToText(list, depth = 0){
     else if (b.type === 'todo') out.push(ind + (b.done ? '- [x] ' : '- [ ] ') + stripHtml(b.text));
     else if (b.type === 'quote') out.push(ind + '> ' + stripHtml(b.text));
     else if (b.type === 'callout') out.push(ind + (b.emoji || '💡') + ' ' + stripHtml(b.text));
-    else if (b.type === 'toggle'){
-      out.push(ind + stripHtml(b.text));
-      if (b.children?.length) out.push(blocksToText(b.children, depth + 1));
-    }
+    else if (b.type === 'toggle') out.push(ind + stripHtml(b.text));
     else if (b.type === 'divider') out.push(ind + '---');
     else if (b.type === 'code') out.push(ind + '```' + (b.lang && b.lang !== 'plain' ? b.lang : ''), b.text || '', ind + '```');
     else if (b.type === 'image'){ if (b.caption) out.push(ind + '[image] ' + stripHtml(b.caption)); }
@@ -1408,10 +1616,15 @@ function blocksToText(list, depth = 0){
     else if (b.type === 'embed'){ if (b.url) out.push(ind + '[embed] ' + b.url); }
     else if (b.type === 'toc') { /* derived from the page's headings, nothing extra to export */ }
     else out.push(ind + stripHtml(b.text));
+    // Nesting via Tab-indent isn't limited to toggles (see indentBlock) —
+    // any block type can carry indented children, so recurse regardless of type.
+    if (b.type !== 'cols' && b.children?.length) out.push(blocksToText(b.children, depth + 1));
   }
   return out.join('\n');
 }
 
+// Whole-page plain-text serialization (title + all blocks) — used for the
+// ⌘A ⌘A → ⌘C "copy whole page" path.
 function noteToText(n){
   const head = n.title ? n.title + '\n\n' : '';
   return head + blocksToText(n.blocks, 0);
@@ -1420,9 +1633,14 @@ function noteToText(n){
 // ---------- export: page (+ subpages) as a single Markdown file ----------
 // b.text holds inline HTML (bold/italic/links/etc.) for rich blocks; kept
 // as-is rather than converted, since Markdown renderers accept inline HTML.
+// GitHub-Markdown-style heading anchor slug, used for the page-link "jump to
+// section" fragment in exported Markdown (#slug).
 function slugifyHeading(s){
   return String(s || '').toLowerCase().trim().replace(/[^\w\s-]/g, '').replace(/\s+/g, '-') || 'untitled';
 }
+// Finds subpages referenced via an in-content page-link block (as opposed to
+// the sidebar-tree parent/child relationship) so noteToMarkdown() can walk
+// both kinds of subpage relationship when flattening into one export file.
 function collectSubpageIds(list, out = []){
   for (const b of list || []){
     if (b.type === 'page-link' && b.target) out.push(b.target);
@@ -1431,6 +1649,10 @@ function collectSubpageIds(list, out = []){
   }
   return out;
 }
+// Markdown serialization of a block list, for the "export as .md" feature —
+// unlike blocksToText(), this keeps b.text's inline HTML (bold/italic/links)
+// as-is rather than stripping it, since Markdown renderers tolerate inline
+// HTML fine (see the file-export section-header comment above).
 function blocksToMarkdown(list, depth = 0){
   const ind = '  '.repeat(depth);
   const out = [];
@@ -1446,10 +1668,7 @@ function blocksToMarkdown(list, depth = 0){
     else if (b.type === 'todo') out.push(ind + (b.done ? '- [x] ' : '- [ ] ') + (b.text || ''));
     else if (b.type === 'quote') out.push(ind + '> ' + (b.text || ''));
     else if (b.type === 'callout') out.push(ind + '> ' + (b.emoji || '💡') + ' ' + (b.text || ''));
-    else if (b.type === 'toggle'){
-      out.push(ind + '**' + (stripHtml(b.text) || 'Toggle') + '**');
-      if (b.children?.length){ const t = blocksToMarkdown(b.children, depth + 1); if (t) out.push(t); }
-    }
+    else if (b.type === 'toggle') out.push(ind + '**' + (stripHtml(b.text) || 'Toggle') + '**');
     else if (b.type === 'divider') out.push(ind + '---');
     else if (b.type === 'code') out.push([ind + '```' + (b.lang && b.lang !== 'plain' ? b.lang : ''), b.text || '', ind + '```'].join('\n'));
     else if (b.type === 'equation') out.push(ind + '$$' + (b.text || '') + '$$');
@@ -1475,6 +1694,9 @@ function blocksToMarkdown(list, depth = 0){
     else if (b.type === 'embed'){ if (b.url) out.push(ind + '[embed](' + b.url + ')'); }
     else if (b.type === 'toc'){ /* derived from headings, nothing extra to export */ }
     else out.push(ind + (b.text || ''));
+    // Nesting via Tab-indent isn't limited to toggles (see indentBlock) —
+    // any block type can carry indented children, so recurse regardless of type.
+    if (b.type !== 'cols' && b.children?.length){ const t = blocksToMarkdown(b.children, depth + 1); if (t) out.push(t); }
   }
   return out.join('\n\n');
 }
@@ -1496,6 +1718,11 @@ function noteToMarkdown(note){
   })(note, 0);
   return sections.join('\n\n---\n\n') + '\n';
 }
+// Saves the exported Markdown, trying progressively more-native mechanisms
+// and falling back gracefully: a native app bridge (if wrapped in a webview),
+// then the backend's save-file endpoint, then the browser's native
+// showSaveFilePicker, and finally a plain <a download> blob URL for browsers
+// that support none of the above.
 async function exportNoteMarkdown(note){
   const md = noteToMarkdown(note);
   const filename = (note.title || 'Untitled').replace(/[\\/:*?"<>|]/g, '').trim() + '.md';
@@ -1528,6 +1755,13 @@ async function exportNoteMarkdown(note){
 }
 
 // ---------- per-block editor wiring ----------
+// Attaches the common event set every rich-text/plaintext block editor
+// needs: persist on input (debounced via save()), route keydown to
+// onEditorKey (Enter/Backspace/Tab/arrow/slash-menu/mention-menu handling),
+// route paste to onEditorPaste (image paste), and show/hide the floating
+// format toolbar on selection change. `plain` distinguishes plaintext-only
+// editors (code/eq blocks, where b.text = ed.textContent) from rich ones
+// (b.text = ed.innerHTML, preserving bold/italic/links/etc).
 function attachEditor(ed, b, parentList, plain, note){
   ed.addEventListener('input', () => {
     b.text = plain ? ed.textContent : ed.innerHTML;
@@ -1576,6 +1810,14 @@ function onEditorPaste(e, ed, b, parentList){
   })();
 }
 
+// Central keydown handler for every block editor — first defers to the
+// slash-menu / mention-menu if one is open (arrow keys navigate it, Enter/Tab
+// picks, Escape closes it), then handles Notion-style block-editing keys:
+// Tab/Shift+Tab indent/outdent, ⌘A block-then-page select, formatting
+// shortcuts (⌘B/I/U/E, ⌘⇧H), Enter to split into a new block, Backspace at
+// an empty/start position to merge into the previous block or demote a
+// styled block back to plain text, and Up/Down at the caret's start/end to
+// move focus to the sibling block.
 function onEditorKey(e, ed, b, parentList, plain, note){
   const slash = $('#nt-slash');
   if (slash?.classList.contains('show')){
@@ -1668,6 +1910,12 @@ function onEditorKey(e, ed, b, parentList, plain, note){
   }
 }
 
+// Both isCaretAtStart/isCaretAtEnd use the same trick: build a "probe" Range
+// spanning from the editor's start (or the caret, for the End check) to the
+// caret, then measure its rendered text length. Zero-length means the caret
+// has no text before (or after) it — i.e. it's at the very start (or end) of
+// the editor's content. This is more reliable than comparing offsets
+// directly since contentEditable can spread text across many nested nodes.
 function isCaretAtStart(ed){
   const s = window.getSelection(); if (!s.rangeCount) return true;
   const r = s.getRangeAt(0); if (!r.collapsed) return false;
@@ -1682,12 +1930,19 @@ function isCaretAtEnd(ed){
 }
 
 // ---------- code block syntax highlighting (hljs — colors via tokens.css, no stock theme) ----------
+// caretOffset/setCaretOffset convert between a plain character offset and a
+// live DOM Selection, needed because re-highlighting a code block replaces
+// its innerHTML wholesale (hljs.highlight() returns fresh markup with new
+// text nodes) which would otherwise silently drop the caret; capturing the
+// offset before and restoring it after keeps typing feeling uninterrupted.
 function caretOffset(el){
   const s = window.getSelection(); if (!s.rangeCount) return el.textContent.length;
   const r = s.getRangeAt(0); if (!el.contains(r.endContainer)) return el.textContent.length;
   const probe = document.createRange(); probe.selectNodeContents(el); probe.setEnd(r.endContainer, r.endOffset);
   return probe.toString().length;
 }
+// Walks the element's text nodes (TreeWalker) to find the node/offset pair
+// `offset` characters in, then collapses the Selection there.
 function setCaretOffset(el, offset){
   const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
   let node, count = 0;
@@ -1703,6 +1958,14 @@ function setCaretOffset(el, offset){
   const range = document.createRange(); range.selectNodeContents(el); range.collapse(false);
   const s = window.getSelection(); s.removeAllRanges(); s.addRange(range);
 }
+// Re-renders a code block's editor with hljs syntax-highlighting markup.
+// Debounced (300ms, see the `input`/`blur` wiring where this is called from)
+// rather than run on every keystroke — highlighting on every character
+// during fast typing would visibly stutter for larger code blocks. hljs is
+// loaded globally (not imported) and is optional: if it's unavailable, or
+// the language is 'plain', falls back to plain textContent, and highlight
+// errors (e.g. an hljs internal issue) also fail safe to plain text rather
+// than corrupting the block.
 function highlightCodeEditor(ed, b){
   const text = b.text || '';
   if (typeof hljs === 'undefined' || !b.lang || b.lang === 'plain'){ ed.textContent = text; return; }
@@ -1717,6 +1980,10 @@ function highlightCodeEditor(ed, b){
 }
 
 // ---------- LaTeX rendering (KaTeX) ----------
+// Renders a block-equation's LaTeX source into `target` via the globally
+// loaded KaTeX library (optional dependency, like hljs above — falls back to
+// plain text if KaTeX isn't present). Invalid LaTeX renders a calm inline
+// error message instead of throwing up to the caller.
 function renderEqPreview(target, text){
   target.classList.remove('eq-error');
   if (!text.trim()){ target.innerHTML = '<span class="eq-placeholder">preview will appear here</span>'; return; }
@@ -1729,6 +1996,12 @@ function renderEqPreview(target, text){
   }
 }
 
+// Notion-style Markdown auto-formatting: typing e.g. "# " at the start of a
+// text block converts it into a Heading 1 block (clearing the trigger
+// characters), mirroring the same conversions available via the slash menu.
+// Checked on every input event (see attachEditor) after the slash/mention
+// menu checks, so it only fires for the current block's whole text matching
+// one of the trigger patterns exactly.
 function maybeMarkdownShortcut(ed, b, parentList){
   const txt = ed.textContent;
   const map = [
@@ -1750,6 +2023,10 @@ function maybeMarkdownShortcut(ed, b, parentList){
 }
 
 // ---------- slash menu ----------
+// Static catalogue of every insertable block type, grouped into sections
+// (rendered as non-selectable headers by renderSlash). `sc` is the Markdown
+// shortcut shown next to each item as a hint (not itself executable — the
+// actual Markdown-shortcut matching lives in maybeMarkdownShortcut above).
 const SLASH_ITEMS = [
   { sec:'Basic blocks' },
   { id:'text', nm:'Text', sc:'', icon:'<i class="ti ti-typography"></i>' },
@@ -1784,6 +2061,12 @@ const SLASH_ITEMS = [
 ];
 let slashState = { open:false, query:'', target:null, parentList:null, filtered:[], cursor:0 };
 
+// Checked on every editor input event (see attachEditor). Builds a Range
+// from the editor's start to the caret and reads its text back out — the
+// same "probe range" technique used by isCaretAtStart/End — to see whether
+// the text immediately before the caret matches a trailing "/query" run
+// (with no other slash or whitespace inside it). If so, opens the menu with
+// that text as the filter query; otherwise closes it.
 function maybeOpenSlash(ed, b, parentList){
   const s = window.getSelection(); if (!s.rangeCount) return;
   const r = s.getRangeAt(0); if (!r.collapsed) return;
@@ -1796,6 +2079,10 @@ function maybeOpenSlash(ed, b, parentList){
   } else hideSlash();
 }
 
+// Rebuilds the #nt-slash popup's contents from the current query: filters
+// SLASH_ITEMS by name match, drops any section header that ends up with no
+// items under it, and positions the popup at the current caret's bounding
+// rect so it tracks the text cursor as the user types.
 function renderSlash(){
   const slashEl = $('#nt-slash'); if (!slashEl) return;
   const items = SLASH_ITEMS.filter(it => it.sec || it.nm.toLowerCase().includes(slashState.query));
@@ -1844,6 +2131,12 @@ function slashMove(d){
 }
 function slashPick(){ const it = slashState.filtered[slashState.cursor]; if (it) pickSlash(it.id); }
 
+// Applies the chosen slash-menu item: first strips the "/query" trigger text
+// back out of the block (everything from the last "/" onward), then converts
+// the block via applyType(). Some picks (image/table/divider/columns/etc.)
+// leave the current block converted to the widget and additionally insert a
+// fresh empty text block after it, since those widget types aren't good
+// places to keep typing.
 function pickSlash(id){
   const b = slashState.target; if (!b) return;
   const parentList = slashState.parentList;
@@ -1869,6 +2162,12 @@ function pickSlash(id){
   }, 20);
 }
 
+// Converts a block in place to a new type (used by both the slash menu and
+// the toolbar's "turn into" picker). Starts by deleting every type-specific
+// field any block type might have, so switching e.g. table -> text doesn't
+// leave a dangling `b.rows` around; then sets the new type and whatever
+// fresh defaults that type needs. The 'page' case is special: it also
+// creates a brand-new subpage note and turns this block into a page-link to it.
 function applyType(b, id){
   delete b.headingLevel; delete b.children; delete b.cols; delete b.rows; delete b.target; delete b.src; delete b.width; delete b.caption; delete b.lang; delete b.emoji;
   delete b.url; delete b.kind; delete b.name; delete b.size; delete b.mime; delete b.tooLarge;
@@ -1911,6 +2210,11 @@ function applyType(b, id){
 // block — mentions can sit mid-paragraph next to other rich text.
 let mentionState = { open:false, query:'', ed:null, filtered:[], cursor:0 };
 
+// Same "probe range" pattern as maybeOpenSlash, but matching "@query"
+// instead of "/query". The extra guard up front closes the menu immediately
+// if the caret has landed inside an already-inserted mention chip (which is
+// contentEditable="false", so this shouldn't normally happen, but a stray
+// click could still put focus there).
 function maybeOpenMention(ed, b){
   const s = window.getSelection(); if (!s.rangeCount) return;
   const r = s.getRangeAt(0); if (!r.collapsed) return;
@@ -1977,6 +2281,11 @@ function mentionMove(d){
 }
 function mentionPick(){ const it = mentionState.filtered[mentionState.cursor]; if (it) pickMention(it.kind, it.id, it.label); }
 
+// Replaces the typed "@query" text with an inline, non-editable mention chip
+// (contentEditable="false" span carrying data-kind/data-id) plus a trailing
+// space so typing continues naturally after it. Note: this assumes the
+// "@query" run lives entirely inside one DOM Text node (true for the normal
+// continuous-typing case) — see the inline comment below for the fallback.
 function pickMention(kind, id, label){
   const ed = mentionState.ed;
   hideMention();
@@ -2005,6 +2314,11 @@ function pickMention(kind, id, label){
   if (b){ b.text = ed.innerHTML; touchSelected(); save(); }
 }
 
+// Attaches a click handler to every mention chip in an editor's current
+// innerHTML — this must be re-run whenever innerHTML is reassigned (e.g.
+// after code/eq re-render or a fresh block render), since replacing
+// innerHTML drops any previously attached listeners. dataset.wired guards
+// against double-wiring the same still-live chip.
 function wireMentionSpans(ed){
   ed.querySelectorAll('.nt-mention[data-id]').forEach(span => {
     if (span.dataset.wired) return;
@@ -2018,6 +2332,11 @@ function wireMentionSpans(ed){
 }
 
 // ---------- floating format toolbar ----------
+// Shows the #nt-ftoolbar positioned above the current text selection
+// whenever there IS a non-collapsed selection inside an editor (called from
+// attachEditor's mouseup/keyup handlers); hides it otherwise. Also syncs
+// which format buttons show as "active" via document.queryCommandState,
+// which reflects whether the current selection is already bold/italic/etc.
 function maybeShowToolbar(ed){
   const ftb = $('#nt-ftoolbar'); if (!ftb) return;
   const s = window.getSelection();
@@ -2039,6 +2358,10 @@ function maybeShowToolbar(ed){
 function hideToolbar(){ $('#nt-ftoolbar')?.classList.remove('show'); $$('#nt-ftoolbar .picker').forEach(p => p.classList.remove('show')); }
 function isToolbarFocused(){ const ftb = $('#nt-ftoolbar'); return document.activeElement && (document.activeElement === ftb || ftb?.contains(document.activeElement)); }
 
+// Walks up from the current Selection's start node to find the enclosing
+// `.b` block wrapper, then looks up that block's live data object in the
+// current note's block tree — the toolbar/formatting functions below use
+// this to know which block's `b.text` to update after a DOM formatting op.
 function currentBlockFromSelection(){
   const s = window.getSelection(); if (!s.rangeCount) return null;
   let node = s.getRangeAt(0).startContainer;
@@ -2049,12 +2372,21 @@ function currentBlockFromSelection(){
   const f = findBlock(n.blocks, id); return f ? { block:f.block, list:f.list } : null;
 }
 
+// Wraps the current selection's contents in a new element of the given tag
+// (e.g. 'code' for inline code, 'mark' via applyHighlight below). Uses
+// Range.extractContents()/insertNode() rather than document.execCommand,
+// since execCommand has no built-in "wrap in arbitrary tag" command. Can
+// throw if the selection spans element boundaries in a way extractContents
+// can't cleanly handle — caught and silently no-op'd rather than corrupting
+// the block, matching this file's general tolerance for edge-case selections.
 function wrapSelection(tag){
   const s = window.getSelection(); if (!s.rangeCount || s.isCollapsed) return;
   const r = s.getRangeAt(0);
   const el = document.createElement(tag);
   try { el.appendChild(r.extractContents()); r.insertNode(el); } catch {}
 }
+// Wraps/unwraps the selection in a <span data-color="..."> for text color —
+// passing a falsy color removes color spans instead of adding one.
 function applyColor(c){
   const s = window.getSelection(); if (!s.rangeCount || s.isCollapsed) return;
   const r = s.getRangeAt(0);
@@ -2066,6 +2398,10 @@ function applyColor(c){
   }
   span.appendChild(r.extractContents()); r.insertNode(span);
 }
+// Wraps/unwraps the selection in a <mark> for highlight color; removing
+// highlight (falsy c) unwraps every <mark> inside the selection back to
+// plain text nodes rather than just the outermost one, in case the
+// selection spans multiple existing highlighted runs.
 function applyHighlight(c){
   const s = window.getSelection(); if (!s.rangeCount || s.isCollapsed) return;
   const r = s.getRangeAt(0);
@@ -2079,6 +2415,11 @@ function applyHighlight(c){
   const m = document.createElement('mark'); if (c !== 'yellow') m.dataset.c = c;
   m.appendChild(r.extractContents()); r.insertNode(m);
 }
+// Called after every toolbar formatting action (bold/italic/color/etc. all
+// mutate the DOM directly via execCommand or wrapSelection). Since those
+// operations touch the DOM without going through attachEditor's 'input'
+// listener in every case, this reads the resulting innerHTML back out of the
+// live editor and writes it into the block's persisted b.text explicitly.
 function afterFormat(){
   const cur = currentBlockFromSelection();
   if (cur){
@@ -2107,6 +2448,12 @@ function blockEditorEl(id){
 
 function getNoteBranch(note, bid){ return (note.branches||[]).find(br => br.bid === bid); }
 
+// Removes branches whose text anchor (<span class="nt-br-anchor"
+// data-bid="...">) is no longer present anywhere in the note's block text —
+// i.e. the user deleted the highlighted passage the branch was attached to.
+// Called at the top of every renderPage(), so a stale branch panel is closed
+// (via closeNoteBranch) as soon as its anchor text disappears, keeping
+// note.branches from silently accumulating orphaned entries.
 function pruneAnchors(note){
   if (!note.branches?.length) return;
   const texts = [];
@@ -2123,12 +2470,16 @@ function pruneAnchors(note){
   if (!note.branches.length) delete note.branches;
 }
 
+// Wires click-to-open on every branch-anchor span in an editor — same
+// re-wire-after-innerHTML-replace need as wireMentionSpans above.
 function wireAnchorSpans(ed){
   ed.querySelectorAll('.nt-br-anchor[data-bid]').forEach(span => {
     span.addEventListener('click', e => { e.preventDefault(); e.stopPropagation(); openNoteBranch(span.dataset.bid); });
   });
 }
 
+// Renders one inline LaTeX span's KaTeX output — same optional-dependency /
+// fail-to-plain-text handling as renderEqPreview (block equations) above.
 function renderInlineEq(span, tex){
   span.dataset.tex = tex;
   span.classList.remove('eq-error');
@@ -2136,6 +2487,9 @@ function renderInlineEq(span, tex){
   try { katex.render(tex, span, { throwOnError: true, displayMode: false }); }
   catch { span.classList.add('eq-error'); span.textContent = tex || '(empty equation)'; }
 }
+// Converts the current text selection into an inline equation: the selected
+// text becomes the LaTeX source (r.toString()), replaced in place by a
+// non-editable rendered span carrying that source in data-tex for later editing.
 function insertInlineEq(){
   const s = window.getSelection(); if (!s.rangeCount || s.isCollapsed) return;
   const r = s.getRangeAt(0);
@@ -2146,6 +2500,8 @@ function insertInlineEq(){
   const after = document.createRange(); after.setStartAfter(span); after.collapse(true);
   s.removeAllRanges(); s.addRange(after);
 }
+// Click-to-edit on every inline-eq span — reopens a prompt() with the
+// existing LaTeX source; an empty result unwraps the span back to plain text.
 function wireEqSpans(ed, b){
   ed.querySelectorAll('.nt-eq-inline').forEach(span => {
     span.addEventListener('click', e => {
@@ -2159,6 +2515,12 @@ function wireEqSpans(ed, b){
   });
 }
 
+// Creates a new text-anchored branch from the current selection: wraps the
+// selected text in an `.nt-br-anchor` span (persisted as part of the block's
+// HTML — the anchor lives inline with the content, same approach as ADR-009's
+// comment spans, so it survives reload/re-render for free and disappears
+// automatically if that text is later deleted, per pruneAnchors above),
+// records a new entry in note.branches, then opens its panel.
 function startBranch(){
   const cur = currentBlockFromSelection();
   if (!cur || !BRANCHABLE.has(cur.block.type)){ toast('select text in a text block to branch'); return; }
@@ -2184,11 +2546,6 @@ function startBranch(){
 function noteBranchStackEl(){ return $('#nt-branch-stack'); }
 function noteBranchMenuEl(){ return $('#nt-branch-menu'); }
 
-function noteModelLabel(){
-  const keys = JSON.parse(localStorage.getItem('nl_api_keys') || '{}');
-  return keys.anthropic || keys.claude ? 'Claude' : keys.deepseek ? 'DeepSeek' : 'No API key';
-}
-
 function titleFromNoteQuote(q){ return truncate(q || 'Untitled branch', 36); }
 
 function flashNoteBranch(el){
@@ -2196,10 +2553,22 @@ function flashNoteBranch(el){
   setTimeout(() => { el.style.boxShadow = ''; }, 700);
 }
 
+// Opens (or refocuses) a branch's floating panel. Mirrors chat's own
+// branch-panel UI/DOM structure and interaction pattern (branch-head/
+// branch-quote/branch-body/branch-compose/branch-resize/.msg/.composer
+// classes are the SAME global CSS classes chat.css defines — reused
+// deliberately rather than duplicated, per ADR in DECISIONS.md) but is a
+// fully separate implementation living in this file, keyed by `note.
+// branches[]` (this ADR-007 db) rather than chat's own thread state, and
+// rendered into #nt-branch-stack rather than chat's branch rail. Notes
+// branches intentionally don't nest (no "branch the branch"), so there is no
+// ancestor-chain logic here, unlike chat's branch context building.
 function openNoteBranch(bid){
   const note = getNote(state.selectedId); if (!note) return;
   const br = getNoteBranch(note, bid); if (!br) return;
 
+  // Panel already open — just bring it to front / unfold it rather than
+  // creating a duplicate DOM node.
   if (noteBranches[bid]){
     const nb = noteBranches[bid];
     if (nb.collapsed) toggleNoteCollapse(bid);
@@ -2236,7 +2605,10 @@ function openNoteBranch(bid){
       <div class="composer">
         <textarea rows="1" placeholder="${br.quote ? 'Ask about this passage…' : 'Ask about this note…'}"></textarea>
         <div class="compose-row">
-          <div class="left"><span class="chip nbp-model-chip"><i class="ti ti-sparkles"></i>${escapeHtml(noteModelLabel())}</span></div>
+          <div class="left">
+            <button class="chip nbp-model-chip" title="Select model" aria-haspopup="menu"></button>
+            <button class="chip nbp-mode-chip" title="Conversation mode" aria-haspopup="menu"></button>
+          </div>
           <button class="send-btn" disabled><i class="ti ti-arrow-up"></i></button>
         </div>
       </div>
@@ -2274,6 +2646,7 @@ function openNoteBranch(bid){
   el.querySelector('.branch-head .actions').addEventListener('click', e => e.stopPropagation());
   el.querySelector('.branch-head').addEventListener('click', e => { if (e.target.closest('.actions')) return; toggleNoteCollapse(bid); });
   wireNoteBranchResize(el, bid);
+  document.dispatchEvent(new Event('nl:refresh-chips'));   // app.js fills the model/mode chips from prefs
 
   const ta = el.querySelector('textarea');
   const sb = el.querySelector('.send-btn');
@@ -2294,6 +2667,7 @@ function openNoteBranch(bid){
   rebalanceNotes();
 }
 
+// Reads the branch panel's textarea, clears it, and hands the text off to sendNoteMsg.
 function doSendFromComposer(bid){
   const nb = noteBranches[bid]; if (!nb) return;
   const ta = nb.el.querySelector('textarea'); if (!ta) return;
@@ -2302,6 +2676,11 @@ function doSendFromComposer(bid){
   sendNoteMsg(bid, v);
 }
 
+// Re-renders a branch panel's message list from persisted br.messages —
+// unlike chat's branch reopen (which uses a snapshot/reopen protocol per
+// DECISIONS.md), Notes branch messages are plain serializable data, so the
+// body can simply be redrawn from scratch every time a panel opens or
+// updates, with no capture/restore step needed.
 function renderNoteBranchBody(bid){
   const nb = noteBranches[bid]; if (!nb) return;
   const note = getNote(state.selectedId);
@@ -2312,13 +2691,16 @@ function renderNoteBranchBody(bid){
   br.messages.forEach(msg => {
     const el = document.createElement('div'); el.className = 'msg ' + msg.role;
     if (msg.role === 'user') el.innerHTML = '<div class="bub">' + escapeHtml(msg.content) + '</div>';
-    else el.innerHTML = renderMarkdown(msg.content);
+    else { el.innerHTML = renderMarkdown(msg.content); highlightCodeIn(el); }
     body.appendChild(el);
   });
   body.scrollTop = body.scrollHeight;
   nb.el.classList.toggle('empty', !br.messages.length);
 }
 
+// Enables/disables the send button based on whether the composer has text —
+// skipped while a response is already streaming (the button repurposes to a
+// stop control during that time, wired directly in openNoteBranch).
 function updateNoteBranchSendState(bid){
   const nb = noteBranches[bid]; if (!nb || nb.streaming) return;
   const ta = nb.el.querySelector('textarea');
@@ -2327,6 +2709,12 @@ function updateNoteBranchSendState(bid){
   sb.disabled = !ta.value.trim();
 }
 
+// Copies a branch panel's live (in-memory) collapsed/reader/size/position
+// state back onto its persisted note.branches[] record and saves. Called
+// from every geometry-changing action (collapse, reader toggle, resize-end,
+// close) rather than on every intermediate drag frame — geometry, like
+// block drag/position elsewhere in this file, is saved on drag-END, not
+// continuously.
 function persistNoteBranchGeometry(bid){
   const nb = noteBranches[bid]; if (!nb) return;
   const note = getNote(state.selectedId);
@@ -2343,6 +2731,10 @@ function persistNoteBranchGeometry(bid){
   save();
 }
 
+// Aborts any in-flight AI request, persists final geometry, then animates
+// the panel out and removes it from the DOM + the in-memory noteBranches map
+// (the underlying note.branches[] record itself is untouched — closing a
+// panel doesn't delete the branch, only deleteNoteBranch below does that).
 function closeNoteBranch(bid){
   const nb = noteBranches[bid]; if (!nb) return;
   if (nb.streaming && nb.controller) nb.controller.abort();
@@ -2405,6 +2797,8 @@ function toggleNoteReader(bid){
   rebalanceNotes();
 }
 
+// The vertical strip (below the topbar, above the bottom edge) that branch
+// panels are allowed to occupy — mirrors chat's own branch-rail concept.
 function noteBranchRail(){
   const topbar = $('#nt-topbar');
   const top = Math.max(70, (topbar?.getBoundingClientRect().bottom || 54) + 12);
@@ -2412,6 +2806,9 @@ function noteBranchRail(){
   return { top, bottom };
 }
 
+// Reads the shared `--drawer-gap` CSS var (viewport margin) to compute how
+// wide a branch panel is allowed to grow — capped at 900px so a panel can't
+// swallow the whole viewport on an ultrawide monitor.
 function noteBranchMaxWidth(){
   const gap = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--drawer-gap')) || 16;
   return Math.max(340, Math.min(900, window.innerWidth - gap * 2));
@@ -2422,6 +2819,13 @@ function noteBranchResizeBounds(){
   return { minTop:rail.top, maxBottom:window.innerHeight - 24, minWidth:340, maxWidth:noteBranchMaxWidth(), minHeight:220 };
 }
 
+// Clamps and applies a branch panel's width/height/top, writing width also
+// into the `--nt-drawer-w` CSS var. This var is deliberately its OWN
+// variable — separate from chat's shared `--drawer-w` — so resizing a Notes
+// branch panel can never cross-contaminate chat's branch rail width, and
+// vice versa (see DECISIONS.md). Marks the panel `.user-sized` so later
+// auto-layout (layoutNoteBranches) respects the manual size/position instead
+// of recalculating it from the anchor.
 function setNoteBranchSize(nb, width, height, top = null){
   if (!nb?.el) return;
   const bounds = noteBranchResizeBounds();
@@ -2447,6 +2851,13 @@ function setNoteBranchSize(nb, width, height, top = null){
   scheduleNoteBranchLayout();
 }
 
+// Pointer-based resize (pointerdown/pointermove/pointerup, using
+// setPointerCapture so the drag keeps tracking even if the cursor leaves the
+// handle) for each of the panel's 5 resize handles (top/bottom/left/
+// top-left/bottom-left edges — no right-edge handle since the panel is
+// anchored to the right rail). Persists geometry only once, in `finish()` on
+// pointerup/pointercancel — live resizing during the drag only updates the
+// DOM via setNoteBranchSize, matching the file's drag-ends-then-saves pattern.
 function wireNoteBranchResize(el, bid){
   const handles = $$('.branch-resize', el);
   if (!handles.length) return;
@@ -2497,6 +2908,10 @@ function wireNoteBranchResize(el, bid){
   handles.forEach(handle => handle.addEventListener('pointercancel', finish));
 }
 
+// Updates z-index (active panel on top; in reader mode, above everything
+// via a high z-index) across all open branch panels, then schedules a
+// layout pass. Called after any change to which panel is "active" (open,
+// collapse toggle, reader toggle, close).
 function rebalanceNotes(){
   const ids = Object.keys(noteBranches);
   ids.forEach(id => {
@@ -2507,6 +2922,9 @@ function rebalanceNotes(){
   scheduleNoteBranchLayout();
 }
 
+// rAF-debounced trigger for layoutNoteBranches — coalesces bursts of layout
+// requests (scroll events, resize drags, multiple panels reacting to the
+// same DOM change) into at most one layout pass per animation frame.
 function scheduleNoteBranchLayout(){
   if (noteBranchLayoutRaf) return;
   noteBranchLayoutRaf = requestAnimationFrame(() => {
@@ -2515,16 +2933,56 @@ function scheduleNoteBranchLayout(){
   });
 }
 
+// Finds a branch's source anchor span in the currently-rendered page (may be
+// absent if the anchor was pruned, or if this is a note-wide branch with no
+// blockId/quote at all). CSS.escape guards against a bid value containing
+// characters that would otherwise break the attribute-selector string.
 function noteBranchAnchorEl(bid){
   const escaped = window.CSS?.escape ? CSS.escape(bid) : String(bid).replace(/"/g, '\\"');
   return $(`#nt-page .nt-br-anchor[data-bid="${escaped}"]`);
 }
 
+// True if a source anchor's bounding rect overlaps the branch rail's visible
+// vertical extent at all (used to decide whether to visually flag a panel as
+// "source scrolled out of view" via the .source-out class).
 function noteSourceIsVisible(rect, rail){
   return rect.bottom >= rail.top && rect.top <= rail.bottom;
 }
 
+// Positions every open, non-reader-mode branch panel vertically within the
+// rail, roughly aligned with its source anchor's on-screen position (like
+// chat's own branch declutter/rail placement, with the ancestor-chain/
+// reader-eclipse/parent-snap logic removed since Notes branches don't nest).
+// Panels with a manual (`user-sized`) top position keep it; others derive a
+// "desired" top from their anchor's vertical center. After computing desired
+// positions, sorts by desired top and pushes overlapping panels down
+// (cursor-based stacking) so multiple open panels never visually overlap,
+// then — if that push made the stack taller than the rail — shifts the whole
+// stack up as much as room allows to fit everything back in.
+// Slides the note page left (via right padding on .nt-pgwrap) just enough that
+// the open branch panel never covers the centered page column — so expanding
+// or resizing a panel pushes the note aside instead of overlaying it.
+function shiftNotePageForBranches(){
+  const wrap = $('.nt-pgwrap'); if (!wrap) return;
+  const gap = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--drawer-gap')) || 16;
+  let panelW = 0;
+  Object.values(noteBranches).forEach(nb => {
+    if (nb.collapsed) return;
+    panelW = Math.max(panelW, nb.el.getBoundingClientRect().width);
+  });
+  const PAGE_MAX = 780, PAGE_MIN = 420;
+  let shift = 0;
+  if (panelW){
+    const reserved = panelW + gap * 2;
+    shift = Math.min(Math.max(0, 2 * reserved + PAGE_MAX - window.innerWidth), Math.max(0, window.innerWidth - PAGE_MIN));
+  }
+  wrap.style.paddingRight = shift ? Math.round(shift) + 'px' : '';
+}
+
+window.addEventListener('resize', () => { if (Object.keys(noteBranches).length) scheduleNoteBranchLayout(); });
+
 function layoutNoteBranches(){
+  shiftNotePageForBranches();
   const ids = Object.keys(noteBranches);
   if (!ids.length) return;
   const rail = noteBranchRail();
@@ -2564,6 +3022,9 @@ function layoutNoteBranches(){
   });
 }
 
+// Opens the shared #nt-branch-menu dropdown (copy source quote / close /
+// delete) positioned under the clicked "..." button; noteBranchMenuTarget
+// tracks which branch it's currently open for.
 function openNoteBranchMenu(anchor, bid){
   noteBranchMenuTarget = bid;
   const menu = noteBranchMenuEl(); if (!menu) return;
@@ -2575,6 +3036,10 @@ function openNoteBranchMenu(anchor, bid){
 
 function closeNoteBranchMenu(){ noteBranchMenuEl()?.classList.remove('show'); noteBranchMenuTarget = null; }
 
+// One-time wiring for the shared branch-actions dropdown (there's only ever
+// one #nt-branch-menu element, reused across whichever branch's "..." was
+// last clicked) — outside-click closes it, and its buttons dispatch on the
+// current noteBranchMenuTarget.
 function wireNoteBranchMenu(){
   const menu = noteBranchMenuEl(); if (!menu || menu.dataset.wired) return;
   menu.dataset.wired = '1';
@@ -2599,6 +3064,14 @@ function wireNoteBranchMenu(){
   });
 }
 
+// Builds the system prompt for a branch's AI conversation: the note's
+// breadcrumb path (for context on where in the notebook this is), a
+// flattened plain-text dump of the note's own content (HTML-tag-stripped,
+// capped at 3000 chars to bound prompt size), and — for text-anchored
+// branches — the specific quoted passage the branch was started from. This
+// is Notes' equivalent of chat's buildBranchContext(), but built as one
+// system-prompt string per send rather than an ancestor-chain message list,
+// since Notes branches are flat (no branch-of-a-branch nesting).
 function buildNoteSystemPrompt(note, quote){
   const path = pathOf(note.id).map(n => n.title || 'Untitled').join(' › ');
   const texts = [];
@@ -2608,20 +3081,39 @@ function buildNoteSystemPrompt(note, quote){
   let prompt = 'You are a research assistant helping the user think through their notes. Be concise and insightful.\n\nNote: ' + path;
   if (content) prompt += '\n\nContent:\n' + content;
   if (quote) prompt += '\n\nSelected passage:\n“' + quote + '”';
+  const modeParts = modeSystemPromptParts(appState.prefs.mode);
+  if (modeParts.length) prompt += '\n\n' + modeParts.join('\n');
   return prompt;
 }
 
+// Streams an AI response for a note branch by calling the provider's HTTP
+// API directly from the browser (Claude's Messages API, or DeepSeek's
+// OpenAI-compatible chat/completions), using whichever API key is present
+// in localStorage (`nl_api_keys` — the same Settings-managed keys chat
+// itself uses). This bypasses the backend's own proxy/logging path that
+// chat's request pipeline goes through; it exists as a self-contained
+// branch-messaging path scoped to this file only. Both branches below parse
+// the provider's SSE `data: ...` stream manually (no SDK), buffering partial
+// lines across chunks, and forward each text delta via onDelta as it
+// arrives so the branch panel can render token-by-token.
 async function streamNoteAI(messages, systemPrompt, signal, onDelta, onDone, onError){
   const keys = JSON.parse(localStorage.getItem('nl_api_keys') || '{}');
-  const claudeKey = keys.anthropic || keys.claude;
-  const deepseekKey = keys.deepseek;
+  const modelPref = appState.prefs.model;
+  const provider = providerForModelPref(modelPref);
+  const modelId = modelIdForModelPref(modelPref);
+  const claudeKey = provider === 'anthropic' ? (keys.anthropic || keys.claude) : null;
+  const deepseekKey = provider === 'deepseek' ? keys.deepseek : null;
 
+  if (provider !== 'anthropic' && provider !== 'deepseek'){
+    onError('Notes branches support Claude and DeepSeek models for now — pick one from the model menu.');
+    return;
+  }
   if (claudeKey){
     try {
       const resp = await fetch('https://api.anthropic.com/v1/messages', {
         method:'POST',
         headers:{ 'x-api-key':claudeKey, 'anthropic-version':'2023-06-01', 'content-type':'application/json' },
-        body:JSON.stringify({ model:'claude-sonnet-5', max_tokens:2000, stream:true, system:systemPrompt, messages }),
+        body:JSON.stringify({ model:modelId, max_tokens:2000, stream:true, system:systemPrompt, messages }),
         signal,
       });
       if (!resp.ok){ const t=await resp.text(); onError('Claude ' + resp.status + ': ' + t.slice(0,200)); return; }
@@ -2643,7 +3135,7 @@ async function streamNoteAI(messages, systemPrompt, signal, onDelta, onDone, onE
       const resp = await fetch('https://api.deepseek.com/v1/chat/completions', {
         method:'POST',
         headers:{ 'Authorization':'Bearer '+deepseekKey, 'Content-Type':'application/json' },
-        body:JSON.stringify({ model:'deepseek-v4-flash', max_tokens:2000, stream:true, thinking:{ type:'disabled' }, messages:[{role:'system',content:systemPrompt},...messages] }),
+        body:JSON.stringify({ model:modelId, max_tokens:2000, stream:true, thinking:{ type:'disabled' }, messages:[{role:'system',content:systemPrompt},...messages] }),
         signal,
       });
       if (!resp.ok){ const t=await resp.text(); onError('DeepSeek ' + resp.status + ': ' + t.slice(0,200)); return; }
@@ -2661,10 +3153,17 @@ async function streamNoteAI(messages, systemPrompt, signal, onDelta, onDone, onE
       onDone(full);
     } catch(err){ if (err.name==='AbortError') return; onError(err.message||'Network error'); }
   } else {
-    onError('No API key — add a Claude or DeepSeek key in Settings.');
+    onError('No ' + (provider === 'deepseek' ? 'DeepSeek' : 'Claude') + ' API key — add one in Settings, or pick a different model.');
   }
 }
 
+// Sends a user message in a branch: appends it to br.messages and saves
+// immediately (not debounced — a sent chat message shouldn't be lost),
+// renders the user bubble + a streaming "thinking" placeholder, then drives
+// streamNoteAI to fill that placeholder in as text arrives. On completion,
+// appends the assistant reply to br.messages and saves; on error, shows the
+// error inline AND pops the just-added user message back off (so a failed
+// send doesn't leave an orphaned "asked but never answered" turn in history).
 function sendNoteMsg(bid, text){
   const nb = noteBranches[bid]; if (!nb || nb.streaming || !text.trim()) return;
   const note = getNote(state.selectedId); if (!note) return;
@@ -2707,6 +3206,7 @@ function sendNoteMsg(bid, text){
     () => {
       nb.streaming = false; nb.controller = null;
       aiEl.classList.remove('streaming');
+      highlightCodeIn(aiEl);
       br.messages.push({ role:'assistant', content:fullContent }); br.touchedAt = Date.now(); note.updatedAt = Date.now(); save();
       if (sendBtn) sendBtn.innerHTML = '<i class="ti ti-arrow-up"></i>';
       if (inp){ inp.disabled = false; setTimeout(() => inp.focus(), 0); }
@@ -2723,6 +3223,10 @@ function sendNoteMsg(bid, text){
   );
 }
 
+// Permanently deletes a branch: unwraps its anchor span back to plain text
+// in the source block (so the highlighted-looking text returns to normal,
+// same "unwrap the marker span" approach ADR-009 uses for resolving inline
+// comments), removes the note.branches[] record, and closes the panel if open.
 function deleteNoteBranch(bid){
   const note = getNote(state.selectedId); if (!note) return;
   const br = getNoteBranch(note, bid); if (!br) return;
@@ -2744,6 +3248,12 @@ function deleteNoteBranch(bid){
 }
 
 // ---------- once-only DOM wiring ----------
+// Wires the static #nt-ftoolbar element's buttons a single time (dataset.wired
+// guards against double-attaching listeners across repeated showOverlay()
+// calls, since the toolbar element itself persists in the DOM rather than
+// being rebuilt per-render like block content is). Each command either
+// applies a formatting op directly then calls afterFormat() to persist it,
+// opens a color/turn-into picker popover, or triggers a branch/link action.
 function wireToolbar(){
   const ftb = $('#nt-ftoolbar'); if (!ftb || ftb.dataset.wired) return;
   ftb.dataset.wired = '1';
@@ -2782,6 +3292,11 @@ function wireToolbar(){
   });
 }
 
+// Document-level listeners for cross-cutting behavior that isn't tied to any
+// one block/element: ⌘C/Escape while a page-wide or range block selection is
+// active, closing the emoji popover / format toolbar / slash menu / mention
+// menu on an outside click, tracking scroll for the topbar's shadow, and the
+// export button. Called once from initNotes().
 function wireGlobalListeners(){
   // attach once; safe to leave running across mounts
   document.addEventListener('keydown', e => {
@@ -2823,12 +3338,19 @@ function wireGlobalListeners(){
 }
 
 // ---------- mount / unmount ----------
+// Memoizes the loadState() promise so concurrent callers (e.g. wireSidebar's
+// eager load and showOverlay's own load) share one in-flight/completed load
+// rather than racing separate Dexie reads.
 let bootPromise = null;
 function ensureLoaded(){
   if (!bootPromise) bootPromise = loadState();
   return bootPromise;
 }
 
+// mount() callback registered with core/registry.js — invoked when the
+// Notes view becomes the active full-screen surface. Ensures data is loaded,
+// wires the (idempotent) toolbar, reveals the #nt-screen overlay, and
+// renders either the index or the last-open page.
 async function showOverlay(){
   await ensureLoaded();
   wireToolbar();
@@ -2837,9 +3359,18 @@ async function showOverlay(){
   if (state.showIndex || !getNote(state.selectedId)) renderIndex();
   else renderPage();
 }
+// unmount() callback — hides the overlay and tears down every transient
+// popover/panel so switching away from Notes doesn't leave floating UI
+// (slash menu, mention menu, toolbar, emoji popover, branch panels) visible
+// over whatever view comes next.
 function hideOverlay(){ $('#nt-screen')?.classList.remove('show'); hideSlash(); hideMention(); hideToolbar(); closeEmojiPop(); closeAllNoteBranches(); }
 
 // ---------- sidebar wiring (in the persistent app sidebar) ----------
+// Wires the ALWAYS-VISIBLE sidebar section (#nt-side-head/#nt-side-tree,
+// distinct from the #nt-screen overlay) — clicking it opens the Notes index,
+// the caret collapses/expands the tree, add/clear-all buttons, and
+// drag-to-top-level (dropping a dragged row on the tree background itself
+// rather than on another row, which wireSideDrag handles per-row).
 function wireSidebar(){
   const head = $('#nt-side-head');
   const addBtn = $('#nt-side-add');
@@ -2881,25 +3412,38 @@ export function openNotesIndex(){
   mountView('notes');
 }
 
+// Lets the shared tab strip (core/registry.js) await Notes' data being
+// loaded before it needs to reason about note tabs, without itself knowing
+// anything about Dexie/state internals.
 export async function ensureNotesLoadedForTabs(){
   await ensureLoaded();
 }
 
+// Used by the tab strip to decide whether a "note:<id>" tab still points at
+// a real note (e.g. after the note was deleted elsewhere).
 export function noteExists(id){
   return !!getNote(id);
 }
 
+// Reports which tab id represents "what Notes is currently showing" — the
+// synthetic 'notes' id for the index, or a per-note tab id otherwise. Used
+// by the tab strip to highlight the active tab.
 export function getCurrentNotesTabId(){
   if (state.showIndex || !getNote(state.selectedId)) return 'notes';
   return noteTabId(state.selectedId);
 }
 
+// Supplies a note tab's label/icon for the shared tab strip to render,
+// without the tab strip needing to know the shape of a note object.
 export function getNoteTabMeta(id){
   const n = getNote(id);
   if (!n) return { label: 'Missing note', iconHtml: '<i class="ti ti-notebook"></i>' };
   return { label: n.title || 'Untitled', iconHtml: glyphHTML(n.emoji, '📄', 14) };
 }
 
+// Entry point used when a note tab (or an @mention chip) is clicked from
+// outside this module — opens Notes directly to that page rather than
+// wherever state.selectedId currently points.
 export function openNoteInTab(id){
   ensureLoaded().then(() => {
     if (!getNote(id)){
@@ -2917,6 +3461,12 @@ export function openNoteInTab(id){
   });
 }
 
+// Feature entry point, called once at app startup. Bails out entirely if
+// #nt-screen isn't in the DOM (defensive — lets this module be safely
+// imported even where the Notes markup hasn't been added to index.html),
+// otherwise registers 'notes' as a view via core/registry.js (the same
+// mechanism chat's own view registers through) and wires the always-on
+// sidebar/global listeners.
 export function initNotes(){
   if (!$('#nt-screen')) return;
   registerView({

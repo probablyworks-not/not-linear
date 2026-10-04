@@ -1,8 +1,27 @@
 // Pure markdown rendering utilities — no app state, no DOM globals required.
 // Exported for use by app.js and any future module that renders markdown.
-
+//
+// This is a hand-rolled, line-oriented markdown-to-HTML renderer (headings,
+// lists, tables, fenced code blocks including mermaid, inline bold/italic/
+// code/links) — not a third-party markdown library. It is used by app.js and
+// the feature views (frontend/views/notes.js)
+// to render assistant/model output and note bodies. It has no dependency on
+// core/state.js, core/store.js, or the DOM (except renderMermaidIn and
+// friendlyError-adjacent helpers below, which do touch the DOM/window) — the
+// pure string-in/string-out functions (esc, renderMarkdown, hasMarkdownTable)
+// can be unit-tested or reused without a live page.
+//
+// esc: HTML-escape a string (&, <, >, ", '). The building block every other
+// function in this file uses before inserting raw text into HTML, so nothing
+// here is vulnerable to injecting markup via message content. Also re-used
+// directly by app.js and the feature views for their own non-markdown escaping.
 export function esc(s){ return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]); }
 
+// inlineMd: internal helper — render inline (single-line) markdown spans
+// (bold/italic/bold+italic, inline code, markdown links, and auto-linked bare
+// URLs) inside one already-HTML-escaped line. Called from renderTable() and
+// from most of the per-line branches in renderMarkdown() below; not exported,
+// since block-level structure (headings, lists, tables) is renderMarkdown's job.
 function inlineMd(raw){
   // escape HTML, then apply inline patterns
   let s = esc(raw);
@@ -11,6 +30,9 @@ function inlineMd(raw){
   s = s.replace(/\*([^*\n]+?)\*/g, '<em>$1</em>');
   s = s.replace(/`([^`]+?)`/g, '<code>$1</code>');
   // markdown links [label](url) — must run before bare-URL pass to avoid capturing the closing )
+  // Replaced with \x02<index>\x03 placeholders (control chars unlikely to appear
+  // in real text/markdown) so the bare-URL auto-linker below can't re-match
+  // text already inside the just-built <a> tags; restored after that pass runs.
   const mdLinks = [];
   s = s.replace(/\[([^\]]*)\]\((https?:\/\/[^)]+)\)/g, (_, label, url) => {
     const i = mdLinks.length;
@@ -28,6 +50,10 @@ function inlineMd(raw){
   return s;
 }
 
+// splitTableRow: internal — split one `| a | b |`-style table row into an
+// array of trimmed cell strings, handling a leading/trailing pipe and
+// backslash-escaped pipes (`\|`) inside a cell. Used by isTableDivider,
+// tableAlignClasses and renderTable below, and by hasMarkdownTable().
 function splitTableRow(line){
   let s = line.trim();
   if (s.startsWith('|')) s = s.slice(1);
@@ -49,11 +75,18 @@ function splitTableRow(line){
   return cells;
 }
 
+// isTableDivider: internal — is `line` a GFM table header-separator row (e.g.
+// `| --- | :---: | ---: |`)? At least 2 cells, each made only of dashes with
+// optional leading/trailing colons for alignment. Used by renderMarkdown's
+// table-detection lookahead and by hasMarkdownTable().
 function isTableDivider(line){
   const cells = splitTableRow(line);
   return cells.length >= 2 && cells.every(cell => /^:?-+:?$/.test(cell.trim()));
 }
 
+// tableAlignClasses: internal — turn a divider row (see isTableDivider) into
+// a per-column array of CSS class suffixes (' md-align-center'/' md-align-right'/
+// '') based on the `:` placement, for use on the <th>/<td> in renderTable.
 function tableAlignClasses(dividerLine){
   return splitTableRow(dividerLine).map(cell => {
     const t = cell.trim();
@@ -63,6 +96,11 @@ function tableAlignClasses(dividerLine){
   });
 }
 
+// normalizeTableCells: internal — pad/truncate a row's cells to exactly
+// `count` columns (the header count) so a ragged row never breaks the table
+// shape. A row with extra cells has its overflow rejoined with ' | ' into the
+// last column (so trailing stray pipes don't silently drop data) rather than
+// being truncated outright.
 function normalizeTableCells(cells, count){
   const out = cells.slice(0, count);
   if (cells.length > count && count > 0) out[count - 1] = cells.slice(count - 1).join(' | ');
@@ -70,6 +108,10 @@ function normalizeTableCells(cells, count){
   return out;
 }
 
+// renderTable: internal — build the `<div class="md-table-wrap"><table>...`
+// markup for one markdown table, given its header line, its divider line
+// (for alignment), and its body rows. Called only from renderMarkdown()'s
+// table-detection branch.
 function renderTable(headers, dividerLine, rows){
   const aligns = tableAlignClasses(dividerLine);
   const count = headers.length;
@@ -81,6 +123,14 @@ function renderTable(headers, dividerLine, rows){
   return `<div class="md-table-wrap"><table><thead><tr>${ths}</tr></thead><tbody>${trs}</tbody></table></div>`;
 }
 
+// normalizeMarkdownForDisplay: internal — pre-process raw model output before
+// line-splitting it in renderMarkdown(). Some LLM responses stream compact
+// prose where a heading, numbered item, or "Label:" field runs directly into
+// the preceding sentence with no blank line (models don't always emit clean
+// block separation). This inserts the missing line breaks *only* right before
+// recognizable Markdown structures so we don't add spurious breaks inside
+// normal prose. Also normalizes CRLF/CR to LF first so line-based regexes work
+// consistently regardless of the source's line endings.
 function normalizeMarkdownForDisplay(text){
   let s = String(text || '').replace(/\r\n?/g, '\n');
   // Some models stream compact prose around tool calls or lists. Add block breaks
@@ -89,6 +139,10 @@ function normalizeMarkdownForDisplay(text){
   s = s.replace(/([^\n])(\s*)(#{1,4}\s+)/g, '$1\n\n$3');
   s = s.replace(/([^\n])[ \t]+(\d{1,2}\.\s+(?=[A-Z][A-Za-z0-9&/()'' -]{1,70}(?:\s|$)))/g, '$1\n\n$2');
 
+  // Known recurring "Label:" field names seen in model output (e.g. structured
+  // comparisons) that should start their own line even when glued to prior
+  // text. This list is a pragmatic, hand-maintained set rather than a general
+  // solution — add to it if a new recurring label shows up glued to prose.
   const fieldLabels = [
     'Model',
     'Funding',
@@ -116,6 +170,17 @@ function normalizeMarkdownForDisplay(text){
   return s;
 }
 
+// renderMarkdown: the main entry point — convert a raw markdown string into
+// an HTML string. Runs normalizeMarkdownForDisplay() first, then walks the
+// text line by line (not a full AST parse) recognizing fenced code blocks
+// (including ```mermaid, deferred to renderMermaidIn for actual diagram
+// rendering), tables (via splitTableRow/isTableDivider/renderTable), headings,
+// horizontal rules, ordered/unordered lists, a "compact field label line"
+// convenience format (`Label: value` rendered as a styled paragraph), and
+// falls back to plain paragraphs. Called by app.js and the feature views
+// (frontend/views/notes.js) to render
+// assistant messages and note bodies for display. Returns '<p></p>' for
+// empty input rather than an empty string, so callers always get a renderable node.
 export function renderMarkdown(text){
   const lines = normalizeMarkdownForDisplay(text).split('\n');
   let html = '';
@@ -143,7 +208,8 @@ export function renderMarkdown(text){
         html += `<pre class="lang-mermaid"><code>${esc(code)}</code></pre>`;
       } else {
         const langClass = lang ? ` class="lang-${esc(lang)}"` : '';
-        html += `<pre><code${langClass}>${esc(code)}</code></pre>`;
+        const label = lang || 'text';
+        html += `<div class="code-block"><div class="code-block-head"><span class="code-block-lang">${esc(label)}</span><button type="button" class="code-copy-btn"><i class="ti ti-copy"></i><span>Copy</span></button></div><pre><code${langClass}>${esc(code)}</code></pre></div>`;
       }
       continue;
     }
@@ -211,16 +277,34 @@ export function renderMarkdown(text){
   return html || '<p></p>';
 }
 
+// hasMarkdownTable: cheap check for whether `text` contains at least one
+// GFM-style table (reuses the same header+divider detection as
+// renderMarkdown's table branch, but without rendering anything). Used by
+// app.js to decide UI behavior (e.g. whether to offer table-specific actions)
+// without paying the cost of a full render.
 export function hasMarkdownTable(text){
   const lines = String(text || '').split('\n');
   return lines.some((line, i) => line.includes('|') && lines[i + 1] && isTableDivider(lines[i + 1]));
 }
 
+// markdownTextFromRendered: take a DOM element containing renderMarkdown()'s
+// output and reconstruct a plain-text approximation, one line per top-level
+// rendered block (paragraph, list item's container, etc.) rather than
+// el.textContent's single run-on string. Used by app.js — e.g. for copying a
+// rendered message back out as readable plain text.
 export function markdownTextFromRendered(el){
   const blocks = [...el.children];
   return (blocks.length ? blocks.map(child => child.textContent) : [el.textContent]).join('\n');
 }
 
+// renderMermaidIn: find any not-yet-rendered `.mermaid.mermaid-block` elements
+// (produced by renderMarkdown() for ```mermaid fences) inside `el` and hand
+// them to the globally-loaded `mermaid` library to render as diagrams.
+// Lazily initializes mermaid once (window._mermaidInited guards against
+// re-initializing on every call). No-ops if the mermaid script hasn't loaded.
+// Marks nodes with data-mermaid-rendered up front so a re-render pass (e.g.
+// during streaming) doesn't re-run mermaid on blocks already in progress.
+// Called by app.js after inserting rendered markdown into the DOM.
 export function renderMermaidIn(el) {
   if (typeof mermaid === 'undefined') return;
   if (!window._mermaidInited) {
@@ -233,6 +317,40 @@ export function renderMermaidIn(el) {
   mermaid.run({ nodes }).catch(() => {});
 }
 
+// highlightCodeIn: find any not-yet-highlighted `pre code[class^="lang-"]`
+// elements (produced by renderMarkdown() for fenced code blocks, tagged with
+// their fence's language as a `lang-<x>` class) inside `el` and run them
+// through the globally-loaded `hljs` library (same optional-dependency
+// pattern as renderMermaidIn above and views/notes.js's highlightCodeEditor —
+// hljs is loaded via CDN script tag in index.html, not imported). No-ops if
+// hljs hasn't loaded yet or a block has no recognizable language (`lang-` with
+// nothing after it, or 'lang-text'); highlight errors (e.g. an unknown
+// language name) fail safe, leaving the block as plain escaped text rather
+// than throwing. Marks nodes with data-hl-done up front so re-highlighting
+// mid-stream (see streamInto in app.js) never reprocesses a finished block.
+// Called by app.js after inserting rendered markdown into the DOM.
+export function highlightCodeIn(el){
+  if (typeof hljs === 'undefined') return;
+  const nodes = Array.from(el.querySelectorAll('pre code[class*="lang-"]:not([data-hl-done])'));
+  if (!nodes.length) return;
+  nodes.forEach(node => {
+    node.setAttribute('data-hl-done', '1');
+    const m = node.className.match(/lang-(\S+)/);
+    const lang = m && m[1];
+    if (!lang || lang === 'text') return;
+    try {
+      if (hljs.getLanguage(lang)) hljs.highlightElement(node);
+    } catch {}
+  });
+}
+
+// friendlyError: translate a raw/technical error message (often surfaced from
+// a backend/provider error string) into calmer, actionable copy for display
+// in a node's UI — per this repo's convention of never silently swallowing
+// LLM/provider errors, but also not showing a raw stack trace to the user.
+// Falls through to returning `msg` unchanged if none of the known patterns
+// match. Used by app.js wherever an error from core/api-client.js or a
+// provider module (frontend/providers/*.js) is shown to the user.
 export function friendlyError(msg){
   if (/anthropic key/i.test(msg))
     return 'No Anthropic API key set. Open Settings and paste your Claude key, or switch the model to DeepSeek.';
@@ -265,6 +383,10 @@ export function friendlyError(msg){
   return msg;
 }
 
+// isConfigError: does `msg` indicate a user-fixable configuration problem
+// (missing/invalid API key, out of credits, auth status codes) rather than a
+// transient/server-side failure? Used by app.js to decide whether to, e.g.,
+// surface a "check Settings" affordance alongside the friendlyError() text.
 export function isConfigError(msg){
   return /no api key|invalid.*key|key.*invalid|personalization|out of credits|top up|401|402/i.test(msg);
 }

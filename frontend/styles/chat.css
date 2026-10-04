@@ -1,3 +1,19 @@
+/*
+ * chat.css — styles for the core chat / branching / thread-map UI.
+ *
+ * Covers: in-doc text spans that mark a highlight or a branched-off
+ * quote, the chat message stream (user/assistant bubbles, markdown
+ * rendering, code blocks, "thinking"/status indicators), the sticky
+ * composer at the bottom of the screen, the floating branch drawer
+ * (.branch-stack/.branch) that renders child conversations, the SVG
+ * connector lines between a doc highlight and its branch, and the
+ * Thread Map summary panel. Layout for the surrounding app shell
+ * (sidebar, topbar, doc typography) lives in base.css instead.
+ *
+ * As elsewhere, colors/spacing/fonts come from tokens.css custom
+ * properties (var(--...)) rather than being hardcoded here.
+ */
+
 /* ---- In-doc highlight/branch spans ---- */
 .branched{background:var(--branch-soft);border-bottom:1px dashed var(--branch);cursor:pointer;border-radius:2px;padding:0 2px;transition:background 120ms}
 .branched:hover{background:var(--branch-strong)}
@@ -6,7 +22,10 @@
 .highlighted:hover{background:var(--highlight-strong)}
 .highlighted.focused-highlight{box-shadow:0 0 0 2px rgba(244,184,59,0.42);background:var(--highlight-strong)}
 
-/* Chat messages (in-doc) */
+/* Chat messages (in-doc) — the user/assistant message stream itself:
+   user bubbles right-aligned, assistant replies as flowing prose, plus
+   the "working"/streaming status row shown while a response is
+   generating (interaction/loading state, not just static layout). */
 .chat-stream{padding:8px 0 0;display:flex;flex-direction:column;gap:18px}
 .msg{animation:fadein 220ms ease-out}
 @keyframes fadein{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
@@ -76,8 +95,25 @@
 .branch-body .msg.ai h3,.branch-body .msg.ai h4{font-size:13px}
 
 /* Fenced code blocks */
-.msg.ai pre{background:var(--bg-3);border:1px solid var(--rule);border-radius:6px;padding:12px 14px;overflow-x:auto;margin:6px 0 10px;font-family:var(--mono);font-size:12px;line-height:1.6;color:var(--text-2)}
-.msg.ai pre code{background:none;padding:0;border-radius:0;font-size:inherit;color:inherit}
+.msg.ai .code-block{margin:6px 0 10px;border:1px solid var(--rule);border-radius:8px;overflow:hidden;background:var(--bg-3)}
+.msg.ai .code-block-head{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:6px 10px;background:var(--surface-tint);border-bottom:1px solid var(--rule)}
+.msg.ai .code-block-lang{font-family:var(--mono);font-size:10.5px;text-transform:lowercase;letter-spacing:.04em;color:var(--text-3)}
+.msg.ai .code-copy-btn{display:flex;align-items:center;gap:4px;font-family:var(--font);font-size:11px;color:var(--text-2);background:none;border:none;padding:2px 5px;border-radius:4px;cursor:pointer;transition:background 120ms,color 120ms}
+.msg.ai .code-copy-btn:hover{background:var(--bg-2);color:var(--text)}
+.msg.ai .code-copy-btn i{font-size:13px}
+.msg.ai .code-copy-btn.copied{color:var(--accent-2)}
+.msg.ai pre{background:none;border:none;border-radius:0;padding:12px 14px;overflow-x:auto;margin:0;font-family:var(--mono);font-size:12px;line-height:1.6;color:var(--text-2)}
+.msg.ai pre code{background:none;padding:0;border-radius:0;font-size:inherit;color:inherit;white-space:pre}
+.msg.ai .hljs-keyword,.msg.ai .hljs-title.function_,.msg.ai .hljs-title.class_{color:var(--syn-keyword)}
+.msg.ai .hljs-string,.msg.ai .hljs-regexp{color:var(--syn-string)}
+.msg.ai .hljs-number,.msg.ai .hljs-literal{color:var(--syn-number)}
+.msg.ai .hljs-comment,.msg.ai .hljs-quote{color:var(--syn-comment);font-style:italic}
+.msg.ai .hljs-title,.msg.ai .hljs-built_in,.msg.ai .hljs-title.function_{color:var(--syn-function)}
+.msg.ai .hljs-tag,.msg.ai .hljs-name,.msg.ai .hljs-selector-tag{color:var(--syn-tag)}
+.msg.ai .hljs-attr,.msg.ai .hljs-attribute,.msg.ai .hljs-variable,.msg.ai .hljs-template-variable,.msg.ai .hljs-type{color:var(--syn-attr)}
+.msg.ai .hljs-symbol,.msg.ai .hljs-bullet,.msg.ai .hljs-link{color:var(--syn-number)}
+.msg.ai .hljs-emphasis{font-style:italic}
+.msg.ai .hljs-strong{font-weight:700}
 
 /* Mermaid diagram container */
 .mermaid-block{margin:10px 0;padding:14px;background:var(--bg-3);border:1px solid var(--rule);border-radius:8px;text-align:center;overflow-x:auto}
@@ -89,7 +125,10 @@
 .search-spinner{width:9px;height:9px;border-radius:50%;border:1.5px solid var(--accent);border-top-color:transparent;animation:spin 0.75s linear infinite;flex-shrink:0}
 @keyframes spin{to{transform:rotate(360deg)}}
 
-/* Extended thinking block */
+/* Extended thinking block — collapsible panel showing the model's
+   extended-thinking output for a message; hidden by default (interaction
+   state toggled via .active/.open) since it's supplementary detail, not
+   part of the main reply. */
 .ai-thinking{margin-bottom:8px;border-radius:8px;border:1px solid var(--rule);overflow:hidden;display:none}
 .ai-thinking.active{display:block}
 .thinking-toggle{width:100%;display:flex;align-items:center;gap:7px;padding:6px 10px;background:transparent;border:none;cursor:pointer;color:var(--text-3);font-size:11.5px;text-align:left;transition:background 120ms}
@@ -112,7 +151,10 @@
 .thinking-switch input:checked + .sw-track + .sw-thumb{transform:translateX(14px)}
 .menu-thinking-note{padding:0 12px 8px;font-size:11px;color:var(--text-3);font-style:italic}
 
-/* Sticky composer */
+/* Sticky composer — the fixed-to-bottom prompt input. Its left/right
+   offsets respond to .nav-open/.with-drawer state classes so it never
+   sits under the sidebar or branch drawer, mirroring .main's margins
+   in base.css with matching transition timing. */
 .composer-wrap{position:fixed;bottom:0;left:0;right:0;padding:10px 32px 14px;background:linear-gradient(to top,var(--bg) 60%,transparent);display:flex;justify-content:center;z-index:30;pointer-events:none;transition:left 220ms cubic-bezier(.2,.7,.2,1),right 240ms cubic-bezier(.2,.7,.2,1)}
 .composer-wrap.nav-open{left:var(--sidebar-w)}
 .composer-wrap.with-drawer{right:calc(var(--drawer-w) + var(--drawer-gap) * 2)}
@@ -129,7 +171,11 @@
 .send-btn:hover{background:var(--accent-2)}
 .send-btn:disabled{background:var(--bg-3);color:var(--text-3);cursor:not-allowed}
 
-/* Branch drawer (floating, right side) */
+/* Branch drawer (floating, right side) — where a branched-off child
+   conversation renders. Supports collapsed/expanded/reader size states,
+   drag-resize handles on each edge/corner, and enter/exit transitions
+   when a branch opens, closes, or gets superseded by a newer active one
+   (.behind-active blurs/dims branches stacked behind the focused one). */
 .branch-stack{position:fixed;top:0;right:var(--drawer-gap);bottom:0;width:var(--drawer-w);z-index:40;pointer-events:none}
 .branch-stack.has-active{pointer-events:auto}
 .branch{position:absolute;left:0;right:0;background:var(--surface);border:1px solid var(--rule-2);border-radius:12px;box-shadow:var(--shadow-lg);display:flex;flex-direction:column;overflow:hidden;pointer-events:auto;transition:transform 220ms cubic-bezier(.2,.7,.2,1),opacity 220ms;transform-origin:right center;min-width:340px;max-width:calc(100vw - var(--drawer-gap) * 2)}
@@ -193,7 +239,10 @@ body.resizing-branch.resize-y{cursor:ns-resize}
 body.resizing-branch.resize-ne-sw{cursor:nesw-resize}
 body.resizing-branch.resize-nw-se{cursor:nwse-resize}
 
-/* Edge connector — subtle line from doc highlight to drawer */
+/* Edge connector — subtle SVG line from doc highlight to drawer, drawn
+   over the whole viewport so it can connect a highlight anywhere in the
+   doc to its branch card in the drawer; .active brightens the line for
+   the currently-focused branch. */
 .edges-svg{position:fixed;inset:0;pointer-events:none;z-index:35}
 .edge{stroke:var(--rule-2);stroke-width:1;fill:none}
 .edge.active{stroke:var(--accent);stroke-width:1.5;opacity:0.5}

@@ -1,5 +1,4 @@
-// Shared emoji + icon picker — used by the sidebar (threads, projects) and the
-// coding projects view. One curated, searchable list so "increase the
+// Shared emoji + icon picker — used by the sidebar (threads, projects) and Notes. One curated, searchable list so "increase the
 // selection" only ever has to change in one place. The picker is
 // self-contained: it manages its own floating popover and outside-click
 // dismissal, and reuses the .cp-pop / .cp-emoji-* CSS classes that already
@@ -7,6 +6,23 @@
 // shows the Mind Garden hand-drawn SVG icons; picking one yields a token of
 // the form `"icon:<id>"` instead of a glyph string. Callers that insert into
 // text (composer, doc body) pass `allowIcons: false`.
+//
+// Relationship to other core/ modules: this is the higher-level picker built
+// on top of core/mind-garden.js's fetch/parse/render primitives (see that
+// file's header) — this module owns the actual popover DOM, search/filter
+// behavior, and color-swatch UI. It has no dependency on core/state.js or
+// core/store.js: callers pass an anchor element and an `onPick` callback and
+// are responsible for what happens to the chosen glyph/token (including
+// persisting it, if relevant). app.js and the feature views
+// (frontend/views/notes.js) are the callers.
+//
+// NOTE (see openEmojiPicker below): despite the emoji/icon naming and the
+// EMOJI_INDEX list still living here, the picker currently only ever shows
+// the Mind Garden icon grid — emoji selection itself was removed/disabled
+// ("Emoji are intentionally not offered any more"). EMOJI_INDEX and
+// CURATED_EMOJIS are effectively dormant at the time of writing (no importer
+// of CURATED_EMOJIS was found elsewhere in frontend/); kept here in case
+// emoji selection is reinstated later, per the comments at gridHTML() below.
 import { loadMindGarden, renderIconSvg, getMindGardenEntries, ICON_COLORS } from './mind-garden.js';
 
 // Each entry is [emoji, "space separated search keywords"]. Keep the most
@@ -209,13 +225,21 @@ const EMOJI_INDEX = [
   ['😴', 'sleep tired zzz face'],
 ];
 
-// Flat list of just the glyphs, in index order. coding-projects uses the head
-// of this for its inline add-project grid; the picker uses the whole set.
+// Flat list of just the glyphs, in index order. the picker uses the whole set.
+// (See file-level note above: as of this pass, no current importer of this
+// export was found in frontend/ — the picker below renders Mind Garden icons
+// only. Left in place/documented rather than removed, since removing exports
+// is a logic change outside the scope of a comments-only pass.)
 export const CURATED_EMOJIS = EMOJI_INDEX.map(e => e[0]);
 
 let pickerEl = null;
 let pickerOutside = null;
 
+// closeEmojiPicker: tear down the currently-open picker popover (if any) and
+// remove its outside-click listener. Called at the top of openEmojiPicker()
+// (so opening a new picker always closes a stale one first) and by
+// frontend/views/notes.js to close the picker on other UI events (e.g.
+// navigating away) without needing to know its internals.
 export function closeEmojiPicker(){
   if (!pickerEl) return;
   pickerEl.remove();
@@ -223,11 +247,19 @@ export function closeEmojiPicker(){
   if (pickerOutside){ document.removeEventListener('mousedown', pickerOutside); pickerOutside = null; }
 }
 
+// gridHTML: internal — render a plain-emoji picker grid from a list of glyph
+// strings. Currently unused by openEmojiPicker() below (which only renders
+// the Mind Garden icon grid via mgGridHTML), kept from when the picker also
+// offered raw emoji — see the file-level "NOTE" above.
 function gridHTML(list){
   if (!list.length) return `<div class="cp-emoji-empty">no matches</div>`;
   return list.map(e => `<button class="cp-emoji-opt" type="button">${e}</button>`).join('');
 }
 
+// mgGridHTML: internal — render the Mind Garden icon grid for a filtered list
+// of `entries` (see core/mind-garden.js's entry shape), using renderIconSvg()
+// for each icon's markup and `color` for the currently-chosen swatch color.
+// Called from the picker's repaint() closure inside openEmojiPicker() below.
 function mgGridHTML(entries, color = ''){
   if (!entries.length) return `<div class="cp-emoji-empty">no matches</div>`;
   return entries.map(e =>
@@ -235,6 +267,11 @@ function mgGridHTML(entries, color = ''){
   ).join('');
 }
 
+// colorSwatchHTML: internal — markup for the small swatch button shown next
+// to the search box (see comment inline). Called once when building the
+// picker's toolbar in openEmojiPicker(); the swatch's contents are then
+// updated in place (not re-rendered via this function) when the user picks a
+// color, to avoid re-rendering the whole toolbar.
 function colorSwatchHTML(color){
   // Header swatch shown beside the search box; clicking opens the palette.
   const bg = color || '';
@@ -245,6 +282,10 @@ function colorSwatchHTML(color){
   return `<button class="${cls}" id="mg-color-swatch" type="button" title="icon color">${inner}</button>`;
 }
 
+// colorPaletteHTML: internal — markup for the hidden-by-default dropdown of
+// ICON_COLORS swatches (see core/mind-garden.js), toggled open by clicking
+// colorSwatchHTML's button. Called once when building the picker in
+// openEmojiPicker() below.
 function colorPaletteHTML(){
   return `<div class="mg-color-pop" id="mg-color-pop" hidden>` +
     ICON_COLORS.map(c => {
@@ -258,6 +299,13 @@ function colorPaletteHTML(){
 // Open the Mind Garden icon picker anchored under `anchorEl`. `onPick` receives
 // a `"icon:<id>"` token. Emoji are intentionally not offered any more — Mind
 // Garden is the single source of glyphs across the app.
+// Builds and positions the popover near `anchorEl` (clamped to stay on
+// screen), lazily loads the icon sheet via loadMindGarden() (core/mind-garden.js)
+// and renders/filters the grid as the user types, wires the color-swatch
+// palette to re-render the grid with the chosen stroke color baked into each
+// icon's token, and wires Escape/Enter/outside-click to close or confirm.
+// Called by app.js and by frontend/views/notes.js wherever a user can set a thread/note/
+// project's icon.
 export function openEmojiPicker(anchorEl, onPick){
   closeEmojiPicker();
   const pop = document.createElement('div');

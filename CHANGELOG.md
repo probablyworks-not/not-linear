@@ -2,6 +2,80 @@
 
 All notable repository changes made by AI agents should be recorded here.
 
+## 2026-10-04
+
+- Agent: Claude Sonnet 5.5
+- Summary: README rewritten to document browser mode (macOS/Windows/Linux) alongside the macOS app, with platform differences, data location and troubleshooting. AGENTS.md "Manual" run line now points at `backend/server.py`.
+- Files changed: `README.md`, `AGENTS.md`, docs/project-notes.
+- Verification: server started on a test port and served `frontend/index.html` (HTTP 200). Not smoke-tested on Windows/Linux.
+
+- Agent: Claude Sonnet 5.5
+- Summary: Fixed OpenAI 400 error — `callOpenAICompatible` now sends `max_completion_tokens` for OpenAI (Gemini keeps `max_tokens`). BUGS.md #052.
+- Files changed: `frontend/providers/openai.js`, `BUGS.md`
+- Verification: `node --check` clean; not tested against the live OpenAI API.
+
+- Agent: Claude Sonnet 5.5
+- Summary: Conversation modes are now user-editable. New "New / manage modes" entry in the mode menu opens a modal to view, create, edit, reset and delete modes (each is only a system prompt).
+- Files changed: `frontend/core/modes.js` (new), `frontend/views/modes-modal.js` (new), `frontend/app.js`, `frontend/index.html`, `frontend/core/{state,store}.js`, `frontend/providers/tools.js`, `frontend/styles/base.css`, `FEATURES.md`, docs/project-notes.
+- Behavior changes: the six built-in modes live in `core/modes.js`; edits are stored as overrides (`prefs.modeOverrides`), custom modes in `prefs.customModes` (both inside the existing `kv:'state'` blob — no Dexie schema change). `modeSystemPromptParts` is re-exported from `providers/tools.js`, so app.js and Notes callers are unchanged. Deleting the active custom mode falls back to General.
+- Verification: `node --check` clean; headless Playwright: menu lists 6 modes, modal opens, create + select custom mode, persists across reload, zero console errors. Edit/reset/delete paths covered only by a node unit test of `core/modes.js`; human GUI check of those pending.
+
+## 2026-10-03
+
+- Agent: Claude Sonnet 5.5
+- Summary: Chat branches now have their own model/provider, independent of the main chat and of each other.
+- Files changed: `frontend/app.js`, `BUGS.md`, `FEATURES.md`, docs/project-notes.
+- Behavior changes: picking a model from a branch chip changes only that branch; picking from the main composer changes only main. New branches start with the parent branch's (or main's) model. Persisted in branch snapshots (`modelPref`, no schema change). Notes branch panels still follow the main model.
+- Verification: `node --check frontend/app.js` only; GUI smoke test by the human pending.
+
+## 2026-09-29
+
+- Agent: Claude Sonnet 5.5
+- Summary: Removed the Coding Projects feature from Notlinear at the user's request. Full record of what it was and how to restore it: `docs/coding-projects-archive.md`; final JS/CSS kept in `docs/archive/coding-projects/`.
+- Files changed: deleted `frontend/views/coding-projects.js` and `frontend/styles/coding-projects.css`; new `frontend/styles/emoji-picker.css` (shared picker rules `.cp-pop`/`.cp-emoji-*`/`.mg-*` moved out of the deleted CSS, unchanged); `frontend/index.html` and `frontend/index-design.html` (sidebar block, `#cp-screen`/`#cp-drawer`, blank-tab tile removed); `frontend/app.js` (import, init call, tab-strip entry, tile handler); comment-only edits in `frontend/core/*`, `views/notes.js`, `styles/{base,tokens}.css`, `backend/server.py`; `AGENTS.md`, `FEATURES.md`.
+- Behavior changes: no Coding Projects sidebar section, overlay, or "Coding projects" blank-tab tile (blank tab now has 4 tiles). Backend `/__notlinear_scan_project` and `/__notlinear_pick_folder` intentionally kept — chat Projects' linked-folder context uses them. Orphaned `nl_cp_*` localStorage keys are left in place.
+- Verification: `node --check` on all frontend JS, `python3 -m py_compile backend/server.py`; headless Playwright against `:8765` — app loads with no console errors, no `cp-*` elements, blank tab shows 4 tiles, Notes opens. GUI smoke test by the human still pending.
+
+## 2026-09-24 (2)
+
+- Agent: Claude Sonnet 5
+- Summary: Corrected the same-day Context panel redesign — user rejected the flat/quote-only tree and asked for branches to be grouped by which main-chat turn (A→B→C→D) they were branched from, most-recent turn on top, with the turn's user prompt visible on hover. Added `mainTurnId`/`mainTurnPrompt` fields captured at branch-creation time in the selection popover's "branch" handler (only for a top-level branch created by highlighting inside the live `stream`, via the closest `[data-turn-id]` ancestor shared by that turn's user+assistant DOM pair) and threaded through `openBranch`, `captureBranchSnapshot`, `applyBranchSnapshot`, `rememberBranchRecent`, and `mergeBranchRow`'s field whitelist so the linkage survives reload/thread-switch with no new persisted schema/table. `renderCtxPanel` now groups top-level branch rows by `mainTurnId`, sorts groups most-recent-first (via a new `turnTimestamp()` that decodes the ms timestamp already embedded in `makeTurnId()`'s string, so no separate per-turn timestamp field was needed), renders a `.ctx-turn` header per group (truncated prompt visible, full prompt via native `title` hover), and sorts branches within a turn — and within every nested sub-branch level — by `touchedAt` descending. Replaced the old flat `renderBranchRows` with a `renderBranchNode` single-node-plus-recurse helper so recency sorting applies at every depth, not just the top.
+- Files changed: `frontend/app.js`, `frontend/styles/base.css`, `FEATURES.md`.
+- Behavior changes: the Context panel's branch tree is now grouped under a header per main-chat turn (most recent turn on top, hover shows the full user prompt for that turn), with branches sorted recency-first within each turn and within each nesting level. Branches with no recorded turn (from the static doc, or created before this change) render ungrouped, below any turn groups — unchanged from before.
+- Verification: `node --check` on app.js. Live headless Playwright E2E against the real dev server (Anthropic API mocked, zero cost): sent two real main-chat turns, branched from each turn's response through the actual selection-popover UI, and confirmed the Context panel rendered turn 2's group above turn 1's, each with the correct branch nested and the correct hover-title prompt text; also confirmed the pre-existing no-turn demo branches still render correctly with no turn header. Zero console errors. See RUNS.md.
+
+## 2026-09-24
+
+- Agent: Claude Sonnet 5
+- Summary: Context panel branch tree redesign — the "Attach branch" picker (`frontend/app.js`'s `renderCtxPanel`/`renderBranchRows`/`buildCtxBranchRow`/`branchTreeRowHTML`) showed only a branch's quote, with no turn count, no content preview, and sub-branch nesting relied on a per-row indentation hack (fixed inline `margin-left` + a disconnected per-row `::before` hook) that was hard to read past 1-2 levels deep. Added a live turn-count badge per row (reusing `branchMessagesFor`), a click-to-expand inline preview of the last 1-2 turn-pairs (new `previewText`/`toggleBranchPreview`, handling both plain-string and Claude content-block-array message shapes), and restructured `renderBranchRows` to nest a parent's children inside a real `.ctx-branch-children` wrapper `<div>` instead of flat sibling rows — this gives collapsible subtrees (new session-only `ctxTreeCollapsed` state) and a continuous CSS `border-left` guide line per depth level "for free," replacing the old per-row hook. Attaching stays whole-branch (no turn-level selection) and no persistence/data-model changes were made.
+- Files changed: `frontend/app.js`, `frontend/styles/base.css`, `FEATURES.md`.
+- Behavior changes: branch rows in the Context panel now show a turn count and an expandable preview; branches with sub-branches get a collapse/expand chevron; the tree renders with continuous nested guide lines instead of per-row hooks. Attach/open/delete behavior on each row is unchanged.
+- Verification: `node --check` on app.js; live headless-browser (Playwright) end-to-end test against the real dev server with the Anthropic API mocked (no real API calls/cost) — created a real parent branch + nested sub-branch via the actual selection-popover → branch UI flow, sent a message in each, confirmed accurate turn counts, correct nesting with visible guide line, working preview toggle (correct You/Assistant text), working collapse chevron (`display:none` on the children wrapper), and zero console errors. See RUNS.md.
+
+## 2026-09-18
+
+- Agent: Claude Sonnet 5
+- Summary: Fixed Notes losing indented sub-bullets on copy/export (bug #049). `blocksToText()`/`blocksToMarkdown()` (`frontend/views/notes.js`) only recursed into a block's `children` when the block was a `toggle` — but any block type can carry Tab-indented children (per the existing `indentBlock` comment), so nested bullets/text/etc. under a plain bullet were silently dropped from ⌘C copy and "export as .md". Moved the children recursion out of the toggle-only branch so it runs for every block type.
+- Files changed: `frontend/views/notes.js`, `BUGS.md`.
+- Behavior changes: ⌘A ⌘A → ⌘C page copy and Markdown export now include indented sub-bullets/children under any block type, not just toggles.
+- Verification: `node --check` on notes.js; scripted logic check (see RUNS.md) confirmed a 3-level nested bullet list serializes with correct indentation. Full in-app smoke test (creating an indented bullet in the browser and copy/pasting) not run this session — server wasn't started.
+
+## 2026-09-06
+
+- Agent: Claude Sonnet 5
+- Summary: Fixed unreadable code blocks in the chat UI (and Notes' AI-branch replies / Coding Projects file preview, which share the same renderer). Fenced code was previously escaped into a plain flat-gray `<pre><code>` with no syntax highlighting even though `hljs` was already loaded globally and already used elsewhere in the app (Notes' own code-block editor). `core/markdown.js`'s `renderMarkdown()` now wraps each code fence in a `.code-block` with a header (language label + Copy button), and a new `highlightCodeIn(el)` helper runs `hljs` over rendered blocks (called from app.js's streaming `onDone` handlers, table rehydration, and thread restore, plus the equivalent spots in notes.js/coding-projects.js). Added a dedicated `--syn-*` color palette to `tokens.css` (per theme) since the rest of the app's palette is intentionally monochrome, and mapped `hljs-*` classes to it in chat.css/notes.css/coding-projects.css. Added a document-level delegated click handler for the new Copy button (delegated because the block's innerHTML gets fully rebuilt on every streamed delta).
+- Files changed: `frontend/core/markdown.js`, `frontend/app.js`, `frontend/views/notes.js`, `frontend/views/coding-projects.js`, `frontend/styles/tokens.css`, `frontend/styles/chat.css`, `frontend/styles/notes.css`, `frontend/styles/coding-projects.css`.
+- Behavior changes: fenced code blocks in chat/Notes-branch-replies/Coding-Projects-preview now show real syntax colors (keywords/strings/comments/numbers in distinct hues) instead of flat gray, and get a header bar with a language label and a "Copy" button that copies the code and briefly shows "Copied".
+- Verification: `node --check` on all four touched JS files; a scratch Playwright script against the live `:8765` server injected a synthetic assistant code-block message through the app's own render path and confirmed the code-block wrapper, copy button, real hljs syntax-color spans, and working copy-to-clipboard, in both light and dark-mono themes (screenshots reviewed). No new console errors.
+
+## 2026-09-06
+
+- Agent: Claude Sonnet 5
+- Summary: Fixed `fetch_url`/`firecrawl_scrape` silently truncating long pages at a fixed head-of-document cutoff (4000/6000 chars, always chars 0–N regardless of where the relevant content sits). Both runners now fetch the full page once, cache the raw text, and return a bounded *window* into it: an optional `offset` param resumes from a given character position, and an optional `query` param jumps the window to center on that term's first match. Every windowed result notes the char range shown and total length so the model knows to call again with `offset` to keep reading, instead of treating truncation as end-of-document. The per-URL cache (previously only in `claude.js`, and only caching the already-truncated string) moved into `tools.js` as a shared `fetchRawTextCached` helper keyed by `${tool}:${url}`, storing the untruncated text — so OpenAI/DeepSeek branches now also get cache reuse across pages/re-reads, and paging through one page never re-hits Jina/Firecrawl.
+- Files changed: `frontend/providers/tools.js`, `frontend/providers/claude.js`, `frontend/app.js`.
+- Behavior changes: `fetch_url`/`firecrawl_scrape` tool schemas (both the Claude and DeepSeek/OpenAI copies in `app.js`) now accept optional `offset`/`query` params; tool result strings for long pages now end with a `[showing chars X-Y of TOTAL. Call again with offset:Y to continue...]` note instead of `[content truncated]`.
+- Verification: `node --check` on all three touched files; confirmed the running `:8765` server serves the updated `app.js` with no syntax errors. Did not exercise a live `fetch_url` call against a real long page in this session (would need a real API key + manual tool-call trigger) — flagging as an item for the user's own smoke pass.
+
 ## 2026-08-07
 
 - Agent: Claude Sonnet 5

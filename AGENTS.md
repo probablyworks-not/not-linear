@@ -11,7 +11,7 @@ These rules apply to **every** AI coding agent working in this repository (Claud
 ## Goals
 
 - **CURRENT MAJOR GOAL — modularize the codebase.** Migrate from the single `notlinear.html` monolith to a separated, modular **`backend/` + `frontend/`** structure using native ES modules and **no build step**, so features can be added without editing a 7,500-line file. The authoritative, step-by-step plan is **`MIGRATION.md`** — follow it exactly, one phase per session. Do **not** start the migration ad hoc or all at once.
-- **UPCOMING FEATURE — Coding Projects.** A Notion-style view that lists local code projects and reads each project's `README/CHANGELOG/BUGS/TASKS` to show a what's-there / what's-missing checklist, open bugs, and click-to-open files. Strictly **additive** — must not change existing chat/threads/branches.
+- **REMOVED — Coding Projects.** The standalone Coding Projects view was removed on 2026-09-29; its record and restore steps are in `docs/coding-projects-archive.md`. The `/__notlinear_scan_project` and `/__notlinear_pick_folder` endpoints stay (chat Projects' linked-folder context uses them).
 - **FEATURE — Notes.** A Notion-style personal notebook (top-level sidebar section + full-screen overlay page editor with a block model: text/headings/lists/todo/toggle/quote/callout/divider/code/equation/image/table/columns/page-link, a slash menu, and a floating format toolbar). Built per `notes_product.md` (the PRD). Strictly **additive** — must not change chat/threads/branches/coding-projects. See "Repo map" and ADR-007 for where it lives and how it persists.
 - **STANDING GOAL — stability.** Zero regressions, especially in the **Fragile areas** listed in `BUGS.md`. Every change is human-reviewed; these rules keep review fast.
 
@@ -29,7 +29,7 @@ These rules apply to **every** AI coding agent working in this repository (Claud
 - `notlinear_server.py` — local server: serves the app and exposes `/__notlinear_open_files`, `/__notlinear_save_file`, `/__notlinear_runtime_logs`.
 - `README.md` — how to run the desktop app.
 - `CHANGELOG.md` — user-facing release history. **Also read by the in-app changelog viewer** (has a bundled `FALLBACK_CHANGELOG_MD`, see bug #007).
-- `FEATURES.md` — **feature inventory: what the product does, right now, by area** (chat/branching, providers/tools, Coding Projects, Notes, Feedback, Settings, redesign-in-progress, backend endpoints, persistence). Keep current — see "Required updates per change" below.
+- `FEATURES.md` — **feature inventory: what the product does, right now, by area** (chat/branching, providers/tools, Notes, Feedback, Settings, redesign-in-progress, backend endpoints, persistence). Keep current — see "Required updates per change" below.
 - `BUGS.md` — solved-bug memory + **Fragile areas**.
 - `logs.md` — runtime-log target (server syncs the latest events into the marked section).
 - `skills/<name>/SKILL.md` — agent skills (see index below).
@@ -44,7 +44,7 @@ These rules apply to **every** AI coding agent working in this repository (Claud
 ## Setup & run
 
 - **Desktop:** double-click `Notlinear.app` — opens its own macOS window and starts the server at `http://127.0.0.1:8765/`.
-- **Manual:** `python3 notlinear_server.py`, then open the served URL. (Plain `python3 -m http.server` also works but disables runtime-log file sync and native pickers.)
+- **Browser (any OS):** `python3 backend/server.py`, then open `http://127.0.0.1:8765/frontend/index.html`. See `README.md`. (Plain `python3 -m http.server` also works but disables runtime-log file sync and native pickers.)
 - **No install, no build, no package manager.**
 
 ## Verification — run before claiming any task is done
@@ -101,7 +101,7 @@ The repo uses a set of markdown memory files. **At the start of the migration (M
 Append a new entry per change: **date · agent · one-line summary · files changed.** Add `Behavior changes:` and `Observed:` lines when applicable. Never remove or rewrite previous entries unless explicitly asked.
 
 ### `FEATURES.md` (root, exists) — feature inventory
-Organized by area (Chat & document core / Model providers & tools / Coding Projects / Notes / Feedback capture / Settings / Redesign-in-progress / Backend endpoints / Persistence). Unlike `CHANGELOG.md` (chronological) this is a **current-state snapshot** — when you add, remove, or materially change a feature, edit the relevant section in place rather than appending a dated entry. Update the "Last compiled" line at the bottom when you touch it.
+Organized by area (Chat & document core / Model providers & tools / Notes / Feedback capture / Settings / Redesign-in-progress / Backend endpoints / Persistence). Unlike `CHANGELOG.md` (chronological) this is a **current-state snapshot** — when you add, remove, or materially change a feature, edit the relevant section in place rather than appending a dated entry. Update the "Last compiled" line at the bottom when you touch it.
 
 ### `BUGS.md` (root, exists) — solved-bug memory
 On every **bug fix**, append a numbered entry: **Bug ID · status (open/fixed/verified/recurring) · date discovered · date fixed · agent · symptom · root cause · fix · files touched · manual test case · prevention · related.** If the bug is in a recurring area, update the **Fragile areas** section at the top.

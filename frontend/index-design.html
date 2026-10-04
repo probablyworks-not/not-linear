@@ -1,16 +1,40 @@
+<!--
+  index-design.html — a static, single-file DESIGN REFERENCE/DRAFT, not the
+  live app.
+
+  Confirmed against FEATURES.md section 8 ("Workspace redesign — in
+  progress", RD00–RD09): this file is the prototype some already-landed
+  redesign work (tab strip, floating panels, hand-drawn icon set, etc.) was
+  drafted against, plus ideas still in progress here (e.g. a simplified
+  composer/model-picker, an earlier non-tabbed layout) that have NOT been
+  ported into index.html yet. It is not linked from index.html, not served
+  as part of the normal app flow, and not registered with the view system —
+  opening it directly shows a frozen mockup with placeholder content only
+  (no chat-stream wiring, no Dexie, no app.js). All CSS here is inlined in
+  a single <style> block (unlike index.html, which pulls the modular
+  styles/*.css files) and there is no closing <script> module — this page
+  has no behavior at all, it's markup + CSS only.
+
+  Where this file's markup/CSS differs from index.html (missing tab strip,
+  simpler composer, fewer settings sections, etc.), treat index-design.html
+  as the stale/aspirational one — index.html is what actually runs.
+-->
 <!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
 <title>notlinear — v6 Dark Mono (Design Reference)</title>
+<!-- Google Fonts + Tabler Icons webfont (CDN), same as index.html. -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.0.0/dist/tabler-icons.min.css">
 <link rel="icon" href="logo.svg">
+<!-- Entire design system is inlined here (unlike index.html's styles/*.css split) — CSS custom-property tokens + theme overrides, then component styles in roughly the same order as the body markup below. -->
 <style>
 /* ---- Design tokens: CSS custom properties + theme overrides ---- */
+/* Base (dark) theme tokens — colors, shadows, fonts, and shell-sizing variables reused throughout the rest of this stylesheet. */
 
 :root{
   --bg:#0A0A0A;
@@ -46,6 +70,7 @@
   --drawer-w:420px;
   --drawer-gap:16px;
 }
+/* "Grey" theme — overrides a subset of the :root tokens above; applied via <html data-theme="grey">. */
 html[data-theme="grey"]{
   --bg:#1C1C1C;
   --bg-2:#232323;
@@ -69,6 +94,7 @@ html[data-theme="grey"]{
   --surface-tint:rgba(255,255,255,0.018);
   --th-tint:rgba(255,255,255,0.028);
 }
+/* "Light" theme — overrides a subset of the :root tokens above; applied via <html data-theme="light">. */
 html[data-theme="light"]{
   --bg:#F8F8F8;
   --bg-2:#F0F0F0;
@@ -94,6 +120,7 @@ html[data-theme="light"]{
 }
 
 /* ---- Global resets ---- */
+/* Box-sizing, base typography, selection color, and custom scrollbar treatment (thumb only appears on hover of the scrolling element). */
 *{box-sizing:border-box}
 html,body{margin:0;padding:0;background:var(--bg);color:var(--text);font-family:var(--font);font-size:15px;line-height:1.65;-webkit-font-smoothing:antialiased}
 ::selection{background:var(--accent-soft);color:var(--text)}
@@ -103,7 +130,7 @@ textarea,input{font-family:inherit}
 ::-webkit-scrollbar-thumb{background:transparent;border-radius:4px}
 *:hover::-webkit-scrollbar-thumb{background:var(--scrollbar-thumb)}
 
-/* Shell */
+/* Shell — left sidebar (slide-in overlay, not a persistent column in this draft — see .main.nav-open pushing content over instead) and its internal sections (brand, nav items, projects/threads/notes lists, footer). */
 .app{display:block;min-height:100vh}
 .sidebar{position:fixed;top:0;bottom:0;left:0;width:var(--sidebar-w);background:var(--surface-2);border-right:1px solid var(--rule);padding:14px 10px;display:flex;flex-direction:column;z-index:80;transform:translateX(calc(-100% - 1px));transition:transform 220ms cubic-bezier(.2,.7,.2,1);box-shadow:var(--shadow-lg)}
 .sidebar.open{transform:translateX(0)}
@@ -197,7 +224,7 @@ textarea,input{font-family:inherit}
 .pane-scrim{position:fixed;inset:0;background:rgba(0,0,0,0.35);opacity:0;pointer-events:none;transition:opacity 200ms;z-index:75}
 .pane-scrim.show{opacity:1;pointer-events:auto}
 
-/* Main */
+/* Main — content column that shifts right when the sidebar is open (.nav-open) and/or left when a branch drawer is open (.branch-open); topbar and breadcrumbs. */
 .main{position:relative;display:flex;flex-direction:column;min-height:100vh;transition:margin-left 220ms cubic-bezier(.2,.7,.2,1),margin-right 240ms cubic-bezier(.2,.7,.2,1)}
 .main.nav-open{margin-left:var(--sidebar-w)}
 .main.branch-open{margin-right:calc(var(--drawer-w) + var(--drawer-gap) * 2)}
@@ -213,7 +240,7 @@ textarea,input{font-family:inherit}
 .ic-btn:hover{background:var(--bg-2);color:var(--text)}
 .ic-btn.active{color:var(--text);background:var(--bg-3)}
 
-/* Doc */
+/* Doc — the editable chat-document surface: title/meta row, prose typography, callouts/quotes, and the chat message stream appended below it. */
 .doc-wrap{flex:1;padding:32px 0 200px;display:flex;justify-content:center}
 .doc{width:100%;max-width:780px;padding:0 32px}
 .doc h1{font-size:36px;font-weight:600;letter-spacing:-0.025em;line-height:1.1;margin:8px 0 14px}
@@ -248,7 +275,7 @@ textarea,input{font-family:inherit}
 /* Folder-name in crumbs */
 .crumb-folder{font-size:13.5px;color:var(--text-2);font-weight:500}
 
-/* Selection popover */
+/* Selection popover — floating toolbar shown on text selection in the doc (Branch/Highlight/Bold/Italic here; this draft has fewer actions than index.html's version). */
 .pop{position:fixed;background:var(--surface-2);color:var(--text);border-radius:8px;padding:5px;display:none;align-items:center;gap:1px;box-shadow:var(--shadow-lg);z-index:200;border:1px solid var(--rule-2)}
 .pop.show{display:inline-flex}
 .pop button{padding:7px 11px;border-radius:5px;font-size:13px;display:inline-flex;align-items:center;gap:6px;color:var(--text)}
@@ -260,7 +287,7 @@ textarea,input{font-family:inherit}
 .pop .kbd{font-family:var(--mono);font-size:10.5px;color:var(--kbd-color);background:var(--kbd-bg);padding:1px 5px;border-radius:3px;margin-left:4px}
 .pop .primary .kbd{background:rgba(255,255,255,0.18);color:rgba(255,255,255,0.85)}
 
-/* Search palette */
+/* Search palette — ⌘K-style command palette modal (present in CSS here even though this draft's body markup below has no search trigger button, unlike index.html). */
 .search-scrim{position:fixed;inset:0;background:rgba(0,0,0,0.45);opacity:0;pointer-events:none;transition:opacity 160ms;z-index:200}
 .search-scrim.show{opacity:1;pointer-events:auto}
 .search-palette{position:fixed;top:18vh;left:50%;transform:translateX(-50%) translateY(-8px);width:min(560px,92vw);background:var(--bg);border:1px solid var(--rule);border-radius:12px;box-shadow:var(--shadow-lg);overflow:hidden;opacity:0;pointer-events:none;transition:opacity 160ms,transform 160ms;z-index:201}
@@ -279,7 +306,7 @@ textarea,input{font-family:inherit}
 .search-result-sub{font-family:var(--mono);font-size:9.5px;color:var(--text-3);flex-shrink:0;max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .search-result mark{background:none;color:var(--accent);font-weight:600}
 
-/* Personalization drawer */
+/* Personalization drawer (Settings) — CSS present here for the right-edge settings panel, though this draft's body markup has no #prefs content block (no equivalent settings UI rendered below). */
 .scrim{position:fixed;inset:0;background:rgba(0,0,0,0.4);opacity:0;pointer-events:none;transition:opacity 200ms;z-index:90}
 .scrim.show{opacity:1;pointer-events:auto}
 .prefs{position:fixed;top:0;right:0;bottom:0;width:min(380px,92vw);background:var(--bg);box-shadow:var(--shadow-lg);transform:translateX(100%);transition:transform 240ms cubic-bezier(.2,.7,.2,1);z-index:100;display:flex;flex-direction:column;border-left:1px solid var(--rule)}
@@ -315,7 +342,7 @@ textarea,input{font-family:inherit}
 .prefs-action .ti-chevron-down{margin-left:auto;color:var(--text-3);transition:transform 160ms}
 .prefs-action[aria-expanded="true"] .ti-chevron-down{transform:rotate(180deg)}
 
-/* Context panel */
+/* Context panel — right-edge drawer for doc hierarchy/files (CSS only in this draft; no matching body markup below). */
 .ctx-panel{position:fixed;top:0;right:0;bottom:0;width:min(340px,92vw);background:var(--bg);box-shadow:var(--shadow-lg);transform:translateX(100%);transition:transform 240ms cubic-bezier(.2,.7,.2,1);z-index:100;display:flex;flex-direction:column;border-left:1px solid var(--rule)}
 .ctx-panel.show{transform:translateX(0)}
 .ctx-top{padding:14px 16px;border-bottom:1px solid var(--rule);display:flex;align-items:center;gap:10px;flex-shrink:0}
@@ -324,20 +351,20 @@ textarea,input{font-family:inherit}
 .ctx-section{margin-bottom:20px}
 .ctx-label{font-family:var(--mono);font-size:9.5px;letter-spacing:0.12em;text-transform:uppercase;color:var(--text-3);margin-bottom:8px}
 
-/* Highlights panel */
+/* Highlights panel — right-edge drawer for saved highlights (CSS only in this draft; no matching body markup below). */
 .highlight-panel{position:fixed;top:0;right:0;bottom:0;width:min(380px,92vw);background:var(--bg);box-shadow:var(--shadow-lg);transform:translateX(100%);transition:transform 240ms cubic-bezier(.2,.7,.2,1);z-index:100;display:flex;flex-direction:column;border-left:1px solid var(--rule)}
 .highlight-panel.show{transform:translateX(0)}
 .highlight-top{padding:14px 16px;border-bottom:1px solid var(--rule);display:flex;align-items:center;gap:10px;flex-shrink:0}
 .highlight-top h3{flex:1;margin:0;font-size:14px;font-weight:600;color:var(--text)}
 .highlight-count{font-family:var(--mono);font-size:10.5px;color:var(--text-3);border:1px solid var(--rule);border-radius:999px;padding:2px 7px}
 
-/* Thread Map panel */
+/* Thread Map panel — right-edge drawer for branch-tree navigation (CSS only in this draft; no matching body markup below). */
 .thread-map-panel{position:fixed;top:0;right:0;bottom:0;width:min(420px,92vw);background:var(--bg);box-shadow:var(--shadow-lg);transform:translateX(100%);transition:transform 240ms cubic-bezier(.2,.7,.2,1);z-index:100;display:flex;flex-direction:column;border-left:1px solid var(--rule)}
 .thread-map-panel.show{transform:translateX(0)}
 .tm-top{padding:14px 16px;border-bottom:1px solid var(--rule);display:flex;align-items:center;gap:10px;flex-shrink:0}
 .tm-top h3{flex:1;margin:0;font-size:14px;font-weight:600;color:var(--text)}
 
-/* Branch context promote menu */
+/* Shared floating menu style — used for the branch context/promote menu and any other small dropdown menus in this draft. */
 .menu{position:fixed;background:var(--surface-2);border:1px solid var(--rule-2);border-radius:8px;box-shadow:var(--shadow-lg);padding:4px;min-width:200px;z-index:220;display:none}
 .menu.show{display:block}
 .menu button{width:100%;padding:7px 10px;border-radius:5px;font-size:13px;color:var(--text);text-align:left;display:flex;align-items:center;gap:9px}
@@ -347,7 +374,7 @@ textarea,input{font-family:inherit}
 .menu button.danger,.menu button.danger .ti{color:#f87171}
 .menu .div{height:1px;background:var(--rule);margin:3px 0}
 
-/* Toast */
+/* Toast — transient status message; also styles for the "New update - refresh" file-watch button (CSS only here, no matching element in this draft's body markup). */
 .toast{position:fixed;bottom:90px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--surface-2);border:1px solid var(--rule-2);color:var(--text);padding:9px 14px;border-radius:8px;font-size:13px;box-shadow:var(--shadow-lg);opacity:0;transition:opacity 200ms,transform 200ms;z-index:500;pointer-events:none;display:flex;align-items:center;gap:8px}
 .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
 .toast .ti{color:var(--accent)}
@@ -356,7 +383,7 @@ textarea,input{font-family:inherit}
 .update-refresh:hover{background:var(--bg-3)}
 .update-refresh .ti{font-size:15px;color:var(--accent)}
 
-/* Confirm dialog */
+/* Confirm dialog — destructive-action confirmation modal (CSS only in this draft; no matching body markup below). */
 .confirm-scrim{position:fixed;inset:0;background:rgba(0,0,0,0.58);backdrop-filter:blur(2px);display:grid;place-items:center;opacity:0;pointer-events:none;transition:opacity 160ms;z-index:360;padding:18px}
 .confirm-scrim.show{opacity:1;pointer-events:auto}
 .confirm-dialog{width:min(420px,100%);background:linear-gradient(180deg,var(--surface-2),var(--surface));border:1px solid var(--rule-2);border-radius:10px;box-shadow:var(--shadow-lg);transform:translateY(8px) scale(.98);transition:transform 160ms;overflow:hidden}
@@ -373,7 +400,7 @@ textarea,input{font-family:inherit}
 .confirm-delete{background:#b91c1c;border-color:#dc2626!important;color:#fff}
 .confirm-delete:hover{background:#dc2626}
 
-/* Notes Styling */
+/* Notes Styling — sidebar note tree rows, the full-screen note editor surface (.nt-screen/.nt-pg), and the Notes branch panel (a simpler variant of #branch-stack for branching from note text). */
 .nt-side-head-actions{ display:flex; align-items:center; gap:2px; }
 #nt-side-clear:hover{ color:var(--tx-red); }
 #nt-side-tree{ display:flex; flex-direction:column; gap:1px; }
@@ -415,48 +442,7 @@ textarea,input{font-family:inherit}
 .nbp-input:focus{ border-color:var(--branch); }
 .nbp-send{ flex:0 0 32px; width:32px; height:32px; display:grid; place-items:center; border-radius:8px; background:var(--branch); border:none; color:#fff; font-size:15px; cursor:pointer; }
 
-/* Coding Projects Styling */
-.cp-screen{position:fixed;inset:0;background:var(--bg);z-index:400;display:none;flex-direction:column}
-.cp-screen.show{display:flex}
-
-.cp-bar{display:flex;align-items:center;gap:10px;padding:13px 18px;border-bottom:1px solid var(--rule);flex:0 0 auto}
-.cp-crumb{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text-2);min-width:0}
-.cp-crumb .ti{color:var(--accent);font-size:15px}
-.cp-crumb .cp-crumb-here{color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-
-.cp-scroll{flex:1;overflow-y:auto}
-.cp-inner{max-width:920px;margin:0 auto;padding:30px 24px 80px;width:100%}
-
-.cp-title{font-size:22px;font-weight:600;letter-spacing:-0.01em;color:var(--text);margin:0}
-
-.cp-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:0 0 18px}
-.cp-head-actions{display:flex;align-items:center;gap:8px}
-.cp-btn{height:32px;padding:0 12px;border-radius:7px;font-size:13px;display:inline-flex;align-items:center;gap:6px;cursor:pointer;border:1px solid var(--rule);background:var(--surface);color:var(--text-2)}
-.cp-btn .ti{font-size:15px}
-.cp-btn:hover{background:var(--surface-2);color:var(--text)}
-.cp-btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
-.cp-btn.primary:hover{background:var(--accent-2)}
-
-.cp-list{display:flex;flex-direction:column;gap:2px}
-.cp-row{display:flex;align-items:center;gap:12px;padding:10px 10px;border-radius:8px;cursor:pointer}
-.cp-row:hover{background:var(--surface-2)}
-.cp-emoji{font-size:22px;line-height:1;width:30px;height:30px;display:grid;place-items:center;border-radius:6px;background:transparent;cursor:pointer;flex:0 0 auto}
-.cp-emoji:hover{background:var(--bg-3)}
-.cp-name{font-size:13.5px;color:var(--text);display:flex;align-items:center;gap:6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.cp-path{font-family:var(--mono);font-size:11px;color:var(--text-3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.cp-status{flex:1 1 auto;min-width:0;display:flex;align-items:center;gap:6px;color:var(--text-2);font-size:12.5px}
-.cp-status .ti{font-size:13px;color:var(--text-3);flex:0 0 auto}
-.cp-status-text{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.cp-status-text .ok{color:var(--branch)}
-
-.cp-drawer{position:fixed;top:var(--drawer-gap);right:var(--drawer-gap);bottom:var(--drawer-gap);width:var(--drawer-w);max-width:calc(100vw - var(--drawer-gap) * 2);background:var(--surface);border:1px solid var(--rule-2);border-radius:12px;box-shadow:var(--shadow-lg);z-index:410;display:flex;flex-direction:column;overflow:hidden;transform:translateX(calc(100% + var(--drawer-gap) * 2));opacity:0;transition:transform 220ms cubic-bezier(.2,.7,.2,1),opacity 200ms;pointer-events:none}
-.cp-drawer.show{transform:none;opacity:1;pointer-events:auto}
-.cp-drawer-head{display:flex;align-items:center;gap:8px;padding:10px 12px;border-bottom:1px solid var(--rule);flex:0 0 auto}
-.cp-drawer-path{font-family:var(--mono);font-size:11.5px;color:var(--text-2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0}
-.cp-drawer-size{font-family:var(--mono);font-size:11px;color:var(--text-3);flex:0 0 auto}
-.cp-drawer-body{flex:1;overflow-y:auto;padding:16px 18px;font-size:14px;color:var(--text-2);line-height:1.6}
-
-/* Responsive */
+/* Responsive — narrower-viewport overrides: hides the branch stack and collapses margins below 1100px, stacks the sidebar full-width and shrinks the usage grid below 760px. */
 @media (max-width: 1100px){
   .branch-stack{display:none}
   .composer-wrap.with-drawer{right:0}
@@ -468,10 +454,12 @@ textarea,input{font-family:inherit}
   .sidebar{width:min(300px,88vw)}
   .llm-usage-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
 }
+/* Accessibility: disable the "AI is working" animations for users who prefer reduced motion. */
 @media (prefers-reduced-motion: reduce){
   .working-status,.working-text,.working-orbit{animation:none}
 }
 
+/* Notes-specific color tokens: text-highlight backgrounds (--hl-*) and text colors (--tx-*) used by the format toolbar's color/highlight pickers. */
 :root{
   --hl-yellow:rgba(244,184,59,0.30);
   --hl-blue:rgba(88,166,255,0.22);
@@ -484,6 +472,7 @@ textarea,input{font-family:inherit}
 </head>
 <body>
 
+<!-- Hidden SVG sprite defining the app logo mark once (same pattern as index.html), referenced via <use href="#logo-mark"/> in the sidebar brand. -->
 <svg width="0" height="0" style="position:absolute" aria-hidden="true">
   <defs>
     <symbol id="logo-mark" viewBox="0 0 36 36">
@@ -495,9 +484,11 @@ textarea,input{font-family:inherit}
   </defs>
 </svg>
 
+<!-- #edges: SVG overlay for doc/branch connector lines; #pane-scrim: dim backdrop behind the open sidebar. -->
 <svg class="edges-svg" id="edges"></svg>
 <div class="pane-scrim" id="pane-scrim"></div>
 
+<!-- Top-level shell: sidebar + main column, same structure as index.html but simplified (no tab strip, fewer sidebar rows/menus). -->
 <div class="app">
   <aside class="sidebar" id="sidebar" aria-label="Left pane" aria-hidden="true">
     <div class="brand">
@@ -506,23 +497,26 @@ textarea,input{font-family:inherit}
       <button class="ic-btn side-close" id="close-sidebar" title="Close left pane"><i class="ti ti-layout-sidebar-left-collapse"></i></button>
     </div>
 
+    <!-- Search (⌘K) and New chat — top-level actions above the collapsible lists (note: no ⌘N label/kbd hint shown here, unlike index.html's later "New chat" restyle). -->
     <button class="side-item" id="search-btn"><i class="ti ti-search"></i><span>Search</span><span style="margin-left:auto;font-family:var(--mono);font-size:10px;color:var(--text-3)">⌘K</span></button>
     <button class="side-item" id="new-chat"><i class="ti ti-edit"></i><span>New chat</span></button>
 
+    <!-- Projects — collapsible section (same purpose as index.html); note this draft has no separate "view all projects" grid-icon button. -->
     <div class="side-section side-section-row collapsible" data-section="projects"><span class="side-sec-label"><i class="ti ti-chevron-down side-caret"></i>Projects</span><button class="side-section-add" id="new-project" type="button" title="New project"><i class="ti ti-plus"></i></button></div>
     <div id="projects-list" class="side-collapse-body"></div>
 
-    <div class="side-section side-section-row cp-side-toggle" id="cp-side-head"><span><i class="ti ti-chevron-down cp-caret"></i>coding projects</span><button class="side-section-add" id="cp-add-project" type="button" title="Add coding project"><i class="ti ti-plus"></i></button></div>
-    <div id="cp-side-list"></div>
 
+    <!-- Threads — one seed thread row shown as placeholder markup (index.html's version seeds four). -->
     <div class="side-section side-section-row collapsible" data-section="threads"><span class="side-sec-label"><i class="ti ti-chevron-down side-caret"></i>Threads</span></div>
     <div id="threads-list" class="side-collapse-body">
       <div class="side-item thread-row active" data-thread="doc-main" data-title="Non-linear chat system" data-icon="ti-file-text"><button type="button" class="thread-open"><span class="thread-emoji" role="button" tabindex="0" title="Set emoji"><i class="ti ti-file-text"></i></span><span class="thread-title">Non-linear chat system</span></button></div>
     </div>
 
+    <!-- Notes sidebar section, same purpose as index.html. -->
     <div class="side-section side-section-row" id="nt-side-head"><span><i class="ti ti-chevron-down nt-caret"></i>Notes</span><div class="nt-side-head-actions"><button class="side-section-add" id="nt-side-clear" type="button" title="Delete all notes" aria-label="Delete all notes"><i class="ti ti-trash"></i></button><button class="side-section-add" id="nt-side-add" type="button" title="New note" aria-label="New note"><i class="ti ti-plus"></i></button></div></div>
     <div id="nt-side-tree"></div>
 
+    <!-- Sidebar footer — in index.html this opens the Settings drawer; this draft has no #prefs markup to open. -->
     <div class="side-foot" id="open-prefs">
       <div class="avatar">A</div>
       <div class="name">Alex Chen</div>
@@ -530,6 +524,7 @@ textarea,input{font-family:inherit}
     </div>
   </aside>
 
+  <!-- Main content column — no tab strip here (unlike index.html's TASK-RD09 tab strip); straight into topbar + doc. -->
   <div class="main">
     <div class="topbar" id="topbar">
       <button class="ic-btn" id="sidebar-toggle" title="Open left pane" aria-label="Open left pane" aria-expanded="false"><i class="ti ti-layout-sidebar-left-expand"></i></button>
@@ -538,6 +533,7 @@ textarea,input{font-family:inherit}
       </div>
     </div>
 
+    <!-- Doc/chat surface, same role as index.html but with trimmed placeholder copy and no context-ranking icon button in the meta row. -->
     <div class="doc-wrap">
       <article class="doc" id="doc" contenteditable="true" spellcheck="false">
         <p class="eyebrow" contenteditable="false">Working draft · Updated 2h ago</p>
@@ -569,13 +565,14 @@ textarea,input{font-family:inherit}
         <p>Below this doc is a chat composer. Type into it to keep talking to AI without picking a sentence.</p>
         </div>
 
+        <!-- Live chat stream placeholder — no content seeded, unlike index.html's structural role staying the same. -->
         <div id="chat-stream" class="chat-stream" contenteditable="false"></div>
       </article>
     </div>
   </div>
 </div>
 
-<!-- main composer -->
+<!-- main composer — trimmed vs index.html: no attach-row, no "Tools"/mode chips beyond a single model chip, no file inputs or attach menu at all in this draft. -->
 <div class="composer-wrap" id="composer-wrap">
   <div class="composer">
     <textarea id="main-input" rows="1" placeholder="Continue the thread, ask anything, or generate the next section…"></textarea>
@@ -590,7 +587,7 @@ textarea,input{font-family:inherit}
   </div>
 </div>
 
-<!-- Selection popover -->
+<!-- Selection popover — Branch/Highlight/Bold/Italic only (index.html adds Ask AI inline, Link, and a keyboard-shortcut badge). -->
 <div class="pop" id="pop" role="toolbar">
   <button class="primary" data-act="branch"><i class="ti ti-git-branch"></i> Branch <span class="kbd">B</span></button>
   <span class="div"></span>
@@ -600,7 +597,7 @@ textarea,input{font-family:inherit}
   <button data-act="italic" title="Italic"><i class="ti ti-italic"></i></button>
 </div>
 
-<!-- Notes overlay (full-screen, notlinear notebook view) -->
+<!-- Notes overlay (full-screen, notlinear notebook view) — same feature as index.html's Notes overlay, shown here with a static "Untitled" placeholder page instead of a rendered export/download button. No slash menu, @-mention menu, or floating format toolbar markup in this draft (those exist only in index.html). -->
 <div class="nt-screen" id="nt-screen">
   <div class="nt-topbar" id="nt-topbar">
     <div class="nt-crumbs" id="nt-crumbs"></div>
@@ -610,46 +607,13 @@ textarea,input{font-family:inherit}
   </div></div>
 </div>
 
-<!-- Notes branch panel (floating right-side) -->
+<!-- Notes branch panel (floating right-side) — placeholder container only; index.html's equivalent (#nt-branch-stack + #nt-branch-menu) has actual menu markup. -->
 <div id="nt-branch-panel"></div>
 
-<!-- Coding Projects overlay (full-screen) -->
-<div class="cp-screen" id="cp-screen">
-  <div class="cp-bar">
-    <button class="ic-btn" id="cp-back" title="Back to chat" aria-label="Back to chat"><i class="ti ti-arrow-left"></i></button>
-    <div class="cp-crumb"><i class="ti ti-folder-code"></i><span class="cp-crumb-here" id="cp-crumb">coding projects</span></div>
-  </div>
-  <div class="cp-scroll" id="cp-scroll">
-    <div class="cp-inner" id="cp-inner">
-      <h2 class="cp-title">Coding Projects</h2>
-      <div class="cp-list">
-        <div class="cp-row">
-          <div class="cp-emoji">📁</div>
-          <div class="cp-namecol">
-            <div class="cp-name">Project 1</div>
-            <div class="cp-path">/path/to/project</div>
-          </div>
-          <div class="cp-status">
-            <i class="ti ti-file"></i>
-            <div class="cp-status-text">12 files</div>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
-  <!-- file preview drawer (read-only) -->
-  <aside class="cp-drawer" id="cp-drawer" aria-hidden="true">
-    <div class="cp-drawer-head">
-      <span class="cp-drawer-path" id="cp-drawer-path">index.js</span>
-      <span class="cp-drawer-size" id="cp-drawer-size">2.3 KB</span>
-      <button class="ic-btn" id="cp-drawer-close" title="Close"><i class="ti ti-x"></i></button>
-    </div>
-    <div class="cp-drawer-body" id="cp-drawer-body"><code>// File preview goes here</code></div>
-  </aside>
-</div>
 
-<!-- Toast -->
+<!-- Toast — transient status message, same as index.html; no "New update - refresh" button markup in this draft. -->
 <div class="toast" id="toast"><i class="ti ti-check"></i><span id="toast-text">Done</span></div>
 
+<!-- No closing <script> tags — this file has no behavior (no Dexie, no app.js module); it's a static markup/CSS mockup only. -->
 </body>
 </html>

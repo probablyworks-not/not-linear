@@ -2,10 +2,26 @@
 // `frontend/mind-garden-icons.html`. The sheet is the source of truth so the
 // app and the print-ready design doc never drift. We fetch+parse it once,
 // lazily on first picker open, and cache the parsed entries.
+//
+// Relationship to other core/ modules: this is the lowest-level Mind Garden
+// module — it only knows how to fetch/parse the icon sheet and render a
+// single icon's SVG markup or parse/build the `icon:<id>` / `icon:<id>:<hex>`
+// storage token. core/emoji.js is the only consumer; it builds the actual
+// picker UI (search box, color palette, popover) on top of these primitives
+// and re-exports what feature views need. app.js and frontend/views/notes.js
+// import loadMindGarden/renderIconSvg/
+// parseIconToken directly (not just via emoji.js) wherever they need to
+// render an already-chosen icon glyph without opening the picker.
 
 let loadPromise = null;
 let entries = [];   // { id, name, section, body, keywords }
 
+// loadSheet: internal — fetch frontend/mind-garden-icons.html, parse it as a
+// DOM document (not executed as a script; DOMParser is inert HTML parsing),
+// and pull each <figure> (icon) inside each <section> (category) into a flat
+// `entries` array. `body` is the raw innerHTML of the icon's <svg><g>...</g>,
+// reused verbatim by renderIconSvg() below. Only called via loadMindGarden()'s
+// memoization, never directly.
 async function loadSheet(){
   const url = new URL('../mind-garden-icons.html', import.meta.url).href;
   const res = await fetch(url);
@@ -36,6 +52,13 @@ async function loadSheet(){
   return entries;
 }
 
+// loadMindGarden: lazily fetch+parse the icon sheet exactly once and cache the
+// resulting Promise, so repeated calls (e.g. every time the picker opens)
+// reuse the same in-flight/completed fetch instead of re-fetching. On failure
+// the cached promise is cleared so a later call will retry. Called by
+// core/emoji.js (to populate the picker grid) and directly by app.js and the
+// feature views before rendering any already-saved icon glyphs, to make sure
+// `entries` is populated before renderIconSvg()/getMindGardenEntries() are used.
 export function loadMindGarden(){
   if (!loadPromise) loadPromise = loadSheet().catch(err => { loadPromise = null; throw err; });
   return loadPromise;
@@ -44,6 +67,10 @@ export function loadMindGarden(){
 // Inline SVG markup for a chosen icon id. Defaults to `currentColor` (inherits
 // theme text color); pass `color` (e.g. "#7C3AED") to lock the stroke to a
 // specific color. Returns '' for unknown ids — caller decides the fallback.
+// Requires `entries` to already be populated (see loadMindGarden above).
+// Called from core/emoji.js (picker grid) and from app.js / the feature views
+// wherever a previously-chosen icon token needs to be rendered as markup
+// (e.g. a thread/note/project row showing its saved icon).
 export function renderIconSvg(id, { size = 18, color = '' } = {}){
   const entry = entries.find(e => e.id === id);
   if (!entry) return '';
@@ -56,7 +83,11 @@ export function renderIconSvg(id, { size = 18, color = '' } = {}){
 
 // Parse a stored glyph token of the form `icon:<id>` or `icon:<id>:<hex>`
 // (hex is the color without the `#`). Returns `{ id, color }` or null when the
-// value isn't an icon token.
+// value isn't an icon token. This is the inverse of the `tokenFor()` builder
+// in core/emoji.js's openEmojiPicker(). Called by app.js and the feature
+// views whenever a saved glyph string needs to be told apart from a plain
+// emoji character before deciding how to render it (renderIconSvg vs. the
+// emoji character itself).
 export function parseIconToken(token){
   if (typeof token !== 'string' || !token.startsWith('icon:')) return null;
   const rest = token.slice(5);
@@ -68,6 +99,7 @@ export function parseIconToken(token){
 // 10 named colors matching the Notion-style palette plus a sentinel for
 // "default" (no color = inherit theme text color). Exported so the picker and
 // any future surface (e.g. note headers) share one source.
+// Consumed by core/emoji.js's color palette/swatch UI, keyed off `.hex`/`.name`.
 export const ICON_COLORS = [
   { name: 'default', hex: '' },
   { name: 'black',   hex: '#1f1f1f' },
@@ -82,4 +114,7 @@ export const ICON_COLORS = [
   { name: 'red',     hex: '#c43a3a' },
 ];
 
+// Return the cached, parsed icon entries (empty until loadMindGarden() has
+// resolved at least once). Used by core/emoji.js to build/filter the picker
+// grid; internal, not meant to trigger the fetch itself.
 export function getMindGardenEntries(){ return entries; }

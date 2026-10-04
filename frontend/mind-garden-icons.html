@@ -1,3 +1,19 @@
+<!--
+  mind-garden-icons.html — a standalone, static reference sheet of the
+  "Mind Garden" hand-drawn icon set, not part of the live app.
+
+  Per FEATURES.md section 8 ("Workspace redesign — in progress", ADR-015):
+  the Mind Garden set is wired in as the DEFAULT project/thread/note icon
+  cycle (see frontend/core/mind-garden.js), replacing a generic
+  folder/message icon. This page is not that runtime module — it's a
+  printable/browsable catalog of every icon in the set (251 icons across 21
+  hand-drawn-themed `<section>`s: Flowers, Trees, Birds, Mind & Philosophy,
+  UI, Hindi Vowels/Consonants, etc.), each inline SVG paired with its
+  <figcaption> name and the `*Icon` identifier used to reference it in code.
+  It is not linked from index.html, not registered as a view, and has no
+  behavior/script of its own — open it directly (or Cmd/Ctrl+S / Cmd/Ctrl+P
+  per the on-page hint) to browse or export the set, not to run the app.
+-->
 <!doctype html>
 <html lang="en">
 <head>
@@ -8,6 +24,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@400;500;600&display=swap" rel="stylesheet" />
 <link href="https://fonts.googleapis.com/css2?family=Kalam:wght@400;700&display=swap" rel="stylesheet" />
+<!-- Self-contained page styling — a light lavender print-friendly layout (grid of `<figure>` cards), independent of the app's styles/tokens.css since this page never runs inside the app shell. Includes a @media print block for the "save as PDF" workflow mentioned in the on-page hint. -->
 <style>
   html, body { margin: 0; padding: 0; }
   body { background: #EBE9F3; color: #1a1a1a; font: 14px ui-sans-serif, system-ui, sans-serif; padding: 48px; }
@@ -32,11 +49,26 @@
 </style>
 </head>
 <body>
+<!-- Page header: title + count + usage hint (save/print, click-to-select icon codes). -->
 <header>
   <h1>Mind Garden — Icons Sheet</h1>
   <p>251 icons across 21 sections.</p>
   <p class="hint">Save this page: <strong>Cmd/Ctrl + S</strong> · or <strong>Cmd/Ctrl + P</strong> for PDF · all icon codes are click-to-select.</p>
 </header>
+<!--
+  <main>: the icon catalog itself — 21 <section>s below, one per theme
+  (Flowers, Trees, Leaves & Greenery, Fruits & Seeds, Birds, Helpful
+  Creatures, Snakes & Weeds, Mind & Philosophy, Elements & Weather, Objects
+  of the Garden, UI, Heroes, Water Garden, Night Garden, Seasons, Valleys,
+  Mountains, Rivers, Numbers, Hindi Vowels, Hindi Consonants). Each section
+  repeats the same pattern: an <h2> section title with a short descriptive
+  subtitle, then a `.grid` of `<figure>` cards — each card is one hand-drawn
+  inline SVG (consistent viewBox/stroke styling) plus a `<figcaption>` giving
+  the icon's plain-language name and its `*Icon` code identifier. Individual
+  sections/icons are not further annotated below since the h2/figcaption
+  text already documents each one; only this overview comment is added here
+  to avoid repeating ~2500 near-identical lines of per-icon commentary.
+-->
 <main>
   <section>
     <h2>Flowers <span class="sub">good thoughts in bloom</span></h2>

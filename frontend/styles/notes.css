@@ -1,3 +1,29 @@
+/*
+ * notes.css — styles for the Notes feature (Notion-style notebook view):
+ * the sidebar notes tree, the full-screen Notes overlay, the all-pages
+ * bento-grid index, and the per-block editor (headings, todos, toggles,
+ * quotes, callouts, code, tables, media/file/bookmark embeds, equations,
+ * page links, columns), plus the slash menu, @-mention menu, floating
+ * format toolbar, emoji popover, and Notes' own branch/AI-chat drawer.
+ *
+ * Scoping convention (ADR-007): almost every rule here is scoped under
+ * .nt-screen, and block/component class names are nt-*-prefixed (.nt-nrow,
+ * .nt-bento, .nt-ftoolbar, etc). This is a DELIBERATE isolation boundary,
+ * not an accident — Notes persists to its own separate Dexie database
+ * (`notlinear-notes`, kept apart from the chat app's `notlinear` db) and
+ * its markup/classes are likewise kept apart so generic-looking class
+ * names in the Notes editor (e.g. .b, .gutter, .lead, .editor, .content)
+ * can never accidentally collide with the chat shell's own classes.
+ * Popovers that live at body root (#nt-slash, #nt-ftoolbar,
+ * #nt-emoji-pop, #nt-mention) already have notes-specific IDs, so they
+ * don't need the .nt-screen wrapper to stay collision-safe.
+ *
+ * Like every other stylesheet here, this consumes tokens.css variables
+ * for color/spacing/type rather than hardcoding values, with a small set
+ * of Notes-local additions below (highlight colors, inline-text colors,
+ * bento card tints) for things unique to the notebook editor.
+ */
+
 /* Notes — Notion-style notebook view.
    Scoped under .nt-screen so block class names (.b, .gutter, .lead, .editor,
    .content, etc.) don't collide with anything else in the app. Popovers
@@ -96,7 +122,7 @@ html[data-theme="light"]{
 .nt-topbar .nt-icbtn.hidden{ display:none; }
 
 /* page */
-.nt-pgwrap{ flex:1; display:flex; justify-content:center; padding:24px 0 200px; }
+.nt-pgwrap{ flex:1; display:flex; justify-content:center; padding:24px 0 200px; transition:padding-right 180ms cubic-bezier(.2,.7,.2,1); }
 .nt-pg{ width:100%; max-width:780px; padding:0 64px; }
 .nt-screen .cover-wrap{ position:relative; height:8px; border-radius:8px; }
 .nt-screen .cover-wrap.has-cover{ height:200px; overflow:hidden; margin-bottom:8px; }
@@ -174,6 +200,12 @@ html[data-theme="light"] .nt-bento-item:hover{ filter:brightness(0.98); }
 .nt-ix-acts button.nt-ix-del:hover{ color:var(--tx-red); }
 
 /* ---------- blocks ---------- */
+/* Per-block editor styling: each block row (.b) has a hover-revealed
+   .gutter (drag handle + block menu) and a .content area holding an
+   optional .lead (bullet/number/checkbox glyph) and the contenteditable
+   .editor itself. Below this are per-block-type modifiers (.h1/.h2/...,
+   .bullet, .todo, .toggle, .quote, .callout, .divider, .code, .eq,
+   .image, .toc, .table, .cols) that layer on top of this base row. */
 .nt-screen .blocks{ display:flex; flex-direction:column; padding-top:2px; }
 .nt-screen .b{ position:relative; padding:2px 0; margin:0; display:flex; flex-wrap:wrap; gap:4px; min-height:30px; }
 .nt-screen .b .gutter{ position:absolute; left:-52px; top:0; width:48px; display:flex; align-items:flex-start; justify-content:flex-end; gap:0; padding-top:4px; opacity:0; transition:opacity 100ms; }
@@ -439,10 +471,32 @@ html[data-theme="light"] .nt-bento-item:hover{ filter:brightness(0.98); }
    resizing here never touches chat's --drawer-w. */
 #nt-branch-stack{ width:var(--nt-drawer-w); z-index:240; }
 #nt-branch-menu{ z-index:241; }
-.nbp-model-chip{ pointer-events:none; }
+/* Model/mode menus are shared with chat (z-index 220); Notes' branch stack sits above that. */
+#model-menu,#mode-menu{ z-index:250; }
 .nbp-thinking{ color:var(--text-3); font-style:italic; animation:nbp-pulse 1.2s ease-in-out infinite; }
 @keyframes nbp-pulse{ 0%,100%{opacity:1} 50%{opacity:0.35} }
 .nbp-err{ color:var(--tx-red); font-size:12.5px; }
+
+/* Fenced code blocks inside a note branch's AI replies — reuses the same
+   .code-block/hljs markup and syntax-color tokens as chat.css's `.msg.ai`
+   rules; re-scoped here since Notes' branch messages use `.msg.assistant`,
+   not chat's `.msg.ai` (ADR-007: Notes persistence/rendering stays separate). */
+.branch-body .msg.assistant .code-block{ margin:6px 0 10px; border:1px solid var(--rule); border-radius:8px; overflow:hidden; background:var(--bg-3); }
+.branch-body .msg.assistant .code-block-head{ display:flex; align-items:center; justify-content:space-between; gap:8px; padding:6px 10px; background:var(--surface-tint); border-bottom:1px solid var(--rule); }
+.branch-body .msg.assistant .code-block-lang{ font-family:var(--mono); font-size:10.5px; text-transform:lowercase; letter-spacing:.04em; color:var(--text-3); }
+.branch-body .msg.assistant .code-copy-btn{ display:flex; align-items:center; gap:4px; font-family:var(--font); font-size:11px; color:var(--text-2); background:none; border:none; padding:2px 5px; border-radius:4px; cursor:pointer; }
+.branch-body .msg.assistant .code-copy-btn:hover{ background:var(--bg-2); color:var(--text); }
+.branch-body .msg.assistant .code-copy-btn.copied{ color:var(--accent-2); }
+.branch-body .msg.assistant pre{ background:none; border:none; border-radius:0; padding:12px 14px; overflow-x:auto; margin:0; font-family:var(--mono); font-size:12px; line-height:1.6; color:var(--text-2); }
+.branch-body .msg.assistant pre code{ background:none; padding:0; white-space:pre; }
+.branch-body .msg.assistant code{ font-family:var(--mono); font-size:12px; background:var(--bg-3); padding:1px 5px; border-radius:3px; color:var(--text-2); }
+.branch-body .msg.assistant .hljs-keyword,.branch-body .msg.assistant .hljs-title.class_{ color:var(--syn-keyword); }
+.branch-body .msg.assistant .hljs-string,.branch-body .msg.assistant .hljs-regexp{ color:var(--syn-string); }
+.branch-body .msg.assistant .hljs-number,.branch-body .msg.assistant .hljs-literal{ color:var(--syn-number); }
+.branch-body .msg.assistant .hljs-comment,.branch-body .msg.assistant .hljs-quote{ color:var(--syn-comment); font-style:italic; }
+.branch-body .msg.assistant .hljs-title,.branch-body .msg.assistant .hljs-built_in,.branch-body .msg.assistant .hljs-title.function_{ color:var(--syn-function); }
+.branch-body .msg.assistant .hljs-tag,.branch-body .msg.assistant .hljs-name,.branch-body .msg.assistant .hljs-selector-tag{ color:var(--syn-tag); }
+.branch-body .msg.assistant .hljs-attr,.branch-body .msg.assistant .hljs-attribute,.branch-body .msg.assistant .hljs-variable,.branch-body .msg.assistant .hljs-type{ color:var(--syn-attr); }
 
 /* bottom CTA — "Ask AI about this note" */
 .nt-branch-cta{ display:flex; align-items:center; gap:10px; margin-top:28px; padding:10px 14px; border:1px solid var(--rule-2); border-radius:10px; background:var(--surface); cursor:text; transition:border-color 120ms; }
