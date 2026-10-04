@@ -51,10 +51,13 @@ export function handleEscape(): boolean {
 }
 
 /** Installs the single global keydown listener. Returns its teardown. */
-export function installGlobalKeys(handlers: { newChat(): void }): () => void {
+export function installGlobalKeys(handlers: { newChat(): void; toggleSearch(): void }): () => void {
   const onKey = (e: KeyboardEvent): void => {
     if (e.key === 'Escape') {
       handleEscape();
+    } else if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+      e.preventDefault();
+      handlers.toggleSearch();
     } else if ((e.metaKey || e.ctrlKey) && e.key === 'n') {
       e.preventDefault();
       handlers.newChat();

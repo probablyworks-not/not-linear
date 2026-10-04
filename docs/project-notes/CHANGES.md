@@ -1,5 +1,15 @@
 # CHANGES.md — internal work memory
 
+## 2026-10-04 — P4 item 2: search palette in `/web/`
+- **Summary:** ⌘K / Ctrl+K quick-open over threads, plus a Search row in the sidebar. Behind `flags.search`. Same placeholder, empty-state copy, filter, match marking and keyboard rules as legacy.
+- **Files touched:** `web/src/search/{palette.ts,SearchPalette.tsx}`, `web/src/{flags.ts,lib/keyboard.ts,main.tsx,state/ui-store.ts,shell/{Sidebar,AppShell}.tsx}`, `web/tests/search/palette.test.ts`, `web/tests/e2e/web-search.spec.ts`.
+- **Deviations from the plan, on purpose:**
+  1. **No `cmdk`/shadcn `Command`.** Legacy's keyboard rules are specific and differ from cmdk's defaults: arrows clamp rather than wrap; with nothing highlighted, ArrowUp *also* lands on the first result; Enter opens the first result if none is highlighted. A listbox on the Radix Dialog already installed reproduces them exactly and adds no dependency.
+  2. **Threads only for now.** Legacy's Branches group comes from `branchRowsForThread` (parses stream HTML, merges snapshots and recents, resolves depth): that is the branch system, P5b/P5c. `SearchItem` is where they merge in.
+  3. **Lists every thread the sidebar shows.** Legacy skips any thread with no saved state (`if (!state) return`), so a never-visited seed thread is unsearchable there. Real threads always have state, so real-data results are the same; only fresh-database seeds differ. Pinned by a named test.
+- **How faithfulness was checked:** unit tests read off the legacy rules; and a parity test drives the *real legacy palette* and this one with 10 queries (blank, mixed case, padded, a miss, partial matches) over identical persisted data and demands identical ordered results. Mutation-tested: a case-sensitive filter fails both the unit tests and the parity test. The first parity run failed and exposed deviations 3 above and a fresh-database title default (`doc-main` is "...for research" only in legacy's memory).
+- **Tests run:** 182 vitest, 69 Playwright (15 legacy + 18 shell + 14 settings + 9 modes + 13 search), typecheck, lint, build.
+- **Next steps:** item 3 (changelog viewer + Product story).
 ## 2026-10-04 — P4.1b: Modes manager in `/web/`
 - **Summary:** Port of `core/modes.js` + `views/modes-modal.js`: list, create, edit, reset and delete conversation modes, from Settings → "New / manage modes". Behind `flags.modes`.
 - **Files touched:** `web/src/settings/{modes,default-modes,ModesDialog}.tsx|ts`, `web/src/settings/SettingsDialog.tsx`, `web/src/state/{app-store,ui-store}.ts`, `web/src/shell/AppShell.tsx`, `web/src/flags.ts`, `web/tests/settings/{modes-differential,modes-store}.test.ts`, `web/tests/e2e/web-modes.spec.ts`; `web/tests/e2e/web-settings.spec.ts` (assertion fix).

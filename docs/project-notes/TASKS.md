@@ -4,6 +4,14 @@ Each entry: **ID · Status · Goal · Context · Files likely involved · Accept
 
 ---
 
+## TASK-P4.2 — Search palette in `/web/`
+- **Status:** Done pending smoke test. Branch results deferred to P5b.
+- **Goal:** ⌘K quick-open over threads with legacy's filter and keyboard rules.
+- **Acceptance criteria:** identical ordered results to the legacy palette on identical data; legacy keyboard rules; copy verbatim; typed markup never parsed.
+- **Verification:** RUNS.md TASK-P4.2.
+
+---
+
 ## TASK-P4.1b — Modes manager in `/web/`
 - **Status:** Done pending the human smoke test (automated gate green 2026-10-04).
 - **Goal:** create/edit/reset/delete modes in `/web/`, overrides-only (ADR-046), shared with legacy.

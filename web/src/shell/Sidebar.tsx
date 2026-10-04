@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { clsx } from 'clsx';
-import { FileText, MessageSquare, PanelLeftClose, Pencil, Settings, Trash2 } from 'lucide-react';
+import { FileText, MessageSquare, PanelLeftClose, Pencil, Search, Settings, Trash2 } from 'lucide-react';
 import { useAppStore } from '../state/app-store';
 import { useUiStore } from '../state/ui-store';
 import { deleteChat, newChat, selectThread } from '../state/actions';
@@ -14,6 +14,7 @@ export function Sidebar() {
   const open = useUiStore(s => s.sidebarOpen);
   const setOpen = useUiStore(s => s.setSidebarOpen);
   const setSettingsOpen = useUiStore(s => s.setSettingsOpen);
+  const setSearchOpen = useUiStore(s => s.setSearchOpen);
   const activeTabId = useUiStore(s => s.activeTabId);
   const threadState = useAppStore(s => s.threadState);
   const dynamic = useAppStore(s => s.dynamicThreads);
@@ -60,6 +61,16 @@ export function Sidebar() {
         </div>
 
         <div className="-mx-2.5 flex min-h-0 flex-1 flex-col overflow-y-auto overflow-x-hidden px-2.5">
+          {flags.search && (
+            <button
+              type="button" onClick={() => setSearchOpen(true)} aria-label="Search"
+              className={`${SIDE_ITEM} mb-1 px-2 py-1.5`}
+            >
+              <Search size={15} aria-hidden />
+              <span className="flex-1 truncate">Search</span>
+              <span className="font-mono text-xs text-text-3">⌘K</span>
+            </button>
+          )}
           <button
             type="button" onClick={() => { void newChat(); }}
             className="flex w-full items-center gap-[9px] rounded-[10px] border border-rule-2 bg-text px-3 py-2 text-left text-sm font-medium text-bg shadow-md"

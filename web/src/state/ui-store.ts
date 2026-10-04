@@ -21,6 +21,7 @@ export interface UiState {
   sidebarOpen: boolean;
   settingsOpen: boolean;
   modesOpen: boolean;
+  searchOpen: boolean;
   tabs: Tab[];
   activeTabId: string | null;
   confirm: PendingConfirm | null;
@@ -30,6 +31,7 @@ export interface UiActions {
   setSidebarOpen(open: boolean): void;
   setSettingsOpen(open: boolean): void;
   setModesOpen(open: boolean): void;
+  setSearchOpen(open: boolean): void;
   /** Reads nl_tabs_v1; call after the app store has hydrated. */
   restoreTabs(deleted: ReadonlySet<string>, fallbackId: string): void;
   /** Opens `id` as a tab (if new) and activates it. */
@@ -50,6 +52,7 @@ export const useUiStore = create<UiState & UiActions>((set, get) => ({
   sidebarOpen: false, // legacy ships the sidebar collapsed
   settingsOpen: false,
   modesOpen: false,
+  searchOpen: false,
   tabs: [],
   activeTabId: null,
   confirm: null,
@@ -57,6 +60,7 @@ export const useUiStore = create<UiState & UiActions>((set, get) => ({
   setSidebarOpen(open) { set({ sidebarOpen: open }); },
   setSettingsOpen(open) { set({ settingsOpen: open }); },
   setModesOpen(open) { set({ modesOpen: open }); },
+  setSearchOpen(open) { set({ searchOpen: open }); },
 
   restoreTabs(deleted, fallbackId) {
     let raw: string | null = null;

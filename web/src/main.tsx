@@ -9,6 +9,7 @@ import { useAppStore } from './state/app-store';
 import { useUiStore } from './state/ui-store';
 import { newChat, syncFromDisk } from './state/actions';
 import { viewForTab } from './shell/TabStrip';
+import { flags } from './flags';
 import './styles/app.css';
 
 registerView({ id: 'chat', label: 'Chat' });
@@ -21,7 +22,10 @@ async function boot(): Promise<void> {
   useUiStore.getState().restoreTabs(new Set(app.deletedThreadIds), app.currentThreadId);
   mountView(viewForTab(useUiStore.getState().activeTabId ?? app.currentThreadId));
 
-  installGlobalKeys({ newChat: () => { void newChat(); } });
+  installGlobalKeys({
+    newChat: () => { void newChat(); },
+    toggleSearch: () => { if (flags.search) useUiStore.getState().setSearchOpen(!useUiStore.getState().searchOpen); },
+  });
   // The other app may have changed the shared row while this one was hidden.
   window.addEventListener('focus', () => { void syncFromDisk(); useAppStore.getState().refreshApiKeys(); });
   document.addEventListener('visibilitychange', () => {

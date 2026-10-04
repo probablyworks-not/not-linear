@@ -4,6 +4,14 @@ Each entry: **date/time · task or bug ID · command category · result · impor
 
 ---
 
+## 2026-10-04 — TASK-P4.2 — full web gate — pass (automated only)
+- **Command category:** test / lint / build
+- **Result:** pass
+- **Output:** `pnpm test` 182 (20 files); typecheck, lint clean; `pnpm e2e` 69 (15 legacy, 18 shell, 14 settings, 9 modes, 13 search). Parity test against the real legacy palette over 10 queries. Mutation check caught. Screenshot reviewed.
+- **Follow-up:** human smoke test: press Ctrl/Cmd+K in `/web/` on your restored data and compare the same queries against the legacy palette.
+
+---
+
 ## 2026-10-04 — P3 + P4.1a + P4.1b — manual smoke test — pass (user-reported)
 - **Command category:** manual GUI smoke test (legacy app in `Notlinear.app`; `/web/` in a browser with the backup restored via `tools/import-data.html`)
 - **Result:** pass, as reported by the maintainer: "works fine". Per-step detail was not itemised.

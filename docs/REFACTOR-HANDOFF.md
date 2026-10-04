@@ -5,7 +5,7 @@ four hardening changes and the provider registry)** are committed on branch
 `refactor/p0-repo-hygiene`. **P3 (React shell) is implemented and automated-green but
 UNCOMMITTED and awaiting the human smoke test.** `main` is untouched at `ccf7504`.
 
-**P3 is committed (`cd5c67e`). P4.1a (Settings + API keys) and P4.1b (Modes manager) are implemented, automated-green and committed after it; the maintainer smoke-tested P3/P4.1 on 2026-10-04 and it passed. Next: P4 item 2 (search palette).**
+**P3 is committed (`cd5c67e`). P4.1a (Settings + API keys) and P4.1b (Modes manager) are implemented, automated-green and committed after it; the maintainer smoke-tested P3/P4.1 on 2026-10-04 and it passed. P4 item 2 (search palette, threads only) is implemented and committed, not yet smoke-tested. Next: P4 item 3 (changelog viewer + Product story).**
 
 This file is the context a new session needs. Read it instead of re-deriving the
 state, then read `AGENTS.md` and `CLAUDE.md` for the standing rules.
@@ -54,8 +54,8 @@ which has no FastAPI. `--legacy` runs the old dependency-free server.
 NOTLINEAR_SERVER=fastapi .venv/bin/python -m pytest tests/contract   # 146 (earlier figures here were stale)
 NOTLINEAR_SERVER=legacy  .venv/bin/python -m pytest tests/contract   # 118 + 28 skipped
 .venv/bin/python -m pytest tests/proxy                               # 7
-cd web && pnpm test && pnpm typecheck && pnpm lint                   # 167
-cd web && pnpm e2e                                                   # builds, then 56 Playwright (15 legacy + 41 /web/)
+cd web && pnpm test && pnpm typecheck && pnpm lint                   # 182
+cd web && pnpm e2e                                                   # builds, then 69 Playwright (15 legacy + 54 /web/)
 ```
 
 Then the manual steps at `AGENTS.md` "Verification" that automation cannot cover:
@@ -142,6 +142,10 @@ port with a plain `bind()` and no `SO_REUSEADDR` (uvicorn sets that flag itself,
 stricter than the real server). One-line fix, deliberately not made (out of scope); until then
 wait for `TIME_WAIT` to clear: `until ! netstat -an | grep -q "\.8766 .*TIME_WAIT"; do sleep 3; done`.
 
+**Legacy's palette hides threads with no saved state, and `doc-main`'s title is an in-memory
+default.** Any parity test between the apps must persist the seed threads first (see
+`web-search.spec.ts`), or it compares data differences instead of behaviour.
+
 **Radix `aria-hidden`s everything behind an open dialog.** `getByRole('complementary')` (the
 sidebar) then reports "absent" whether or not it is open, so `toBeHidden()` on a role query is
 vacuous. Use a CSS locator (`aside[aria-label="Left pane"]`), and assert it visible first.
@@ -190,7 +194,7 @@ the one-session-per-phase cadence is not. P5 alone is four sessions.
 | P2a | FastAPI core, static allowlist | **done**, smoke-tested |
 | P2 | Hardening (a-d) + provider registry | **done**, verified live |
 | P3 | React shell | **done, committed, smoke-tested** |
-| P4 | Leaf features | **in progress**: 4.1 Settings, keys and Modes done; item 2 (search palette) next |
+| P4 | Leaf features | **in progress**: 4.1 Settings, keys and Modes done; item 2 (search palette, threads only) done; item 3 next |
 | P5 | Chat core (four sub-sessions) | |
 | P6 | Notes editor | |
 | P7 | Extension seams | |

@@ -5,6 +5,13 @@ All notable repository changes made by AI agents should be recorded here.
 ## 2026-10-04
 
 - Agent: Claude Sonnet 5.5
+- Summary: P4 item 2 — search palette in `/web/` (⌘K / Ctrl+K and a sidebar Search row), behind `flags.search`.
+- Files changed: `web/src/search/*`, `web/src/{flags.ts,lib/keyboard.ts,main.tsx,state/ui-store.ts,shell/*}`, `web/tests/{search,e2e}/*`, `docs/project-notes/*`, `FEATURES.md`, `docs/REFACTOR-HANDOFF.md`.
+- Behavior changes: none in legacy. In `/web/`, threads only (branch results arrive with P5b), and it lists never-persisted seed threads that legacy's palette hides.
+- Observed: legacy's palette silently omits any thread without saved state (`if (!state) return`, app.js:6180), so a never-visited seed thread cannot be found by search. Real threads are unaffected. Not changed.
+- Verification: 182 vitest, 69 Playwright including a parity test against the real legacy palette, typecheck, lint, build.
+
+- Agent: Claude Sonnet 5.5
 - Summary: P4.1b — the Modes manager in `/web/`: create, edit, reset and delete conversation modes from Settings → "New / manage modes". Behind `flags.modes`.
 - Files changed: `web/src/settings/{modes.ts,default-modes.ts,ModesDialog.tsx,SettingsDialog.tsx}`, `web/src/state/*`, `web/src/shell/AppShell.tsx`, `web/src/flags.ts`, `web/tests/{settings,e2e}/*`, `docs/project-notes/*`, `FEATURES.md`, `docs/REFACTOR-HANDOFF.md`.
 - Behavior changes: none in legacy. `/web/` gains the manager; modes and edits are shared with legacy through `prefs.customModes` / `prefs.modeOverrides` (overrides-only, ADR-046). New Settings row to open it, since legacy's only entry point is the composer's mode menu (P5).

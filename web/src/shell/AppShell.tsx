@@ -12,6 +12,7 @@ import { ConfirmDialog } from '../ui/ConfirmDialog';
 import { Toaster } from '../ui/toast';
 import { SettingsDialog } from '../settings/SettingsDialog';
 import { ModesDialog } from '../settings/ModesDialog';
+import { SearchPalette } from '../search/SearchPalette';
 import { flags } from '../flags';
 
 export function AppShell() {
@@ -65,6 +66,7 @@ export function AppShell() {
       </div>
       {flags.settings && <SettingsDialog />}
       {flags.modes && <ModesDialog />}
+      {flags.search && <SearchPalette />}
       <ConfirmDialog />
       <Toaster />
     </div>
