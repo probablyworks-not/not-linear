@@ -4,6 +4,15 @@ Each entry: **date/time · task or bug ID · command category · result · impor
 
 ---
 
+## 2026-10-04 — TASK-P4.4 — full web gate — pass (automated only)
+- **Command category:** test / lint / build
+- **Result:** pass
+- **Output:** `pnpm test` 247 (25 files); typecheck, lint clean; `pnpm e2e` 95 (15 legacy, 80 `/web/`); `pytest tests/server tests/proxy` 11. Differential mutation: disabling the typed-name overlay fails its test. Screenshots of the grid and panel reviewed.
+- **Flake note:** one failure of `a key connected in legacy is shown in /web/` in about 25 full runs; not reproduced since (15 isolated, 6 full). The test now asserts its legacy precondition first.
+- **Follow-up:** human smoke test on your restored data: Projects in the sidebar, the grid, open a project, add/remove a chat, then check the legacy app shows the same.
+
+---
+
 ## 2026-10-04 — TASK-P4.3 — full web gate — pass (automated only)
 - **Command category:** test / lint / build
 - **Result:** pass

@@ -6,6 +6,10 @@ import { createDebouncedWriter } from '../lib/debounced-writer';
 import { connectKey, disconnectKey, readApiKeys } from '../lib/api-keys';
 import { applyTheme } from '../lib/theme';
 import { MODE_PREF_KEYS } from '../settings/modes';
+import {
+  addChatToProjectIn, createProjectIn, deleteProjectIn, newChatInProjectIn, removeChatFromProjectIn,
+  renameProjectIn, touchOnOpen,
+} from '../db/project-ops';
 import type { PersistedPrefs, PersistedProject, PersistedState, PersistedThread } from '../db/types';
 
 // Mirrors frontend/core/state.js:31 `appState`, field for field, so a feature
@@ -83,13 +87,33 @@ export interface AppActions {
    * survives. Returns whatever the edit returns.
    */
   editModes<T>(edit: (prefs: PersistedPrefs) => T): Promise<T>;
+  // ---- Projects (grid + chat-linking; rules/files/folder are later) ----
+  /** Creates a project and stamps it as opened, as legacy's createProject + openProjectPanel do. */
+  createProject(): Promise<string | null>;
+  /** Stamps `updatedAt` on first open (a no-op, and no write, once it is set). */
+  touchProjectOnOpen(pid: string): Promise<void>;
+  /** Name edits: memory at once, one debounced write (flushed by flushPrefs). */
+  renameProject(pid: string, name: string): Promise<void>;
+  addChatToProject(pid: string, tid: string): Promise<boolean>;
+  removeChatFromProject(tid: string): Promise<boolean>;
+  /** Returns the new chat's id. */
+  newChatInProject(pid: string): Promise<string | null>;
+  /** The caller owns the confirm. Chats are kept and move back to Threads. */
+  deleteProject(pid: string): Promise<boolean>;
   /** Re-reads localStorage.nl_api_keys, which the other app may have changed. */
   refreshApiKeys(): void;
   connectApiKey(provider: string, key: string): void;
   disconnectApiKey(provider: string): void;
 }
 
+/**
+ * One debounced writer for every typed field (prefs, project names), keyed by
+ * what is being edited; `flushPrefs` flushes them all.
+ */
 const prefWriter = createDebouncedWriter<string>();
+
+/** Project names typed but not yet written. Thread actions overlay these so the DB's older copy cannot roll them back. */
+const pendingProjectNames = new Map<string, { name: string; updatedAt: number }>();
 
 function fromPersisted(s: PersistedState): Partial<AppState> {
   return {
@@ -112,7 +136,20 @@ function fromPersisted(s: PersistedState): Partial<AppState> {
 function threadFields(s: PersistedState): Partial<AppState> {
   const all = fromPersisted(s);
   delete all.prefs;
+  if (pendingProjectNames.size && all.projects) {
+    const projects = { ...all.projects };
+    for (const [pid, p] of pendingProjectNames) {
+      if (projects[pid]) projects[pid] = { ...projects[pid]!, name: p.name, updatedAt: p.updatedAt };
+    }
+    all.projects = projects;
+  }
   return all;
+}
+
+type ProjectFieldsResult<T> = { state: PersistedState; result: T };
+function applyProjectWrite<T>(set: (p: Partial<AppState>) => void, r: ProjectFieldsResult<T>): T {
+  set({ ...threadFields(r.state), error: null });
+  return r.result;
 }
 
 const initial = emptyState();
@@ -203,6 +240,58 @@ export const useAppStore = create<AppState & AppActions>((set, get) => ({
       }
     }
     return result;
+  },
+
+  async createProject() {
+    try {
+      return applyProjectWrite(set, await updateChatState(s => {
+        const id = createProjectIn(s, Date.now());
+        touchOnOpen(s, id, Date.now());
+        return id;
+      }));
+    } catch (e) { set({ error: e instanceof Error ? e.message : String(e) }); return null; }
+  },
+
+  async touchProjectOnOpen(pid) {
+    const p = get().projects[pid];
+    if (!p || p.updatedAt) return; // nothing to stamp: no write
+    try { applyProjectWrite(set, await updateChatState(s => touchOnOpen(s, pid, Date.now()))); }
+    catch (e) { set({ error: e instanceof Error ? e.message : String(e) }); }
+  },
+
+  async renameProject(pid, name) {
+    const now = Date.now();
+    const p = get().projects[pid];
+    if (!p) return;
+    pendingProjectNames.set(pid, { name, updatedAt: now });
+    set({ projects: { ...get().projects, [pid]: { ...p, name, updatedAt: now } } });
+    prefWriter.schedule(`project:${pid}`, async () => {
+      pendingProjectNames.delete(pid);
+      try { await updateChatState(s => renameProjectIn(s, pid, name, now)); }
+      catch (e) { set({ error: e instanceof Error ? e.message : String(e) }); }
+    });
+  },
+
+  async addChatToProject(pid, tid) {
+    try { return applyProjectWrite(set, await updateChatState(s => addChatToProjectIn(s, pid, tid))); }
+    catch (e) { set({ error: e instanceof Error ? e.message : String(e) }); return false; }
+  },
+
+  async removeChatFromProject(tid) {
+    try { return applyProjectWrite(set, await updateChatState(s => removeChatFromProjectIn(s, tid))); }
+    catch (e) { set({ error: e instanceof Error ? e.message : String(e) }); return false; }
+  },
+
+  async newChatInProject(pid) {
+    try { return applyProjectWrite(set, await updateChatState(s => newChatInProjectIn(s, pid, Date.now()))); }
+    catch (e) { set({ error: e instanceof Error ? e.message : String(e) }); return null; }
+  },
+
+  async deleteProject(pid) {
+    prefWriter.cancel(`project:${pid}`);
+    pendingProjectNames.delete(pid);
+    try { return applyProjectWrite(set, await updateChatState(s => deleteProjectIn(s, pid))); }
+    catch (e) { set({ error: e instanceof Error ? e.message : String(e) }); return false; }
   },
 
   async setTheme(theme) {

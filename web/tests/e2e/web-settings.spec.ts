@@ -205,6 +205,8 @@ test.describe('API keys', () => {
     await page.locator('#api-provider').selectOption('anthropic');
     await page.locator('#api-key-input').fill(FAKE_ANTHROPIC);
     await page.locator('#api-key-add').click();
+    // Precondition, so a failure below can only be /web/'s: legacy really stored it.
+    await expect.poll(() => page.evaluate(() => localStorage.getItem('nl_api_keys'))).toContain('anthropic');
 
     await openWeb(page);
     await openSettings(page);

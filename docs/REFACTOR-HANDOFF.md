@@ -5,7 +5,7 @@ four hardening changes and the provider registry)** are committed on branch
 `refactor/p0-repo-hygiene`. **P3 (React shell) is implemented and automated-green but
 UNCOMMITTED and awaiting the human smoke test.** `main` is untouched at `ccf7504`.
 
-**P3 is committed (`cd5c67e`). P4.1a (Settings + API keys) and P4.1b (Modes manager) are implemented, automated-green and committed after it; the maintainer smoke-tested P3/P4.1 on 2026-10-04 and it passed. P4 item 2 (search palette, threads only) is implemented and committed, not yet smoke-tested. P4 item 3 (changelog viewer) is implemented and committed, NOT the Product story, which the maintainer asked to leave out for now. Next: P4 item 4 (Projects grid).**
+**P3 is committed (`cd5c67e`). P4.1a (Settings + API keys) and P4.1b (Modes manager) are implemented, automated-green and committed after it; the maintainer smoke-tested P3/P4.1 on 2026-10-04 and it passed. P4 item 2 (search palette, threads only) is implemented and committed, not yet smoke-tested. P4 item 3 (changelog viewer) is implemented and committed, NOT the Product story, which the maintainer asked to leave out for now. P4 item 4 (Projects grid and chat-linking) is implemented and committed, not yet smoke-tested; project rules/files/folder are deferred to item 5. Next: P4 item 5 (attachments).**
 
 This file is the context a new session needs. Read it instead of re-deriving the
 state, then read `AGENTS.md` and `CLAUDE.md` for the standing rules.
@@ -54,8 +54,8 @@ which has no FastAPI. `--legacy` runs the old dependency-free server.
 NOTLINEAR_SERVER=fastapi .venv/bin/python -m pytest tests/contract   # 146 (earlier figures here were stale)
 NOTLINEAR_SERVER=legacy  .venv/bin/python -m pytest tests/contract   # 118 + 28 skipped
 .venv/bin/python -m pytest tests/proxy                               # 7
-cd web && pnpm test && pnpm typecheck && pnpm lint                   # 205
-cd web && pnpm e2e                                                   # builds, then 80 Playwright (15 legacy + 65 /web/)
+cd web && pnpm test && pnpm typecheck && pnpm lint                   # 247
+cd web && pnpm e2e                                                   # builds, then 95 Playwright (15 legacy + 80 /web/)
 ```
 
 Then the manual steps at `AGENTS.md` "Verification" that automation cannot cover:
@@ -176,6 +176,18 @@ Technical tone buttons sit in a second `.seg` row outside `#seg-tone`.
 **Editing this file: replace by exact anchor, never by a range between two headings.** A range
 replace deleted six landmines here once.
 
+**Legacy saves the OLD thread before switching.** After "New chat" the saved `current` is still the
+previous thread (`renderThread` calls `saveCurrentThread` first). A test that waits for `current`
+to equal the new chat can hang; wait for the chat in `dynamic` instead.
+
+**A sidebar-open helper must key on `aria-hidden`, not `isVisible()`.** The sidebar stays visible
+for the 200ms it takes to slide out, so `isVisible()` lies right after something closes it.
+
+**Throwaway Playwright scripts that seed IndexedDB must `db.close()`.** An open v1 connection
+blocks Dexie's upgrade to v10 and the app silently never renders (blank body, no error).
+
+**Do not delete anything under "Landmines" with a range-replace.** See the note above.
+
 **Never use `waitForTimeout` to wait for legacy to save.** It flaked 1 run in 3. Poll the
 persisted state (`expect.poll(() => readPersistedState(...))`) for the actual condition.
 
@@ -213,7 +225,7 @@ the one-session-per-phase cadence is not. P5 alone is four sessions.
 | P2a | FastAPI core, static allowlist | **done**, smoke-tested |
 | P2 | Hardening (a-d) + provider registry | **done**, verified live |
 | P3 | React shell | **done, committed, smoke-tested** |
-| P4 | Leaf features | **in progress**: 4.1 Settings, keys and Modes done; items 2 (search, threads only) and 3 (changelog; Product story deferred) done; item 4 next |
+| P4 | Leaf features | **in progress**: 4.1 Settings, keys and Modes done; items 2 (search, threads only), 3 (changelog; Product story deferred) and 4 (projects grid + chat-linking) done; item 5 (attachments) next |
 | P5 | Chat core (four sub-sessions) | |
 | P6 | Notes editor | |
 | P7 | Extension seams | |

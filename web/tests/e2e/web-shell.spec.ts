@@ -135,9 +135,12 @@ test.describe('one database, two apps', () => {
     await openApp(page);
     await openSidebar(page);
     await page.locator('#new-chat').click();
-    // Legacy saves a moment after rendering; wait for the row, not a fixed time.
-    await expect.poll(async () => ((await readPersistedState(page)) as { current: string } | null)?.current).toMatch(/^chat-\d+$/);
-    const id = ((await readPersistedState(page)) as { current: string }).current;
+    // Wait for the chat itself to be saved. NOT `current`: legacy's renderThread saves the OLD
+    // thread before switching, so right after New chat the saved `current` is still the previous
+    // one and only catches up on a later save. The new chat is in `dynamic` from that first save.
+    const newest = async () => ((await readPersistedState(page)) as { dynamic: Array<{ id: string }> } | null)?.dynamic.at(-1)?.id;
+    await expect.poll(newest).toMatch(/^chat-\d+$/);
+    const id = (await newest())!;
 
     await openWeb(page);
     await showSidebar(page);

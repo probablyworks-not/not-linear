@@ -17,8 +17,12 @@ export interface PersistedProject {
   rules: string;
   files: unknown[];
   path: string;
-  /** Added for TASK-RD07's "Last updated" sort; 0 for saves that predate it. */
-  updatedAt: number;
+  /**
+   * Added for TASK-RD07's "Last updated" sort. Absent on a project legacy has just
+   * created (it is stamped when the panel first opens), and 0 once loaded from a
+   * save that predates it.
+   */
+  updatedAt?: number;
 }
 
 /** User preferences. persistAll writes exactly these keys — no more. */

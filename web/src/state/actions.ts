@@ -4,6 +4,7 @@ import { mountView } from '../registry/views';
 import { confirmDeleteChat } from '../ui/confirm-copy';
 import { toast } from '../ui/toast';
 import { MAIN_THREAD_ID, visibleThreads } from '../db/thread-ops';
+import { confirmDeleteProject } from '../ui/confirm-copy';
 
 // Shell-level operations that span both stores. These are what the legacy
 // `register*Opener` bridges became: plain functions, callable from anywhere.
@@ -51,4 +52,57 @@ export async function syncFromDisk(): Promise<void> {
   await useAppStore.getState().flushPrefs();
   await useAppStore.getState().hydrate();
   useUiStore.getState().dropTabs(useAppStore.getState().deletedThreadIds);
+}
+
+// ---- Projects -------------------------------------------------------------
+
+/** app.js:5393 openProjectPanel: stamp updatedAt on first open, tuck the sidebar away, show the panel. */
+export async function openProjectPanel(pid: string, opts?: { selectName?: boolean }): Promise<void> {
+  const ui = useUiStore.getState();
+  ui.setProjectsViewOpen(false);
+  ui.setSidebarOpen(false);
+  ui.setActiveProject(pid, opts);
+  await useAppStore.getState().touchProjectOnOpen(pid);
+}
+
+export function closeProjectPanel(): void {
+  useUiStore.getState().setActiveProject(null);
+  void useAppStore.getState().flushPrefs();
+}
+
+export async function newProject(): Promise<void> {
+  const pid = await useAppStore.getState().createProject();
+  if (pid) await openProjectPanel(pid, { selectName: true });
+}
+
+/** app.js:5576 newChatInProject. */
+export async function newChatInProject(pid: string): Promise<void> {
+  await useAppStore.getState().flushPrefs();
+  const id = await useAppStore.getState().newChatInProject(pid);
+  if (!id) return;
+  const ui = useUiStore.getState();
+  ui.activateTab(id);
+  mountView('chat');
+  closeProjectPanel();
+  if (window.innerWidth <= 760) ui.setSidebarOpen(false);
+  toast('New chat in project');
+}
+
+export async function addExistingChat(pid: string, tid: string): Promise<void> {
+  if (await useAppStore.getState().addChatToProject(pid, tid)) toast('Chat added to project');
+}
+
+/** app.js:5516 click on a chat row in the panel. */
+export async function openProjectChat(tid: string): Promise<void> {
+  closeProjectPanel();
+  await selectThread(tid);
+}
+
+/** app.js:5675 #project-delete. */
+export async function deleteProjectWithConfirm(pid: string): Promise<void> {
+  const p = useAppStore.getState().projects[pid];
+  if (!p) return;
+  if (!(await useUiStore.getState().askConfirm(confirmDeleteProject(p.name || 'Untitled project')))) return;
+  closeProjectPanel();
+  if (await useAppStore.getState().deleteProject(pid)) toast('Project deleted');
 }

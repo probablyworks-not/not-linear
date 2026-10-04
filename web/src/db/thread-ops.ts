@@ -107,6 +107,8 @@ export interface ThreadRow {
   emoji?: string;
   unread: boolean;
   isStatic: boolean;
+  /** Set when the thread is filed in a project; the Threads list hides those (app.js:5348). */
+  projectId?: string;
 }
 
 /**
@@ -123,7 +125,8 @@ export function visibleThreads(state: PersistedState): ThreadRow[] {
     seen.add(id);
     const thread = state.threads[id];
     const emoji = typeof thread?.emoji === 'string' && thread.emoji ? thread.emoji : undefined;
-    rows.push({ id, title: resolveThreadTitle(thread, fallback), emoji, unread: thread?.unread === true, isStatic });
+    const projectId = typeof thread?.projectId === 'string' && thread.projectId ? thread.projectId : undefined;
+    rows.push({ id, title: resolveThreadTitle(thread, fallback), emoji, unread: thread?.unread === true, isStatic, projectId });
   };
   for (const t of STATIC_THREADS) push(t.id, t.title, true);
   for (const d of state.dynamic) push(d.id, d.title, false);

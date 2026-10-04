@@ -7,6 +7,7 @@ import { deleteChat, newChat, selectThread } from '../state/actions';
 import { ESC_PRIORITY, useEscLayer } from '../lib/keyboard';
 import { visibleThreads, MAIN_THREAD_ID } from '../db/thread-ops';
 import { flags } from '../flags';
+import { ProjectsSidebarSection } from '../projects/ProjectsSidebarSection';
 
 const SIDE_ITEM = 'relative flex w-full items-center gap-[9px] rounded-md text-left text-sm leading-tight text-text-2 hover:bg-bg-2 hover:text-text';
 
@@ -20,6 +21,7 @@ export function Sidebar() {
   const dynamic = useAppStore(s => s.dynamicThreads);
   const deleted = useAppStore(s => s.deletedThreadIds);
   const name = useAppStore(s => s.prefs.name);
+  const projects = useAppStore(s => s.projects);
 
   const rows = useMemo(
     () => visibleThreads({
@@ -80,9 +82,12 @@ export function Sidebar() {
             <span className="rounded-[5px] bg-kbd-bg px-1.5 py-0.5 font-mono text-xs text-kbd-fg">⌘N</span>
           </button>
 
+          {flags.projects && <ProjectsSidebarSection />}
+
           <div className="mx-2 mb-1 mt-3.5 font-mono text-xs uppercase tracking-widest text-text-3">Threads</div>
           <div role="list">
-            {rows.map(row => {
+            {/* A chat filed in a project is reached through the project, not the flat list (app.js:5348). */}
+            {rows.filter(r => !(flags.projects && r.projectId && projects[r.projectId])).map(row => {
               const active = row.id === activeTabId;
               return (
                 <div

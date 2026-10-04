@@ -24,3 +24,14 @@ export function confirmDeleteBranch(title: string, count = 1): ConfirmRequest {
     actionLabel: count > 1 ? 'Delete branches' : 'Delete branch',
   };
 }
+
+/** app.js:5677. */
+export function confirmDeleteProject(name: string): ConfirmRequest {
+  return {
+    heading: 'Delete project?',
+    name,
+    before: 'This removes the project',
+    after: '. Its chats are kept and moved back to Threads.',
+    actionLabel: 'Delete project',
+  };
+}

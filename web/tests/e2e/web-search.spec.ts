@@ -93,6 +93,7 @@ test.describe('searching', () => {
     await page.locator('[data-thread="pricing"]').hover();
     await page.getByRole('button', { name: 'Delete Pricing research' }).click();
     await page.getByRole('alertdialog').getByRole('button', { name: 'Delete chat' }).click();
+    await expect(page.locator('[data-thread="pricing"]')).toHaveCount(0); // the delete has landed
     await page.keyboard.press('Control+k');
     expect(await titles(page)).not.toContain('Pricing research');
   });

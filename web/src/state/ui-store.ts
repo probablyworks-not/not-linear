@@ -22,6 +22,11 @@ export interface UiState {
   settingsOpen: boolean;
   modesOpen: boolean;
   searchOpen: boolean;
+  projectsViewOpen: boolean;
+  /** The project whose panel is open, if any. */
+  activeProjectId: string | null;
+  /** Set when the panel opens for a just-created project, so its name is selected for typing. */
+  selectProjectName: boolean;
   tabs: Tab[];
   activeTabId: string | null;
   confirm: PendingConfirm | null;
@@ -32,6 +37,8 @@ export interface UiActions {
   setSettingsOpen(open: boolean): void;
   setModesOpen(open: boolean): void;
   setSearchOpen(open: boolean): void;
+  setProjectsViewOpen(open: boolean): void;
+  setActiveProject(pid: string | null, opts?: { selectName?: boolean }): void;
   /** Reads nl_tabs_v1; call after the app store has hydrated. */
   restoreTabs(deleted: ReadonlySet<string>, fallbackId: string): void;
   /** Opens `id` as a tab (if new) and activates it. */
@@ -53,6 +60,9 @@ export const useUiStore = create<UiState & UiActions>((set, get) => ({
   settingsOpen: false,
   modesOpen: false,
   searchOpen: false,
+  projectsViewOpen: false,
+  activeProjectId: null,
+  selectProjectName: false,
   tabs: [],
   activeTabId: null,
   confirm: null,
@@ -61,6 +71,8 @@ export const useUiStore = create<UiState & UiActions>((set, get) => ({
   setSettingsOpen(open) { set({ settingsOpen: open }); },
   setModesOpen(open) { set({ modesOpen: open }); },
   setSearchOpen(open) { set({ searchOpen: open }); },
+  setProjectsViewOpen(open) { set({ projectsViewOpen: open }); },
+  setActiveProject(pid, opts) { set({ activeProjectId: pid, selectProjectName: !!opts?.selectName }); },
 
   restoreTabs(deleted, fallbackId) {
     let raw: string | null = null;

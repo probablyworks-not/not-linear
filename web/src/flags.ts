@@ -6,4 +6,5 @@ export const flags = {
   modes: true,
   search: true,
   changelog: true,
+  projects: true,
 } as const;

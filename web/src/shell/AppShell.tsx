@@ -13,6 +13,8 @@ import { Toaster } from '../ui/toast';
 import { SettingsDialog } from '../settings/SettingsDialog';
 import { ModesDialog } from '../settings/ModesDialog';
 import { SearchPalette } from '../search/SearchPalette';
+import { ProjectsGrid } from '../projects/ProjectsGrid';
+import { ProjectPanel } from '../projects/ProjectPanel';
 import { flags } from '../flags';
 
 export function AppShell() {
@@ -67,6 +69,8 @@ export function AppShell() {
       {flags.settings && <SettingsDialog />}
       {flags.modes && <ModesDialog />}
       {flags.search && <SearchPalette />}
+      {flags.projects && <ProjectsGrid />}
+      {flags.projects && <ProjectPanel />}
       <ConfirmDialog />
       <Toaster />
     </div>

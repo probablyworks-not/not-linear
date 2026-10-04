@@ -5,6 +5,13 @@ All notable repository changes made by AI agents should be recorded here.
 ## 2026-10-04
 
 - Agent: Claude Sonnet 5.5
+- Summary: P4 item 4 — Projects in `/web/`: sidebar list, full-screen grid (search, sort, cards), and a project panel for the name, filing chats in and out, creating a chat inside a project, and deleting the project. Behind `flags.projects`.
+- Files changed: `web/src/{db/project-ops.ts,lib/time-ago.ts,projects/*,state/*,shell/*,ui/confirm-copy.ts,db/{types,thread-ops}.ts}`, `web/tests/{projects,e2e}/*`, `docs/project-notes/*`, `FEATURES.md`, `docs/REFACTOR-HANDOFF.md`.
+- Behavior changes: none in legacy. In `/web/`, a chat filed in a project is hidden from the Threads list and reached through its project, as in legacy. Rules, files, the linked folder and project emoji are not shown yet and are left untouched in storage.
+- Observed: legacy's `renderThread` saves the previous thread before switching, so right after "New chat" the saved `current` is still the old thread; it catches up on a later save. Not changed. Separately, a Dexie version upgrade blocks silently if another connection to the database stays open (it hung my throwaway test script); a real page opens one connection, so this only bites ad-hoc scripts.
+- Verification: 247 vitest, 95 Playwright including a grid parity test against the legacy app, typecheck, lint, build.
+
+- Agent: Claude Sonnet 5.5
 - Summary: P4 item 3 — changelog viewer in `/web/` Settings (mechanical `## <date>` chapters, Older/Newer, bundled fallback), behind `flags.changelog`. The Product story (sidebar entry, fullscreen player, "Play the story") is deliberately not included, per the maintainer.
 - Files changed: `web/src/changelog/*`, `web/scripts/gen-changelog-assets.mjs`, `web/src/{flags.ts,settings/SettingsDialog.tsx}`, `frontend/styles/tokens.css`, `web/tests/{changelog,e2e}/*`, `docs/project-notes/*`, `FEATURES.md`, `docs/REFACTOR-HANDOFF.md`.
 - Behavior changes: none in legacy. `tokens.css` gains seven additive tokens (`--story-hue-1..4`, `--tag-*`). In `/web/` the pager is kept outside the scrolling card and the chapter dots wrap.

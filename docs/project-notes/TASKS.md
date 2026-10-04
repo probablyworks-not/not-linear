@@ -4,6 +4,14 @@ Each entry: **ID · Status · Goal · Context · Files likely involved · Accept
 
 ---
 
+## TASK-P4.4 — Projects grid and chat-linking in `/web/`
+- **Status:** Done pending smoke test. Rules, files, linked folder and project emoji deferred to the attachments item.
+- **Goal:** list, create, rename, delete projects and file chats into them, sharing storage with legacy.
+- **Acceptance criteria:** identical grid (cards, order, meta) to legacy on identical data; membership only on `threads[id].projectId`; deleting a project keeps its chats; create/link/delete leaves all other data byte-identical on real data.
+- **Verification:** RUNS.md TASK-P4.4.
+
+---
+
 ## TASK-P4.3 — Changelog viewer in `/web/` (Product story deferred)
 - **Status:** Done pending smoke test. Product story (sidebar row, fullscreen player, "Play the story") intentionally NOT built - maintainer's instruction.
 - **Acceptance criteria:** identical chapters to legacy from the same file; bundled fallback on any failure; mechanical grouping; no literal colours; pager always reachable.
