@@ -94,13 +94,28 @@ const SEEDS: Array<{ name: string; state: PersistedState }> = [
     },
   },
   {
-    name: 'branches and highlights',
+    // Shape taken from a real database via the key-path golden, NOT invented.
+    // An earlier version of this seed used a `branches: []` array, which does
+    // not exist in practice — branches persist as two id-keyed maps.
+    name: 'branches and highlights (real shape)',
     state: {
       threads: {
         'chat-1': {
           title: 'Branched', stream: '<p>a <span class="branched" data-bid="b1">b</span></p>',
-          branches: [{ id: 'b1', bodyHTML: '<p>branch body</p>', parentId: null }],
+          branchSnapshots: {
+            b1778130159563: { id: 'b1778130159563', bodyHTML: '<p>branch body</p>', parentBid: null, depth: 0 },
+          },
+          branchRecents: {
+            b1778130159563: {
+              id: 'b1778130159563', anchorBid: 'b1', createdAt: 1778130159563,
+              touchedAt: 1778130159999, depth: 0, parentBid: null, quote: 'b',
+              mainTurnId: null, mainTurnPrompt: 'why?',
+            },
+          },
           highlights: [{ id: 'h1', text: 'b', source: 'assistant' }],
+          mainMessages: [{ role: 'user', content: 'hi' }],
+          model: 'sonnet', provider: 'claude',
+          tokenIn: 10, tokenOut: 20, cost: 0.0003, unread: false,
         },
       },
       current: 'chat-1', dynamic: [{ id: 'chat-1', title: 'Branched' }], deletedThreads: [],

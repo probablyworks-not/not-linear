@@ -49,8 +49,45 @@ export interface PersistedThread {
   /** Rendered HTML, not data. The whole reason P5 must dual-write. */
   stream?: string;
   title?: string;
-  branches?: unknown[];
+
+  /**
+   * Branch persistence. NOTE: there is no `branches` array — an earlier draft
+   * of this type invented one, and a key-path golden built from a real
+   * database showed it appears zero times in practice (`branchSnapshots`
+   * appears 22 times in app.js, `.branches` once). Branches persist as two
+   * id-keyed maps instead.
+   */
+  branchSnapshots?: Record<string, unknown>;
+  branchRecents?: Record<string, unknown>;
+
   highlights?: unknown[];
+
+  /** Transcript and breadcrumb state. */
+  mainMessages?: unknown[];
+  mainHistory?: unknown[];
+  docContent?: string;
+  h1?: string;
+  eyebrow?: string;
+  meta?: string;
+  promotedCrumbTitle?: string;
+
+  /** Per-thread model and ranking choices (ADR-045, ADR-012). */
+  model?: string;
+  provider?: string;
+  rankingMode?: string;
+
+  /** Usage accounting, shown in the thread header. */
+  cost?: number;
+  tokenIn?: number;
+  tokenOut?: number;
+  tokenCacheHit?: number;
+
+  emoji?: string;
+  kind?: string;
+  projectId?: string;
+  unread?: boolean;
+
+  /** Threads carry fields this layer has no business narrowing. */
   [key: string]: unknown;
 }
 

@@ -5,6 +5,13 @@ All notable repository changes made by AI agents should be recorded here.
 ## 2026-10-04
 
 - Agent: Claude Opus 5
+- Summary: Branch pushed, and the real-data schema fixture generated — which immediately corrected two things the synthetic seeds had wrong.
+- Files changed: `web/tests/fixtures/*` (new), `web/tests/schema/__snapshots__/chat-keypaths.json` (new), `web/src/db/{types,keypaths}.ts`, `web/tests/schema/chat-store.oracle.test.ts`, `web/scripts/backup-to-fixture.mjs`.
+- Behavior changes: none — tests and fixtures only.
+- Observed: the fixture from a real database (91 threads, 18 projects) revealed that **`threads.*.branches` does not exist**. The synthetic seed had invented it; real branches persist as two id-keyed maps, `branchSnapshots` and `branchRecents` (22 vs 1 occurrences in app.js). Real threads also carry 20 fields the seeds never covered — `cost`, `tokenIn`/`tokenOut`/`tokenCacheHit`, `mainMessages`, `mainHistory`, `docContent`, `h1`, `eyebrow`, `meta`, `promotedCrumbTitle`, `model`, `provider`, `rankingMode`, `projectId`, `emoji`, `kind`, `unread`. Separately, the first golden had **6,447 paths** because `schemaPaths` did not collapse those id-keyed maps — a golden that grows a path per branch churns on every branch and is worthless as a review signal; now 128 paths.
+- Verification: 146 contract tests, 66 vitest (3 previously-skipped now running), 15 Playwright, typecheck clean. Redaction re-verified against the real backup: 0 of 4 API keys, 0 of 74 thread titles and 0 of 200 note strings appear in the committed fixtures or the golden.
+
+- Agent: Claude Opus 5
 - Summary: P2 complete. Four hardening changes (ADR-035) and the provider interface plus single tool registry (ADR-037).
 - Files changed: `backend/app/services/{safe_fetch,consent,macos}.py`, `backend/app/middleware/local_only.py`, `backend/app/routers/endpoints.py`, `frontend/core/{api-client,feedback}.js`, `frontend/app.js`, `frontend/views/notes.js`, `tools/_backup-lib.js`, `web/src/providers/{types,tool-specs}.ts` (new), `tests/contract/**`, `web/tests/providers/**`, `docs/project-notes/DECISIONS.md`.
 - Behavior changes: every `/__notlinear_*` POST now requires `X-Notlinear-Local: 1` and gets 403 without it. `link_preview` refuses private, loopback, link-local, CGNAT and reserved addresses, re-validating every redirect hop. `scan_project` returns **403** for a path outside a folder the user picked — the one place P2 is deliberately not byte-identical. `save_file` rejects filenames containing a path separator and passes the name as argv rather than interpolating it.
