@@ -5,6 +5,9 @@ import { confirmDeleteChat } from '../ui/confirm-copy';
 import { toast } from '../ui/toast';
 import { MAIN_THREAD_ID, visibleThreads } from '../db/thread-ops';
 import { confirmDeleteProject } from '../ui/confirm-copy';
+import { pickFiles } from '../attachments/pick-files';
+import { readFiles } from '../attachments/read-files';
+import { LOCAL_HEADER } from '../lib/api';
 
 // Shell-level operations that span both stores. These are what the legacy
 // `register*Opener` bridges became: plain functions, callable from anywhere.
@@ -105,4 +108,44 @@ export async function deleteProjectWithConfirm(pid: string): Promise<void> {
   if (!(await useUiStore.getState().askConfirm(confirmDeleteProject(p.name || 'Untitled project')))) return;
   closeProjectPanel();
   if (await useAppStore.getState().deleteProject(pid)) toast('Project deleted');
+}
+
+// ---- Project files and linked folder (P4 item 5) ----------------------------
+
+/** app.js:5694 #project-add-file. */
+export async function addFilesToProject(pid: string): Promise<void> {
+  const picked = await pickFiles();
+  if (!picked.length) return;
+  try {
+    const read = await readFiles(picked);
+    if (!read.length) { toast('No readable files added'); return; }
+    // The panel may have been closed, or the project deleted, while the files were read.
+    if (!useAppStore.getState().projects[pid]) return;
+    await useAppStore.getState().addProjectFiles(pid, read);
+    toast(`Added ${read.length} file${read.length > 1 ? 's' : ''} to project`);
+  } catch (e) {
+    toast('Could not add files: ' + (e instanceof Error ? e.message : String(e)));
+    console.error('notlinear: add project file error', e);
+  }
+}
+
+/** app.js:5604 #project-link-folder. The server records the pick in its consent ledger (ADR-035). */
+export async function linkProjectFolder(pid: string): Promise<void> {
+  let res: Response;
+  try {
+    res = await fetch('/__notlinear_pick_folder', { method: 'POST', headers: { 'content-type': 'application/json', ...LOCAL_HEADER }, body: '{}' });
+  } catch {
+    toast('Folder picker needs the local server (run backend/server.py)');
+    return;
+  }
+  if (res.status === 404 || res.status === 501) { toast('Restart the server — folder picker endpoint missing'); return; }
+  let data: { cancelled?: boolean; ok?: boolean; path?: string; error?: string } | null;
+  try { data = (await res.json()) as typeof data; } catch { data = null; }
+  if (data?.cancelled) return;
+  if (!data?.ok) { toast(data?.error ? `Picker error: ${data.error}` : 'Could not pick folder'); return; }
+  if (await useAppStore.getState().setProjectPath(pid, data.path || '')) toast('Folder linked');
+}
+
+export async function unlinkProjectFolder(pid: string): Promise<void> {
+  if (await useAppStore.getState().setProjectPath(pid, '')) toast('Folder unlinked');
 }

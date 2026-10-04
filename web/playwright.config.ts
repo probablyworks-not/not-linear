@@ -35,6 +35,11 @@ export default defineConfig({
   webServer: {
     command: `python3 backend/server.py --host ${HOST} --port ${PORT}`,
     cwd: '..',
+    // Stubs osascript and screencapture (backend/app/services/macos.py). Without this, a test
+    // that clicks "Add files" would put a REAL macOS file dialog on the developer's screen and
+    // hang waiting for it. With it, the native pickers report "cancelled", which is exactly the
+    // path that must fall through to the browser's own file input (BUGS.md #022).
+    env: { NOTLINEAR_FAKE_NATIVE: '1' },
     url: `http://${HOST}:${PORT}/frontend/index.html`,
     reuseExistingServer: !process.env.CI,
     timeout: 30_000,

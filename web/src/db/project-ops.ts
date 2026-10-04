@@ -117,3 +117,48 @@ export function gridProjects(state: PersistedState, search: string, sort: Projec
 export function chatCount(state: PersistedState, pid: string): number {
   return Object.values(state.threads).filter(t => t.projectId === pid).length;
 }
+
+// ---- Rules, files and the linked folder (P4 item 5) -------------------------
+
+/** app.js:5663 #project-rules-input: set the text and touch. */
+export function setProjectRulesIn(state: PersistedState, pid: string, rules: string, now: number): boolean {
+  const p = state.projects[pid];
+  if (!p) return false;
+  p.rules = rules;
+  p.updatedAt = now;
+  return true;
+}
+
+/**
+ * app.js:5694 add files. Stored as text only: the picker's base64 is dropped
+ * because project knowledge is injected through the system prompt as text, and
+ * keeping it would balloon the persisted state. Touches the project.
+ */
+export function addProjectFilesIn(state: PersistedState, pid: string, files: Array<{ base64?: unknown } & Record<string, unknown>>, now: number): boolean {
+  const p = state.projects[pid];
+  if (!p || !files.length) return false;
+  const stripped = files.map(f => {
+    const copy = { ...f };
+    delete copy.base64;
+    return copy;
+  });
+  p.files = [...(Array.isArray(p.files) ? p.files : []), ...stripped];
+  p.updatedAt = now;
+  return true;
+}
+
+/** app.js:5490 remove chip: a splice and a save. Legacy does not touch `updatedAt` here. */
+export function removeProjectFileIn(state: PersistedState, pid: string, index: number): boolean {
+  const p = state.projects[pid];
+  if (!p || !Array.isArray(p.files) || index < 0 || index >= p.files.length) return false;
+  p.files = p.files.filter((_f, i) => i !== index);
+  return true;
+}
+
+/** app.js:5616 / :5630 link and unlink the folder. Does not touch `updatedAt`, as legacy does not. */
+export function setProjectPathIn(state: PersistedState, pid: string, path: string): boolean {
+  const p = state.projects[pid];
+  if (!p) return false;
+  p.path = path;
+  return true;
+}

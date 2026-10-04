@@ -9,6 +9,7 @@ import { MODE_PREF_KEYS } from '../settings/modes';
 import {
   addChatToProjectIn, createProjectIn, deleteProjectIn, newChatInProjectIn, removeChatFromProjectIn,
   renameProjectIn, touchOnOpen,
+  addProjectFilesIn, removeProjectFileIn, setProjectPathIn, setProjectRulesIn,
 } from '../db/project-ops';
 import type { PersistedPrefs, PersistedProject, PersistedState, PersistedThread } from '../db/types';
 
@@ -94,6 +95,13 @@ export interface AppActions {
   touchProjectOnOpen(pid: string): Promise<void>;
   /** Name edits: memory at once, one debounced write (flushed by flushPrefs). */
   renameProject(pid: string, name: string): Promise<void>;
+  /** Rules text: memory at once, one debounced write, flushed by flushPrefs. */
+  setProjectRules(pid: string, rules: string): Promise<void>;
+  /** Appends already-read files (base64 is dropped) and touches the project. */
+  addProjectFiles(pid: string, files: Array<Record<string, unknown>>): Promise<boolean>;
+  removeProjectFile(pid: string, index: number): Promise<boolean>;
+  /** Links ('/some/path') or unlinks ('') the project's folder. */
+  setProjectPath(pid: string, path: string): Promise<boolean>;
   addChatToProject(pid: string, tid: string): Promise<boolean>;
   removeChatFromProject(tid: string): Promise<boolean>;
   /** Returns the new chat's id. */
@@ -114,6 +122,8 @@ const prefWriter = createDebouncedWriter<string>();
 
 /** Project names typed but not yet written. Thread actions overlay these so the DB's older copy cannot roll them back. */
 const pendingProjectNames = new Map<string, { name: string; updatedAt: number }>();
+/** Same, for the rules textarea. */
+const pendingProjectRules = new Map<string, { rules: string; updatedAt: number }>();
 
 function fromPersisted(s: PersistedState): Partial<AppState> {
   return {
@@ -136,10 +146,13 @@ function fromPersisted(s: PersistedState): Partial<AppState> {
 function threadFields(s: PersistedState): Partial<AppState> {
   const all = fromPersisted(s);
   delete all.prefs;
-  if (pendingProjectNames.size && all.projects) {
+  if ((pendingProjectNames.size || pendingProjectRules.size) && all.projects) {
     const projects = { ...all.projects };
     for (const [pid, p] of pendingProjectNames) {
       if (projects[pid]) projects[pid] = { ...projects[pid]!, name: p.name, updatedAt: p.updatedAt };
+    }
+    for (const [pid, p] of pendingProjectRules) {
+      if (projects[pid]) projects[pid] = { ...projects[pid]!, rules: p.rules, updatedAt: p.updatedAt };
     }
     all.projects = projects;
   }
@@ -272,6 +285,34 @@ export const useAppStore = create<AppState & AppActions>((set, get) => ({
     });
   },
 
+  async setProjectRules(pid, rules) {
+    const now = Date.now();
+    const p = get().projects[pid];
+    if (!p) return;
+    pendingProjectRules.set(pid, { rules, updatedAt: now });
+    set({ projects: { ...get().projects, [pid]: { ...p, rules, updatedAt: now } } });
+    prefWriter.schedule(`project-rules:${pid}`, async () => {
+      pendingProjectRules.delete(pid);
+      try { await updateChatState(s => setProjectRulesIn(s, pid, rules, now)); }
+      catch (e) { set({ error: e instanceof Error ? e.message : String(e) }); }
+    });
+  },
+
+  async addProjectFiles(pid, files) {
+    try { return applyProjectWrite(set, await updateChatState(s => addProjectFilesIn(s, pid, files, Date.now()))); }
+    catch (e) { set({ error: e instanceof Error ? e.message : String(e) }); return false; }
+  },
+
+  async removeProjectFile(pid, index) {
+    try { return applyProjectWrite(set, await updateChatState(s => removeProjectFileIn(s, pid, index))); }
+    catch (e) { set({ error: e instanceof Error ? e.message : String(e) }); return false; }
+  },
+
+  async setProjectPath(pid, path) {
+    try { return applyProjectWrite(set, await updateChatState(s => setProjectPathIn(s, pid, path))); }
+    catch (e) { set({ error: e instanceof Error ? e.message : String(e) }); return false; }
+  },
+
   async addChatToProject(pid, tid) {
     try { return applyProjectWrite(set, await updateChatState(s => addChatToProjectIn(s, pid, tid))); }
     catch (e) { set({ error: e instanceof Error ? e.message : String(e) }); return false; }
@@ -289,7 +330,9 @@ export const useAppStore = create<AppState & AppActions>((set, get) => ({
 
   async deleteProject(pid) {
     prefWriter.cancel(`project:${pid}`);
+    prefWriter.cancel(`project-rules:${pid}`);
     pendingProjectNames.delete(pid);
+    pendingProjectRules.delete(pid);
     try { return applyProjectWrite(set, await updateChatState(s => deleteProjectIn(s, pid))); }
     catch (e) { set({ error: e instanceof Error ? e.message : String(e) }); return false; }
   },

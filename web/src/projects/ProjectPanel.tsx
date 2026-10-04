@@ -1,20 +1,23 @@
 import { useEffect, useRef, useState } from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
-import { ArrowLeft, Folder, FolderMinus, MessageSquare, Pencil, Plus, Trash2 } from 'lucide-react';
+import { ArrowLeft, FilePlus, Folder, FolderMinus, FolderOpen, MessageSquare, Pencil, Plus, Trash2, Unlink } from 'lucide-react';
 import { useAppStore } from '../state/app-store';
 import { useUiStore } from '../state/ui-store';
 import {
-  addExistingChat, closeProjectPanel, deleteChat, deleteProjectWithConfirm, newChatInProject, openProjectChat,
+  addExistingChat, addFilesToProject, closeProjectPanel, deleteChat, deleteProjectWithConfirm, linkProjectFolder,
+  newChatInProject, openProjectChat, unlinkProjectFolder,
 } from '../state/actions';
+import { AttachmentRow } from '../attachments/AttachmentRow';
+import type { Attachment } from '../attachments/read-files';
 import { ESC_PRIORITY, useEscLayer } from '../lib/keyboard';
 import { projectChatIds, ungroupedChatIds } from '../db/project-ops';
 import type { PersistedState } from '../db/types';
 
 /**
  * The single-project screen (index.html #project-panel, app.js:5393). Grid and
- * chat-linking only: name, chats (open / remove from project / delete), add or
- * create a chat, delete the project. Rules, files and the linked folder arrive
- * with attachments (P4 item 5).
+ * chat-linking: name, chats (open / remove from project / delete), add or create
+ * a chat, delete the project; plus the project's rules, files and linked folder
+ * (P4 item 5). How those reach a model is chat work (P5).
  */
 export function ProjectPanel() {
   const pid = useUiStore(s => s.activeProjectId);
@@ -43,9 +46,12 @@ function PanelBody({ pid }: { pid: string }) {
   const deleted = useAppStore(s => s.deletedThreadIds);
   const rename = useAppStore(s => s.renameProject);
   const removeFrom = useAppStore(s => s.removeChatFromProject);
+  const setRules = useAppStore(s => s.setProjectRules);
+  const removeFile = useAppStore(s => s.removeProjectFile);
   const selectName = useUiStore(s => s.selectProjectName);
   const [picker, setPicker] = useState(false);
   const [name, setName] = useState(project?.name ?? '');
+  const [rules, setRulesDraft] = useState(project?.rules ?? '');
   const nameRef = useRef<HTMLInputElement>(null);
 
   // Legacy focuses and selects a new project's name after a beat (app.js:5390). Focus is an external system.
@@ -129,6 +135,40 @@ function PanelBody({ pid }: { pid: string }) {
                 </button>
               </div>
             ))}
+          </section>
+
+          <section className="rounded-xl border border-rule bg-surface p-4">
+            <div className="mb-2 font-mono text-xs uppercase tracking-widest text-text-3">Project rules</div>
+            <textarea
+              rows={6} aria-label="Project rules" value={rules}
+              placeholder="Custom instructions the AI follows for every chat in this project, e.g. 'Answer in British English. Always cite sources. Prefer TypeScript examples.'"
+              onChange={e => { setRulesDraft(e.target.value); void setRules(pid, e.target.value); }}
+              onBlur={() => { void useAppStore.getState().flushPrefs(); }}
+              className="w-full resize-y rounded-md border border-rule-2 bg-surface px-2.5 py-2 text-sm text-text placeholder:text-text-3 focus:border-text-2 focus:outline-none"
+            />
+            <p className="mt-1.5 text-xs leading-normal text-text-3">Applied to every chat in this project, across the main thread and branches.</p>
+          </section>
+
+          <section className="rounded-xl border border-rule bg-surface p-4">
+            <div className="mb-2 flex items-center gap-2 font-mono text-xs uppercase tracking-widest text-text-3">
+              <span className="flex-1">Project files</span>
+              {project.path && <span data-testid="project-folder" className="break-all font-mono text-xs normal-case tracking-normal text-text-2">{project.path}</span>}
+            </div>
+            <AttachmentRow files={project.files as Attachment[]} onRemove={i => { void removeFile(pid, i); }} />
+            <div className="mt-2 flex flex-wrap gap-2">
+              <button type="button" className={ghost} onClick={() => { void addFilesToProject(pid); }}>
+                <FilePlus size={14} aria-hidden />Add files
+              </button>
+              <button type="button" className={ghost} onClick={() => { void linkProjectFolder(pid); }}>
+                <FolderOpen size={14} aria-hidden />Link folder…
+              </button>
+              {project.path && (
+                <button type="button" className={ghost} onClick={() => { void unlinkProjectFolder(pid); }}>
+                  <Unlink size={14} aria-hidden />Unlink
+                </button>
+              )}
+            </div>
+            <p className="mt-1.5 text-xs leading-normal text-text-3">Shared knowledge for every chat in this project — uploaded files, plus an optional linked folder whose matching files are added as context automatically.</p>
           </section>
 
           <section className="rounded-xl border border-rule bg-surface p-4">
