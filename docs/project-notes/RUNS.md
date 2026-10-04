@@ -4,6 +4,14 @@ Each entry: **date/time · task or bug ID · command category · result · impor
 
 ---
 
+## 2026-10-04 — P3 + P4.1a + P4.1b — manual smoke test — pass (user-reported)
+- **Command category:** manual GUI smoke test (legacy app in `Notlinear.app`; `/web/` in a browser with the backup restored via `tools/import-data.html`)
+- **Result:** pass, as reported by the maintainer: "works fine". Per-step detail was not itemised.
+- **Notes:** `Notlinear.app` cannot reach `/web/` (it loads `/notlinear.html`, which redirects to the legacy app), so `/web/` is exercised in a normal browser on a restored copy of the data. Starting the server required quitting the app first: its webview held leftover connections to the old server, which `backend/server.py`'s port probe counts as "in use".
+- **Follow-up:** P4 item 2.
+
+---
+
 ## 2026-10-04 — TASK-P4.1b — full web gate — pass (automated only)
 - **Command category:** test / lint / build
 - **Result:** pass

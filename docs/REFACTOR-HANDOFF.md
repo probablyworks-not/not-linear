@@ -5,7 +5,7 @@ four hardening changes and the provider registry)** are committed on branch
 `refactor/p0-repo-hygiene`. **P3 (React shell) is implemented and automated-green but
 UNCOMMITTED and awaiting the human smoke test.** `main` is untouched at `ccf7504`.
 
-**P3 is committed (`cd5c67e`). P4.1a (Settings + API keys) and P4.1b (Modes manager) are implemented, automated-green and committed after it; the user has not yet smoke-tested any of P3/P4.1. Next: P4 item 2 (search palette), after the smoke test.**
+**P3 is committed (`cd5c67e`). P4.1a (Settings + API keys) and P4.1b (Modes manager) are implemented, automated-green and committed after it; the maintainer smoke-tested P3/P4.1 on 2026-10-04 and it passed. Next: P4 item 2 (search palette).**
 
 This file is the context a new session needs. Read it instead of re-deriving the
 state, then read `AGENTS.md` and `CLAUDE.md` for the standing rules.
@@ -189,7 +189,7 @@ the one-session-per-phase cadence is not. P5 alone is four sessions.
 | P1 | Test safety net + CI | **done** |
 | P2a | FastAPI core, static allowlist | **done**, smoke-tested |
 | P2 | Hardening (a-d) + provider registry | **done**, verified live |
-| P3 | React shell | **done, uncommitted, smoke test pending** |
+| P3 | React shell | **done, committed, smoke-tested** |
 | P4 | Leaf features | **in progress**: 4.1 Settings, keys and Modes done; item 2 (search palette) next |
 | P5 | Chat core (four sub-sessions) | |
 | P6 | Notes editor | |
