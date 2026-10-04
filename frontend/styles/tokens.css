@@ -65,6 +65,16 @@
   --danger-border:#dc2626;
   --on-danger:#ffffff;
   --scrim:rgba(0,0,0,0.58);
+  /* Changelog cards: chapter hues and tag hues, carried over from the literals in
+     app.js (STORY_HUES, STORY_TAG_HUES) so web/ can reference them as tokens.
+     Constant across themes, as they are in legacy. Additive; nothing reads them in frontend/. */
+  --story-hue-1:#5B93E0;
+  --story-hue-2:#9C82D6;
+  --story-hue-3:#4FAA9F;
+  --story-hue-4:#9A9A9A;
+  --tag-fix:oklch(55% 0.13 25);
+  --tag-feature:oklch(48% 0.08 195);
+  --tag-improvement:oklch(52% 0.10 55);
   /* Elevation shadows for floating panels/drawers/dialogs. */
   --shadow-md:0 4px 20px rgba(0,0,0,0.60);
   --shadow-lg:0 12px 48px rgba(0,0,0,0.80);

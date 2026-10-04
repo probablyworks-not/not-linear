@@ -8,6 +8,7 @@ import { MODELS, RANKING_OPTIONS, THEMES, TONES } from './options';
 import { INPUT, Section, Segmented } from './fields';
 import { ApiKeysSection } from './ApiKeysSection';
 import { flags } from '../flags';
+import { ChangelogSection } from '../changelog/ChangelogSection';
 
 /**
  * Ports the Settings panel (index.html #prefs, app.js:4287). Defaults shown
@@ -138,6 +139,8 @@ function SettingsForm() {
           onChange={e => { setSearxng(e.target.value); void setPref('searxngUrl', e.target.value.trim(), { debounce: true }); }}
         />
       </Section>
+
+      {flags.changelog && <ChangelogSection />}
     </>
   );
 }

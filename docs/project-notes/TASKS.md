@@ -4,6 +4,13 @@ Each entry: **ID · Status · Goal · Context · Files likely involved · Accept
 
 ---
 
+## TASK-P4.3 — Changelog viewer in `/web/` (Product story deferred)
+- **Status:** Done pending smoke test. Product story (sidebar row, fullscreen player, "Play the story") intentionally NOT built - maintainer's instruction.
+- **Acceptance criteria:** identical chapters to legacy from the same file; bundled fallback on any failure; mechanical grouping; no literal colours; pager always reachable.
+- **Verification:** RUNS.md TASK-P4.3.
+
+---
+
 ## TASK-P4.2 — Search palette in `/web/`
 - **Status:** Done pending smoke test. Branch results deferred to P5b.
 - **Goal:** ⌘K quick-open over threads with legacy's filter and keyboard rules.

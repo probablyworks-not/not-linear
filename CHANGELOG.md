@@ -5,6 +5,13 @@ All notable repository changes made by AI agents should be recorded here.
 ## 2026-10-04
 
 - Agent: Claude Sonnet 5.5
+- Summary: P4 item 3 — changelog viewer in `/web/` Settings (mechanical `## <date>` chapters, Older/Newer, bundled fallback), behind `flags.changelog`. The Product story (sidebar entry, fullscreen player, "Play the story") is deliberately not included, per the maintainer.
+- Files changed: `web/src/changelog/*`, `web/scripts/gen-changelog-assets.mjs`, `web/src/{flags.ts,settings/SettingsDialog.tsx}`, `frontend/styles/tokens.css`, `web/tests/{changelog,e2e}/*`, `docs/project-notes/*`, `FEATURES.md`, `docs/REFACTOR-HANDOFF.md`.
+- Behavior changes: none in legacy. `tokens.css` gains seven additive tokens (`--story-hue-1..4`, `--tag-*`). In `/web/` the pager is kept outside the scrolling card and the chapter dots wrap.
+- Observed: legacy's changelog pager has one dot per chapter in a non-wrapping row, so with the real changelog (53 chapters) the row is wider than the panel. Not changed in legacy.
+- Verification: 205 vitest, 80 Playwright including a parity test against the legacy viewer, typecheck, lint, build.
+
+- Agent: Claude Sonnet 5.5
 - Summary: Fixed the server's "already in use" error that appeared for about a minute after every stop (BUGS.md #054).
 - Files changed: `backend/server.py`, `tests/server/test_port_probe.py`, `.github/workflows/ci.yml`, `BUGS.md`, `docs/REFACTOR-HANDOFF.md`.
 - Behavior changes: restarting the server immediately after stopping it now works. A genuinely running second copy is still refused. Nothing else changes.

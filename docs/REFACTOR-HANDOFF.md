@@ -5,7 +5,7 @@ four hardening changes and the provider registry)** are committed on branch
 `refactor/p0-repo-hygiene`. **P3 (React shell) is implemented and automated-green but
 UNCOMMITTED and awaiting the human smoke test.** `main` is untouched at `ccf7504`.
 
-**P3 is committed (`cd5c67e`). P4.1a (Settings + API keys) and P4.1b (Modes manager) are implemented, automated-green and committed after it; the maintainer smoke-tested P3/P4.1 on 2026-10-04 and it passed. P4 item 2 (search palette, threads only) is implemented and committed, not yet smoke-tested. Next: P4 item 3 (changelog viewer + Product story).**
+**P3 is committed (`cd5c67e`). P4.1a (Settings + API keys) and P4.1b (Modes manager) are implemented, automated-green and committed after it; the maintainer smoke-tested P3/P4.1 on 2026-10-04 and it passed. P4 item 2 (search palette, threads only) is implemented and committed, not yet smoke-tested. P4 item 3 (changelog viewer) is implemented and committed, NOT the Product story, which the maintainer asked to leave out for now. Next: P4 item 4 (Projects grid).**
 
 This file is the context a new session needs. Read it instead of re-deriving the
 state, then read `AGENTS.md` and `CLAUDE.md` for the standing rules.
@@ -54,8 +54,8 @@ which has no FastAPI. `--legacy` runs the old dependency-free server.
 NOTLINEAR_SERVER=fastapi .venv/bin/python -m pytest tests/contract   # 146 (earlier figures here were stale)
 NOTLINEAR_SERVER=legacy  .venv/bin/python -m pytest tests/contract   # 118 + 28 skipped
 .venv/bin/python -m pytest tests/proxy                               # 7
-cd web && pnpm test && pnpm typecheck && pnpm lint                   # 182
-cd web && pnpm e2e                                                   # builds, then 69 Playwright (15 legacy + 54 /web/)
+cd web && pnpm test && pnpm typecheck && pnpm lint                   # 205
+cd web && pnpm e2e                                                   # builds, then 80 Playwright (15 legacy + 65 /web/)
 ```
 
 Then the manual steps at `AGENTS.md` "Verification" that automation cannot cover:
@@ -146,6 +146,36 @@ process, quit it first.
 `interactive_comments`, an apostrophe in a comment opens an unclosed quote and the terminal
 sits at `quote>`. Give the maintainer comment-free commands.
 
+**Radix `aria-hidden`s everything behind an open dialog.** `getByRole('complementary')` (the
+sidebar) then reports "absent" whether or not it is open, so `toBeHidden()` on a role query is
+vacuous. Use a CSS locator (`aside[aria-label="Left pane"]`), and assert it visible first.
+
+**A fresh database has no `prefs.mode`/`tone`/`model`/`theme`.** Legacy defaults them in memory
+(`core/state.js`); `/web/` must apply the same default wherever it reads a pref. The Modes
+"Active" badge missed this.
+
+**Generated, not retyped.** Prompt text and other ported copy are emitted from the legacy source:
+`settings/default-modes.ts` from `frontend/core/modes.js`, and
+`changelog/{fallback-changelog,story-icons}.ts` via `node scripts/gen-changelog-assets.mjs`.
+A test fails if any of them drifts from its source.
+
+**Legacy's palette hides threads with no saved state, and `doc-main`'s title is an in-memory
+default.** Any parity test between the apps must persist the seed threads first (see
+`web-search.spec.ts`), or it compares data differences instead of behaviour.
+
+**A control per data item overflows at real-data size.** The changelog pager has one dot per
+chapter and the real changelog has 53; the row pushed Older/Newer out of the clipped panel.
+Playwright reported it as "intercepts pointer events". Test per-item UI against the real data's
+size, not three seeded rows.
+
+**`getByRole('button', { name: 'Connect' })` also matches "Disconnect …".** Use `exact: true`.
+
+**Legacy's sidebar and its Settings entry are off-screen until opened**, and the Socratic and
+Technical tone buttons sit in a second `.seg` row outside `#seg-tone`.
+
+**Editing this file: replace by exact anchor, never by a range between two headings.** A range
+replace deleted six landmines here once.
+
 **Never use `waitForTimeout` to wait for legacy to save.** It flaked 1 run in 3. Poll the
 persisted state (`expect.poll(() => readPersistedState(...))`) for the actual condition.
 
@@ -183,7 +213,7 @@ the one-session-per-phase cadence is not. P5 alone is four sessions.
 | P2a | FastAPI core, static allowlist | **done**, smoke-tested |
 | P2 | Hardening (a-d) + provider registry | **done**, verified live |
 | P3 | React shell | **done, committed, smoke-tested** |
-| P4 | Leaf features | **in progress**: 4.1 Settings, keys and Modes done; item 2 (search palette, threads only) done; item 3 next |
+| P4 | Leaf features | **in progress**: 4.1 Settings, keys and Modes done; items 2 (search, threads only) and 3 (changelog; Product story deferred) done; item 4 next |
 | P5 | Chat core (four sub-sessions) | |
 | P6 | Notes editor | |
 | P7 | Extension seams | |

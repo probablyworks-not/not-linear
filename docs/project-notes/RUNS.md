@@ -4,6 +4,14 @@ Each entry: **date/time · task or bug ID · command category · result · impor
 
 ---
 
+## 2026-10-04 — TASK-P4.3 — full web gate — pass (automated only)
+- **Command category:** test / lint / build
+- **Result:** pass
+- **Output:** `pnpm test` 205 (23 files); typecheck, lint clean; `pnpm e2e` 80 (15 legacy, 65 `/web/`); `pytest tests/server tests/proxy` 11. Differential parser test against the real legacy function; generated-asset drift test; mutation checks both caught. Screenshot reviewed.
+- **Follow-up:** smoke test: Settings → View changelog in `/web/` and in legacy, compare the newest chapter and page back a few; confirm Older/Newer are reachable.
+
+---
+
 ## 2026-10-04 — TASK-P4.2 — full web gate — pass (automated only)
 - **Command category:** test / lint / build
 - **Result:** pass
