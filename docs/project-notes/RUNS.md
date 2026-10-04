@@ -4,6 +4,14 @@ Each entry: **date/time · task or bug ID · command category · result · impor
 
 ---
 
+## 2026-10-04 — TASK-P2 (hardening + P2b) — full suite — pass
+- **Command category:** `pytest tests/contract` under both server flavours, `pnpm test`, `pnpm typecheck`, `pnpm e2e`, mutation tests
+- **Result:** pass — 142 contract (fastapi), 120 + 22 skipped (legacy), 63 vitest, 15 Playwright, typecheck clean
+- **Output:** SSRF filter refuses 11 targets including `169.254.169.254`, CGNAT and `::ffff:10.0.0.1`. Consent ledger: approved root and children allowed, siblings and `/etc` refused, a symlink escaping an approved root refused, corrupt ledger fails closed, `seed_if_empty` trusts exactly one path and only while empty. AppleScript injection payload verified absent from the script source and present in argv. Tool-registry description oracle mutation-tested: altering a description fails 1 test, removing a tool fails 3.
+- **Follow-up:** A stray `~/.notlinear/allowed_roots.json` remains from the run before the ledger was isolated; it holds a now-deleted pytest temp path. **It must be removed** — a non-empty ledger suppresses the trust-on-first-use migration, so the user's real project folder would not be auto-approved and `scan_project` would 403. Deletion left to the user (home directory). The human smoke test has not been re-run since the hardening landed; `scan_project` and `save_file` behaviour changed, so steps 4 and 5 are worth repeating.
+
+---
+
 ## 2026-10-04 — P0+P1+P2a — manual smoke test — pass (user-reported)
 - **Command category:** manual GUI smoke test via `Notlinear.app`, plus agent-side HTTP probes against the live instance
 - **Result:** pass — user reports "it is working" after running the app on the new FastAPI backend
