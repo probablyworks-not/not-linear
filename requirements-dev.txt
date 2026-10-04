@@ -1,0 +1,5 @@
+# Backend test tooling. The app itself has NO runtime dependencies —
+# backend/server.py is stdlib only, and keeping it that way is the reason the
+# quick start is still "python3 backend/server.py".
+pytest==9.1.1
+requests==2.34.2

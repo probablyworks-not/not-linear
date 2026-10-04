@@ -266,7 +266,10 @@ function describeRecord(rec){
       if (Array.isArray(t?.branches)) branches += t.branches.length;
       if (Array.isArray(t?.highlights)) highlights += t.highlights.length;
     }
-    const projects = Array.isArray(v.projects) ? v.projects.length : 0;
+    // projects is an object keyed by project id (see core/store.js
+    // loadPersistedState), not an array — counting it as an array
+    // silently reported 0 for every real backup.
+    const projects = v.projects && typeof v.projects === 'object' ? Object.keys(v.projects).length : 0;
     return `state: ${threads.length} thread(s), ${branches} branch(es), ${highlights} highlight(s), ${projects} project(s)`;
   }
   if (key === 'nl_notes_v1'){

@@ -4,6 +4,16 @@ Each entry: **ID · Status · Goal · Context · Files likely involved · Accept
 
 ---
 
+## TASK-P1 — Test safety net (phase 1 of the React/FastAPI refactor)
+- **Status:** Done pending a real-data fixture and a first CI run on GitHub
+- **Goal:** Automated regression coverage before any production code moves, so every later phase has an oracle instead of a ten-step manual click-through.
+- **Context:** P1 of the approved plan, and the phase plan.md calls the highest-leverage prerequisite. Deliberately changes NO production code, which is also why it was safe to run before P0's human smoke test — its Playwright suite automates most of that smoke test anyway.
+- **Files likely involved:** `web/**`, `tests/contract/**`, `.github/workflows/ci.yml`, `requirements-dev.txt`, `pytest.ini`
+- **Acceptance criteria:** The legacy `core/store.js` is usable as a differential oracle. A Dexie version bump, a store rename and a dropped field all fail the build. All 12 endpoints have contract tests that pass unchanged against FastAPI in P2. Playwright reproduces the automatable smoke steps. Contract tests never touch real `logs.md` or `FEEDBACK.md`.
+- **Verification:** 37 vitest + 32 pytest + 13 Playwright green; oracle mutation-tested three ways; real-file hashes unchanged across a contract run.
+
+---
+
 ## TASK-P0 — Repo and dev hygiene (phase 0 of the React/FastAPI refactor)
 - **Status:** Done pending human smoke test; `git gc` step deliberately not run (irreversible, awaiting approval)
 - **Goal:** Make the working tree and dev setup safe and portable before any refactor: close the CORS hole, stop tracking user content and build artifacts, remove hardcoded paths, and correct docs that point at things that do not exist.

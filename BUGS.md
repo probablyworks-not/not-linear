@@ -351,6 +351,22 @@ None currently tracked.
 
 ## Resolved bugs (continued)
 
+### #053 — New contract tests wrote a stub entry into the real feedback log
+- Date discovered: 2026-10-04
+- Date fixed: 2026-10-04
+- Agent: Claude Opus 5
+- Symptom: After the first run of the new `tests/contract` suite, `feedback/FEEDBACK.md` had gained a stub entry `## FB-001 · Idea · 2026-10-04 14:15 · status: open` that no human created. Developer data modified by a test run.
+- Root cause: `backend/server.py` resolves `LOGS_PATH`, `FEEDBACK_DIR`, `FEEDBACK_MEDIA_DIR` and `FEEDBACK_PATH` at import time, relative to the repo. The autouse isolation fixture in `tests/contract/conftest.py` redirected the first three but missed `FEEDBACK_PATH`. `test_every_documented_endpoint_exists` POSTs an empty body to all 12 endpoints to prove none has been renamed, and that sweep includes `/__notlinear_feedback_save`, which appended a real entry.
+- Fix: Added `FEEDBACK_PATH` to the autouse `isolated_paths` fixture and restored the file with `git checkout`. Verified by hashing `logs.md` and `feedback/FEEDBACK.md` and counting `feedback/media` before and after a full 32-test run.
+- Files touched: `tests/contract/conftest.py`, `feedback/FEEDBACK.md` (restored)
+- Manual test case:
+  1. `md5 -q feedback/FEEDBACK.md logs.md` and `ls feedback/media | wc -l`.
+  2. `pytest tests/contract`.
+  3. Repeat step 1 — all three must be unchanged.
+- Prevention: A test that sweeps every endpoint is a test that WRITES through every endpoint. Any new module-level path in `backend/server.py` must be added to `isolated_paths` in the same change, and the hash check above belongs in the P2 session before the first FastAPI contract run — not after it.
+- Related: P1 safety net; the same sweep is what will validate the FastAPI shims in P2.
+
+
 ### #018 — DeepSeek tool-result fallback was placed in the wrong function
 - Date discovered: 2026-05-08
 - Date fixed: 2026-05-08

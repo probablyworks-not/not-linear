@@ -34,3 +34,16 @@ Claude outputs/
 # Compiled macOS launcher binary — a build artifact of
 # launchers/build-macos-app.command, not source. Rebuild it with that script.
 launchers/Notlinear.app/Contents/MacOS/
+
+# Test and build output
+.venv/
+web/node_modules/
+web/test-results/
+web/playwright-report/
+web/.playwright/
+
+# Real-data fixtures are generated locally from a backup and are redacted
+# before committing — see web/scripts/backup-to-fixture.mjs. They are NOT
+# ignored (committing them is what makes the round-trip test run in CI);
+# the raw backups they come from must never be in the repo.
+notlinear-backup-*.json

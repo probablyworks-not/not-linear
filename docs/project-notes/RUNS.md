@@ -4,6 +4,14 @@ Each entry: **date/time · task or bug ID · command category · result · impor
 
 ---
 
+## 2026-10-04 — TASK-P1 — vitest + pytest + Playwright + CI — pass
+- **Command category:** `pnpm typecheck`, `pnpm test` (vitest), `pytest tests/contract`, `pnpm e2e` (Playwright/chromium), mutation tests
+- **Result:** pass — 37 vitest passed + 3 skipped, 32 pytest passed, 13 Playwright passed
+- **Output:** Oracle mutation-tested three ways: dropping `thread.stream` failed 3 tests, renaming the `kv` store failed 19, and bumping the Dexie version failed NOTHING until `schema-invariants.test.ts` was added — it now fails that case. Contract run verified `logs.md` and `feedback/FEEDBACK.md` hashes and the `feedback/media` file count unchanged before and after — after an initial failure: the first contract run, before `FEEDBACK_PATH` was added to the autouse isolation fixture, wrote a stub `FB-001` entry into the real `feedback/FEEDBACK.md` via `test_every_documented_endpoint_exists`, which POSTs to every endpoint including `feedback_save`. The file was restored with `git checkout` and the isolation now covers all four module-level paths. Playwright initially failed 3 tests, all wrong assumptions in the tests rather than app defects: `applyTheme` (app.js:4306) overwrites `nl_theme` from `prefs.theme`; the sidebar ships `aria-hidden` and collapsed so rows need `#sidebar-toggle` first; the search palette hides by opacity so `#search-input` reads visible when closed — assertion moved to the palette's `show` class. Each CI command was then run locally exactly as the workflow invokes it.
+- **Follow-up:** `fixture-roundtrip.test.ts` is SKIPPED until a redacted real-data fixture is generated (`pnpm fixtures <backup.json>`), so CI's only schema coverage today is the synthetic seeds. No branch or highlight coverage yet — that is P5b's gate. CI has never actually run on GitHub; it is verified locally only. The human 10-step smoke test for P0 remains outstanding.
+
+---
+
 ## 2026-10-04 — TASK-P0 — static + HTTP + security checks — pass (automated only)
 - **Command category:** static (`py_compile`, `node --check`, `zsh -n`, `osacompile`), HTTP serve + CORS probes on test port 8799, `clang` build check, launcher path-resolution tests
 - **Result:** pass
