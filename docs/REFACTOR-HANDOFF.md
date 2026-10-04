@@ -1,8 +1,10 @@
 # Refactor handoff — read this first
 
-**Status as of 2026-10-04.** Phases P-1, P0, P1 and P2a are done, smoke-tested and
-committed on branch `refactor/p0-repo-hygiene`. `main` is untouched at `ccf7504`.
-Nothing is pushed.
+**Status as of 2026-10-04.** Phases P-1, P0, P1 and **P2 (complete, including the
+four hardening changes and the provider registry)** are done and committed on branch
+`refactor/p0-repo-hygiene`. `main` is untouched at `ccf7504`. Nothing is pushed.
+
+**Next phase is P3 (React shell).**
 
 This file is the context a new session needs. Read it instead of re-deriving the
 state, then read `AGENTS.md` and `CLAUDE.md` for the standing rules.
@@ -21,6 +23,12 @@ state, then read `AGENTS.md` and `CLAUDE.md` for the standing rules.
 | New frontend | `web/` — scaffold + tests only, no app yet |
 
 ```
+33a02fd  Record P2 completion in the memory files
+a6c1926  P2b: one ChatProvider interface and a single TOOL_SPECS registry
+4c62500  Hardening (c) and (d): filesystem consent ledger, argv AppleScript
+d79ae22  Hardening (b): block SSRF in link_preview (supersedes ADR-023)
+87e9804  Hardening (a): require X-Notlinear-Local on every endpoint
+aab8018  Add refactor handoff doc; record the smoke-test pass
 cc7362a  Fail clearly when the port is already in use
 b7de178  P2a: FastAPI core, and static serving becomes an allowlist
 020b98a  P1: test safety net
@@ -42,10 +50,10 @@ which has no FastAPI. `--legacy` runs the old dependency-free server.
 ## The gate before claiming anything is done
 
 ```bash
-NOTLINEAR_SERVER=fastapi .venv/bin/python -m pytest tests/contract   # 79 tests
-NOTLINEAR_SERVER=legacy  .venv/bin/python -m pytest tests/contract   # 58 + 21 skipped
-cd web && pnpm test && pnpm typecheck                                # 37 + 3 skipped
-cd web && pnpm e2e                                                   # 13 Playwright
+NOTLINEAR_SERVER=fastapi .venv/bin/python -m pytest tests/contract   # 142 tests
+NOTLINEAR_SERVER=legacy  .venv/bin/python -m pytest tests/contract   # 120 + 22 skipped
+cd web && pnpm test && pnpm typecheck                                # 63 + 3 skipped
+cd web && pnpm e2e                                                   # 15 Playwright
 ```
 
 Then the manual steps at `AGENTS.md` "Verification" that automation cannot cover:
@@ -99,6 +107,15 @@ the same change. See BUGS.md #053.
 (`LINK_PREVIEW_TIMEOUT_S`, the `CP_*` block). `tests/contract/test_service_parity.py`
 is what caught them; keep it until `server_legacy.py` goes.
 
+**Any new module-level path must go into `isolated_paths` in the same change.**
+This is BUGS.md #053, and it was written down and then not applied when the
+consent ledger landed — a test run wrote into `~/.notlinear`. The fixture is the
+only thing standing between a test suite and the developer's real files.
+
+**A test payload that fails validation proves nothing.** The first AppleScript
+injection test used a payload containing `/`, which the filename check rejected
+before `osascript` was ever called. It passed, and it tested nothing.
+
 **Playwright failures are usually wrong test assumptions.** Three were:
 `applyTheme` overwrites `nl_theme` from `prefs.theme`; the sidebar ships
 collapsed so rows are not clickable; the search palette hides via opacity so its
@@ -109,7 +126,20 @@ calling something a bug.
 
 ## Next steps, in order
 
-### 1. P2 hardening — four separate, individually revertable commits
+### DONE — P2 hardening and P2b
+
+All four hardening changes and the provider registry are committed. See ADR-035
+and ADR-037. Two things to carry forward:
+
+- **`scan_project` now returns 403** for a path outside an approved folder. This
+  is the one place P2 is deliberately not byte-identical, and it has a
+  trust-on-first-use migration: an *empty* ledger accepts and records the first
+  path. A stale ledger therefore suppresses that migration.
+- **The tool-description oracle** (`web/tests/providers/descriptions-match-app.test.ts`)
+  compares the registry against `app.js`. **Delete it in P5d**, when app.js stops
+  building tools and there is nothing left to compare against.
+
+### Superseded — the original P2 hardening list, kept for reference
 
 Carried over from P2a deliberately so the move diff stayed reviewable. Each gets
 its own commit and its own test.
@@ -139,7 +169,7 @@ its own commit and its own test.
 
 Write **ADR-035** covering (a)–(d); it supersedes ADR-023.
 
-### 2. P2b — providers and one tool registry in TypeScript
+### Superseded — P2b, now done
 
 Moved forward from P5 on purpose: it is DOM-free, unit-testable immediately,
 unblocks P4's settings UI, and is the entire premise of P7.
@@ -160,7 +190,7 @@ with **no logic change**; `windowText` and `_rawTextCache` stay module-private
 (ADR-029 holds). `ToolFatalError` survives verbatim — it is what separates
 abort-the-turn from feed-the-error-back, and bugs #010–#018 live in that seam.
 
-### 3. P3 — React shell
+### 1. P3 — React shell (next)
 
 Tailwind + shadcn mapped entirely to `frontend/styles/tokens.css` variables, with
 a lint rule forbidding literal colours so bug #022 cannot recur. FastAPI
@@ -186,6 +216,12 @@ file has the detail.
   `launchers/NotlinearNative.m`. The current binary works with its old compiled-in
   path, so this is optional.
 - **Stray process** PID 47090, an idle `backend/server.py` from a failed start.
+- **`~/.notlinear/allowed_roots.json` must be deleted.** A test run wrote a
+  pytest temp path into it before the ledger was isolated. Because the ledger is
+  non-empty, the trust-on-first-use migration will not fire, so an existing
+  project folder will not be auto-approved and `scan_project` will return 403.
+  `rm ~/.notlinear/allowed_roots.json` and re-pick the folder, or just delete it
+  and let the next scan seed it.
 
 ## Conventions that are not optional
 
