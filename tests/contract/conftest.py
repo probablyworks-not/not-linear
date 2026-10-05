@@ -120,7 +120,7 @@ def isolated_paths(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     # routers read them off the module at call time, so patching the service
     # module is what takes effect.
     from app import config as app_config
-    from app.services import consent, feedback_store, runtime_logs
+    from app.services import consent, feedback_store, notes_backup, runtime_logs
 
     # The consent ledger lives in ~/.notlinear by default. Without this a test
     # run writes into the developer's home directory — which it did, once,
@@ -128,6 +128,9 @@ def isolated_paths(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     # module-level path was added without extending this fixture.
     monkeypatch.setattr(consent, "LEDGER_DIR", tmp_path / "consent", raising=False)
     monkeypatch.setattr(consent, "LEDGER_PATH", tmp_path / "consent" / "allowed_roots.json", raising=False)
+
+    # Added with /__notlinear_backup_notes (ADR-042): the default is ~/.notlinear/backups.
+    monkeypatch.setattr(notes_backup, "BACKUP_DIR", tmp_path / "backups", raising=False)
 
     monkeypatch.setattr(runtime_logs, "LOGS_PATH", logs, raising=False)
     monkeypatch.setattr(feedback_store, "FEEDBACK_DIR", feedback, raising=False)

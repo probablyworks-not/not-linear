@@ -4,6 +4,16 @@ Each entry: **ID · Status · Goal · Context · Files likely involved · Accept
 
 ---
 
+## TASK-P6 — Notes editor in `/web/` (BlockNote), behind `flags.notesV2`
+- **Status:** Built and automated-green (P6a-d, uncommitted); waiting on the maintainer's smoke test. Cutover is a separate later commit.
+- **Goal:** replace `frontend/views/notes.js` with a React/BlockNote editor with zero data loss. Storage stays in the legacy shape in `notlinear-notes` (ADR-007, ADR-042).
+- **P6a (done):** `web/src/notes/{types,inline,convert}.ts`, property + fixture round-trip tests. No UI, no writes.
+- **P6b (done):** BlockNote (`@blocknote/{core,react,ariakit}`), custom schema, real-editor round-trip test, server-written backup (`/__notlinear_backup_notes`, ADR-053) gating all writes, Notes repo, `flags.notesV2`, sidebar section, index, page editor, 7 Playwright specs.
+- **P6c (done):** page create/subpage/duplicate/delete/delete-all/drag-reparent, nested tree with remembered expansion, cover/icon/tags/meta, slash menu and blocks (toggle, callout, divider, page link, media, file, bookmark, embed, columns, equation, TOC), `@` mentions, toolbar colour/highlight/inline equation, Ask-AI branches (ADR-054).
+- **P6d (done):** Markdown export through the save cascade (tested against legacy), cross-app Playwright spec, FEATURES.md.
+- **Separate commit, a week later:** delete `frontend/`, flip `/`, delete `server_legacy.py`.
+- **Open:** a real unmasked notes fixture (`pnpm fixtures <backup.json>`); the committed one covers 8 block types.
+
 ## TASK-P5b-d — Highlights, branches, views, tool loop and parity in `/web/`
 - **Status:** Done pending smoke test. UNCOMMITTED by the maintainer's instruction ("commit everything together in phase 5").
 - **Goal:** the same functionality as legacy for highlights, branch panels (drag, resize, collapse, reader, promote-to-main, responsive), Recent branches, thread map, canvas, tools, attachments, folder context, Mind Garden icons; both apps read each other's data.

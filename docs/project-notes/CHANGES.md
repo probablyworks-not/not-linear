@@ -921,3 +921,39 @@ Each entry: **date · summary · files touched · why changed · risks · tests 
 - **Risks:** Drag mutates block arrays then `save()` + `renderPage()` — same persistence path as existing insert/remove, no schema change, notes db (`notlinear-notes`, ADR-007) untouched. The global keydown handler is capture-phase but no-ops unless page-selection mode is active and the Notes screen is shown.
 - **Tests run:** `node --check`; headless Playwright drive (placeholder computed styles, synthetic DnD + reload persistence, ⌘A/⌘A/⌘C clipboard capture, Escape) — all pass, zero console errors. See RUNS.md.
 - **Next steps:** Possible follow-up: mouse drag-selection across blocks (Notion-style rubber-band multi-block select) and Backspace-deletes-selection in page-selection mode.
+
+
+---
+
+## 2026-10-05 — P6a: Notes converter
+
+- **Summary:** Lossless legacy <-> BlockNote-shaped converter and inline mapper, with property and fixture round-trip tests. No UI, no writes.
+- **Files touched:** `web/src/notes/{types,inline,convert}.ts`, `web/tests/notes/*`, `web/package.json`, `web/pnpm-lock.yaml`, `CHANGELOG.md`, `docs/project-notes/{CHANGES,RUNS,DECISIONS,TASKS}.md`, `docs/REFACTOR-HANDOFF.md`.
+- **Why changed:** First sub-phase of P6; must exist and be proven before any editor can write notes.
+- **Risks:** The converter targets a BlockNote-shaped model, not BlockNote. Whether BlockNote itself preserves the custom inline nodes is untested until P6b. The fixture is masked and thin (8 block types).
+- **Tests run:** vitest 786, typecheck, lint; mutation check (drop anchor wrappers) fails 5 tests.
+- **Next steps:** Real unmasked fixture via `pnpm fixtures`; P6b: install BlockNote, custom specs, backup, repo, flag `notesV2`.
+
+
+---
+
+## 2026-10-05 — P6b: Notes editor in /web/
+
+- **Summary:** BlockNote editor behind `flags.notesV2`, a verified server-side backup that unlocks it, a Notes repo that writes only what an edit changed, sidebar section, index, tab titles. New endpoint `/__notlinear_backup_notes`.
+- **Files touched:** see CHANGELOG.md (same date).
+- **Why changed:** Second sub-phase of P6; the converter had to be proven against a real editor before anything could write notes.
+- **Risks:** Saves still race a stale legacy tab (same two-writer landmine as chat; `/web/` re-reads on focus and remounts the editor only when nothing is unsaved). A literal newline in an edited block becomes `<br>` (identical in the pre-wrap editor). BlockNote drops what has no content, so empty wrappers are kept raw. Mark and anchor styling in the editor is approximate. Backups accumulate in `~/.notlinear/backups/`.
+- **Tests run:** vitest, typecheck, lint, pytest contract (fastapi and legacy), Playwright (see RUNS.md).
+- **Next steps:** P6c: create/delete/duplicate/reparent, nested tree, covers/icons/tags, slash menu for custom blocks, Ask-AI branch panels (reuse `chat/anchor.ts`), an unmasked fixture. P6d: export, `save_file`, FEATURES parity.
+
+
+---
+
+## 2026-10-05 — P6c/P6d: Notes feature parity in /web/
+
+- **Summary:** Everything that was listed as missing after P6b: page operations and tree, header (cover, icon, tags), custom-block UI and slash menu, mentions, toolbar, Ask-AI branches, Markdown export, and a cross-app test.
+- **Files touched:** see CHANGELOG.md (same date).
+- **Why changed:** The user asked for the whole of Notes to move over so the classic Notes editor can be retired at the cutover.
+- **Risks:** Saves still race a stale classic tab. Auto-prune is not ported, so orphan branch records can remain. The index is a list, not the bento grid. Branch panels sit in a fixed rail beside the anchor (single panel at a time, as legacy). BlockNote's own select-all, drag-select and markdown shortcuts replace the custom ones. Not smoke-tested in the real `Notlinear.app`.
+- **Tests run:** vitest, typecheck, lint, build, Playwright (see RUNS.md).
+- **Next steps:** Maintainer smoke test with a real backup and a real key; an unmasked fixture through `pnpm fixtures`; then the cutover (separate commit, a week later): delete `frontend/` and `server_legacy.py`, move `tokens.css`, flip `/`.

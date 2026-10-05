@@ -261,7 +261,7 @@ the one-session-per-phase cadence is not. P5 alone is four sessions.
 | P3 | React shell | **done, committed, smoke-tested** |
 | P4 | Leaf features | **in progress**: 4.1 Settings, keys and Modes done; **complete pending smoke test**: 4.1 Settings/keys/Modes, 2 search (threads only), 3 changelog (Product story deferred), 4 projects, 5 attachments (+ project rules/files/folder), 6 feedback, 7 runtime logs |
 | P5 | Chat core (four sub-sessions) | **P5a–d built in one session, uncommitted (maintainer: commit all of P5 together), pending smoke test** (`flags.chat`) |
-| P6 | Notes editor | |
+| P6 | Notes editor | **P6a-d built, automated-green, uncommitted** (converter, BlockNote editor behind `flags.notesV2`, backup gate, page tree/header, custom blocks, branches, export; ADR-042/053/054). Needs the maintainer's smoke test in the real app. Then the cutover as its own commit a week later |
 | P7 | Extension seams | |
 | P8 | Public launch | |
 
@@ -529,3 +529,45 @@ All four sub-phases were done in one session at the maintainer's request; nothin
 - **Sidebar rows start with a glyph button**; select a row with `getByRole('button', { name: title, exact: true })` (substring also matches Delete).
 - Never read `e.currentTarget` inside a setState updater; sonner toasts and `pointer-events: none` panel actions (hover first) break clicks; Tailwind preflight strips list markers.
 - Full Playwright takes ~7 minutes with one worker; `web-feedback` "Escape discards" can flake under that load.
+
+
+## P6a status and landmines (2026-10-05)
+
+`web/src/notes/` converts legacy Notes blocks to a plain-data BlockNote-shaped model and back; nothing is wired to a UI or writes to any db. P5 is committed (`efe636a`).
+- **`.nt-cmt` is dead in `notes.js`** (comments became branches, ADR-028). The converter still models it; `.nt-br-anchor[data-bid]` is the live risk.
+- **Inline markup is wider than anchors:** b/i/u/strike/code, `<a>`, `<mark data-c>`, `span[data-color]`, `.nt-eq-inline[data-tex]` (inner is rendered KaTeX, kept opaque) and `.nt-mention`. Real data also has `br`, `div`, `p`, `img`; those stay `raw`.
+- **Identity is per character, not per byte.** Re-serialised inline HTML is normalised (nesting order, `strong`->`b`). P6b must write back only blocks whose content changed, or merely opening a note rewrites its HTML.
+- **BlockNote itself is untested.** P6a never imports it. P6b must mount the real editor and prove the custom inline specs survive its parse.
+- **The fixture is thin** (masked; text, h2, h3, bullet, numbered, todo, table, page-link only). Generated data does most of the proving. Get a real backup through `pnpm fixtures`.
+- **Do not use `@blocknote/xl-multi-column`** (GPL/commercial). Columns are a custom block.
+- **Falsy-`null` trap:** an opaque `null` block is stored in the sidecar; test `has(entry, 'opaque')`, never truthiness. The property test found this on its first run.
+- **The test oracle (`tests/notes/annotate.ts`) is deliberately independent of the converter.** Do not reimplement it with the converter's own model.
+
+
+## P6b status and landmines (2026-10-05)
+
+- **A 13th endpoint exists:** `/__notlinear_backup_notes` (FastAPI only). `tests/contract/conftest.py` isolates `notes_backup.BACKUP_DIR`; any e2e that reaches the real one writes into `~/.notlinear/backups`, so `web-notes.spec.ts` mocks it. Do the same in any new spec that touches Notes.
+- **Notes writes are locked until `localStorage.nl_notes_v2_backed_up` holds a server-confirmed path.** The e2e seeds nothing for it; the spec clicks the real button against the mock. To test an unlocked editor in a scratch script, set the flag in an init script.
+- **BlockNote throws or drops in three cases** the adapter handles by keeping `raw`: `code` + another style (or inside a link), and empty links/anchors. A new generator that produces other combinations may find more; run `tests/notes/editor.roundtrip.test.ts` several times, it is randomised.
+- **Real notes contain literal `\n` in text blocks** (pasted AI replies), which `white-space: pre-wrap` renders like `<br>`. Never "normalise" them: an untouched block must come back byte for byte (`captureBaseline` + `saveNoteBlocks`).
+- **`captureBaseline` must run on `editor.document` after load**, not on what you sent: BlockNote normalises content, and comparing against the input makes every block look edited.
+- **`@blocknote/mantine` needs React 19.** Use Ariakit. Do not add `@blocknote/xl-*` (GPL/commercial).
+- **Tailwind's scale is `xs/sm/base` only,** so `text-3xl` silently does nothing; use `text-[30px]`.
+- **`--hl-*` / `--tx-*` are defined in legacy `notes.css`,** so `/web/` carries a copy in `app.css`. Move both into `tokens.css` at the cutover.
+- **The safety hook false-positives on some heredocs** (it blocked one that wrote a test file). Use the Write tool.
+- **`web/dist` splits `NotesView` into its own chunk** (~970kB); chat does not load it.
+
+
+## P6c/P6d landmines (2026-10-05)
+
+- **chat.css hides a branch panel's header buttons until the header is hovered.** In Playwright, hover `.branch-head` before clicking collapse/reader/menu.
+- **`getByRole('button', { name: 'All notes' })` also matches "Delete all notes"**, and `name: 'Branch'` matches the sidebar's "Recent Branches" header. Use `exact: true` and scope to `getByTestId('note-page')`.
+- **A test that fills the title right after "Add subpage" races the page switch** and renames the PARENT. Wait for `getByLabel('Note title')` to be empty first.
+- **BlockNote drops its text selection when a toolbar menu is used**, so colour then highlight needs a re-select in a test.
+- **Drag onto the list background needs an empty strip.** The tree has bottom padding for it; aim the drop at the bottom of `notes-tree`, not the top (that is the first row).
+- **React lint forbids setState in effects.** The branch panel positions itself by writing `style.top` on its own node and re-measuring on scroll/resize.
+- **Anchoring is ProseMirror, not DOM.** `editor-anchors.ts` wraps via `editor.transact`; a link is a mark and an equation an atom, so selections holding either are refused. Test it with a real headless editor, as `editor-anchors.test.ts` does.
+- **Export parity is tested against the real legacy functions** cut out of `notes.js` (`tests/helpers/legacy-notes-source.ts`). If you change `export-markdown.ts`, that differential test says whether you diverged.
+- **Not ported on purpose:** auto-prune of orphaned anchors/branches, per-block branch badges. (The bento index WAS ported afterwards: `bento.ts` + `NotesIndex.tsx`, helpers tested against legacy.)
+- **BlockNote follows the OS colour scheme unless told otherwise**, which paints a dark box on a light page. `NotePage` passes `theme` from `<html data-theme>` via `appliedTheme()`; do not read `prefs.theme` (unset on a fresh db). `app.css` overrides the Ariakit blues and the `--bn-*` variables, including the `[data-color-scheme]` selectors.
+- **In JSX, `\\u2026` in an attribute string is literal text.** Use `{'...\\u2026'}` or the character itself.

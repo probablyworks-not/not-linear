@@ -26,6 +26,7 @@ from fastapi.staticfiles import StaticFiles
 from . import config
 from .middleware.local_only import LocalOriginMiddleware
 from .routers.endpoints import router as legacy_router
+from .routers.notes import router as notes_router
 
 
 def create_app(port: int = config.DEFAULT_PORT) -> FastAPI:
@@ -38,6 +39,7 @@ def create_app(port: int = config.DEFAULT_PORT) -> FastAPI:
 
     app.add_middleware(LocalOriginMiddleware, port=port)
     app.include_router(legacy_router)
+    app.include_router(notes_router)
 
     @app.get("/CHANGELOG.md")
     async def changelog() -> FileResponse:

@@ -4,7 +4,7 @@ import { PanelLeftOpen } from 'lucide-react';
 import { useUiStore } from '../state/ui-store';
 
 /** Sticky bar with the sidebar toggle and breadcrumb; gains a hairline once content scrolls under it. */
-export function Topbar({ trail }: { trail: ReactNode }) {
+export function Topbar({ trail, actions }: { trail: ReactNode; actions?: ReactNode }) {
   const open = useUiStore(s => s.sidebarOpen);
   const setOpen = useUiStore(s => s.setSidebarOpen);
   const [scrolled, setScrolled] = useState(false);
@@ -33,6 +33,7 @@ export function Topbar({ trail }: { trail: ReactNode }) {
         <PanelLeftOpen size={15} />
       </button>
       <div className="min-w-0 flex-1 truncate text-sm text-text-2" data-testid="crumb-trail">{trail}</div>
+      {actions}
     </div>
   );
 }

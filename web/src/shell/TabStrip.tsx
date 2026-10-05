@@ -3,10 +3,12 @@ import { FileText, MessageSquare, NotebookText, Plus, SquarePen, X } from 'lucid
 import { useMemo } from 'react';
 import { useAppStore } from '../state/app-store';
 import { useUiStore } from '../state/ui-store';
-import { isNoteTabId, isSingletonTab, SINGLETON_TABS } from '../state/tabs';
+import { NOTE_TAB_PREFIX, isNoteTabId, isSingletonTab, SINGLETON_TABS } from '../state/tabs';
+import { useNotesStore } from '../notes/notes-store';
 import { selectThread } from '../state/actions';
 import { mountView } from '../registry/views';
 import { Glyph } from '../ui/Glyph';
+import { NoteGlyph } from '../notes/NoteGlyph';
 import { MAIN_THREAD_ID, STATIC_THREAD_IDS, visibleThreads } from '../db/thread-ops';
 
 /** Which registry view a tab belongs to. */
@@ -14,6 +16,15 @@ export function viewForTab(id: string): 'chat' | 'notes' | 'blank' {
   if (id === 'blank') return 'blank';
   if (id === 'notes' || isNoteTabId(id)) return 'notes';
   return 'chat';
+}
+
+function noteLabel(notes: { id: string; title?: unknown }[], tabId: string): string {
+  const t = notes.find(n => n.id === tabId.slice(NOTE_TAB_PREFIX.length))?.title;
+  return typeof t === 'string' && t ? t : 'Note';
+}
+
+function noteIcon(notes: { id: string; emoji?: unknown }[], tabId: string): unknown {
+  return notes.find(n => n.id === tabId.slice(NOTE_TAB_PREFIX.length))?.emoji;
 }
 
 export function TabStrip() {
@@ -24,6 +35,7 @@ export function TabStrip() {
   const threadState = useAppStore(s => s.threadState);
   const dynamic = useAppStore(s => s.dynamicThreads);
   const deleted = useAppStore(s => s.deletedThreadIds);
+  const notes = useNotesStore(s => s.notes);
 
   const titles = useMemo(() => {
     const rows = visibleThreads({
@@ -51,7 +63,7 @@ export function TabStrip() {
           const active = tab.id === activeId;
           const label = isSingletonTab(tab.id)
             ? SINGLETON_TABS[tab.id].label
-            : isNoteTabId(tab.id) ? 'Note' : (titles.get(tab.id) ?? tab.id);
+            : isNoteTabId(tab.id) ? noteLabel(notes, tab.id) : (titles.get(tab.id) ?? tab.id);
           const Icon = tab.id === 'blank' ? SquarePen
             : tab.id === 'notes' || isNoteTabId(tab.id) ? NotebookText
             : STATIC_THREAD_IDS.has(tab.id) ? FileText : MessageSquare;
@@ -65,7 +77,9 @@ export function TabStrip() {
             >
               <button type="button" onClick={() => open(tab.id)} className="flex items-center gap-1.5">
                 {/* A chosen glyph replaces the default icon; with none chosen the tab keeps its icon (as legacy, app.js:6414). */}
-                {threadState[tab.id]?.emoji
+                {isNoteTabId(tab.id) && noteIcon(notes, tab.id)
+                  ? <NoteGlyph value={noteIcon(notes, tab.id)} size={14} />
+                  : threadState[tab.id]?.emoji
                   ? <Glyph value={threadState[tab.id]?.emoji} cycle={[]} index={0} size={14} fallback={<Icon size={13} aria-hidden />} />
                   : <Icon size={13} aria-hidden />}
                 <span className="max-w-[180px] truncate">{label}</span>

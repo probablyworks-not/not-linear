@@ -630,3 +630,19 @@ Each entry: **date/time · task or bug ID · command category · result · impor
 
 ## 2026-10-04 — editable modes
 `node --check` clean on all touched JS. Playwright (headless): 6 menu items → modal opens → create "Teacher" → 7 items → select → chip shows Teacher → persisted in IndexedDB and restored after reload; zero console errors. `core/modes.js` node test: override/reset/delete/fallback OK. Human GUI check of edit/reset/delete pending.
+
+
+## 2026-10-05 — P6a Notes converter
+`cd web && pnpm test` 786 passed (51 files); `pnpm typecheck` and `pnpm lint` clean. Property test caught a real bug on its first run (a `null` block was treated as having no sidecar entry); fixed. Mutation check confirms the tests fail when anchors are dropped. Playwright/pytest not run (no backend or UI change). Manual smoke not applicable.
+
+## 2026-10-05 — P6b Notes editor
+vitest 800 passed (53 files); typecheck, lint, `pnpm build` clean. Playwright 226 passed (4.8m, includes 7 new web-notes specs). pytest contract: fastapi all pass (incl. 8 new notes_backup tests), legacy all pass with the new file skipped; tests/proxy pass. Nothing written to `~/.notlinear/backups` by tests. Real-editor round trip run repeatedly (randomised, 150 docs each): it found three BlockNote failures (code+style, code in link, empty wrappers), all fixed. Manual smoke in the real Notlinear.app NOT run: pending the maintainer.
+
+## 2026-10-05 — P6c/P6d Notes parity
+vitest 847 passed (58 files); typecheck, lint, `pnpm build` clean. Playwright 263 passed (6.4m; new: web-notes-pages 14, web-notes-blocks 14, web-notes-branches 8, web-notes-legacy 1). pytest contract fastapi 161 passed, legacy 122 passed 39 skipped; tests/proxy 7 passed. Export checked against the real legacy functions on 600 generated page trees. Nothing written to `~/.notlinear/backups`. Manual smoke in the real Notlinear.app NOT run: pending the maintainer.
+
+## 2026-10-05 — Notes bento home, theme fix
+vitest 855 passed (59 files); typecheck, lint, build clean. Playwright notes specs 52 passed (pages 20, blocks 14, branches 8, legacy 1, notes 9). Screenshots checked in light and dark, including a dark-OS/light-app mismatch. Full Playwright suite not re-run after this change (the 263 run predates it); only Notes code and CSS scoped to Notes/BlockNote changed.
+
+## 2026-10-05 — Notes page restyle to the classic design
+vitest 855, lint clean, build clean. Playwright notes specs 52 passed after the colour-menu fix. Screenshots compared with the classic page (header, toolbar, to-dos). Full suite not re-run.

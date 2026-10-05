@@ -1,4 +1,4 @@
-import { useMemo, type ReactNode } from 'react';
+import { lazy, Suspense, useMemo, type ReactNode } from 'react';
 import { clsx } from 'clsx';
 import { useAppStore } from '../state/app-store';
 import { useUiStore } from '../state/ui-store';
@@ -20,7 +20,13 @@ import { CapturePreview } from '../feedback/CapturePreview';
 import { ChatView } from '../chat/ChatView';
 import { Breadcrumbs } from '../chat/Breadcrumbs';
 import { ImagePreview } from '../ui/ImagePreview';
+import { useNotesStore } from '../notes/notes-store';
+import { ExportButton } from '../notes/ExportButton';
+import { NOTE_TAB_PREFIX, isNoteTabId } from '../state/tabs';
 import { flags } from '../flags';
+
+// BlockNote is large; chat should not pay for it at startup.
+const NotesView = lazy(() => import('../notes/NotesView').then(m => ({ default: m.NotesView })));
 
 export function AppShell() {
   const sidebarOpen = useUiStore(s => s.sidebarOpen);
@@ -30,6 +36,11 @@ export function AppShell() {
   const dynamic = useAppStore(s => s.dynamicThreads);
   const deleted = useAppStore(s => s.deletedThreadIds);
   const error = useAppStore(s => s.error);
+  const noteTitle = useNotesStore(s => {
+    const id = activeTabId && isNoteTabId(activeTabId) ? activeTabId.slice(NOTE_TAB_PREFIX.length) : null;
+    const t = id ? s.notes.find(n => n.id === id)?.title : null;
+    return typeof t === 'string' && t ? t : null;
+  });
 
   const title = useMemo(() => {
     const rows = visibleThreads({
@@ -39,7 +50,7 @@ export function AppShell() {
     return rows.find(r => r.id === activeTabId)?.title ?? 'Untitled chat';
   }, [threadState, dynamic, deleted, activeTabId]);
 
-  const trail: ReactNode = view === 'notes' ? 'Notes'
+  const trail: ReactNode = view === 'notes' ? (flags.notesV2 && noteTitle ? `Notes / ${noteTitle}` : 'Notes')
     : view === 'blank' ? 'New tab'
     : flags.chat && activeTabId ? <Breadcrumbs threadId={activeTabId} fallbackTitle={title} /> : title;
 
@@ -47,14 +58,19 @@ export function AppShell() {
     <div className="min-h-full">
       <Sidebar />
       <div className={clsx('flex min-h-screen flex-col transition-[margin] duration-200 ease-out', sidebarOpen && 'md:ml-sidebar')}>
-        <TabStrip />
-        <Topbar trail={trail} />
+        {/* Tabs and breadcrumb bar stay pinned together while the page scrolls. */}
+        <div className="sticky top-0 z-30 bg-bg">
+          <TabStrip />
+          <Topbar trail={trail} actions={view === 'notes' && flags.notesV2 && activeTabId && isNoteTabId(activeTabId) ? <ExportButton noteId={activeTabId.slice(NOTE_TAB_PREFIX.length)} /> : undefined} />
+        </div>
         {error && (
           // Errors read as a calm statement of what happened, not an apology.
           <div role="alert" className="mx-7 mt-2 rounded-md border border-rule-2 bg-surface-2 px-3 py-2 text-sm text-text-2">{error}</div>
         )}
         {view === 'chat' && flags.chat && activeTabId ? (
           <main className="flex flex-1 flex-col"><ChatView key={activeTabId} threadId={activeTabId} /></main>
+        ) : view === 'notes' && flags.notesV2 ? (
+          <Suspense fallback={<main className="flex-1 p-8 text-sm text-text-3">Loading&hellip;</main>}><NotesView /></Suspense>
         ) : (
           <main className="flex flex-1 items-center justify-center px-7 py-16">
             {view === 'blank' ? (

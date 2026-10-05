@@ -18,3 +18,15 @@ export function applyTheme(t: unknown): Theme {
   try { localStorage.setItem(THEME_STORAGE, theme); } catch { /* the attribute is already applied */ }
   return theme;
 }
+
+/** The theme that is on screen right now, read from <html> so it is right before preferences have loaded. */
+export function appliedTheme(): Theme {
+  return normalizeTheme(document.documentElement.getAttribute('data-theme'));
+}
+
+/** Subscribes to theme changes for useSyncExternalStore. */
+export function onThemeChange(cb: () => void): () => void {
+  const obs = new MutationObserver(cb);
+  obs.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+  return () => obs.disconnect();
+}

@@ -31,3 +31,159 @@
 /* Tailwind's reset removes list markers; legacy's markdown relied on the browser's defaults. */
 .msg.ai ul { list-style: disc; }
 .msg.ai ol { list-style: decimal; }
+
+/* In-text highlight and text-colour tokens. They live in frontend/styles/notes.css, which only the
+   classic app loads; same values, duplicated until the P6 cutover moves them into tokens.css. */
+:root {
+  --hl-yellow: rgba(244, 184, 59, 0.3);
+  --hl-blue: rgba(88, 166, 255, 0.22);
+  --hl-green: rgba(80, 200, 120, 0.22);
+  --hl-pink: rgba(240, 120, 180, 0.22);
+  --hl-gray: rgba(255, 255, 255, 0.1);
+  --tx-red: #e97777;
+  --tx-orange: #e2a14b;
+  --tx-green: #78c387;
+  --tx-blue: #7db0f0;
+  --tx-purple: #b795e6;
+}
+html[data-theme='light'] {
+  --hl-yellow: rgba(255, 212, 0, 0.3);
+  --hl-blue: rgba(31, 111, 235, 0.16);
+  --hl-green: rgba(50, 160, 90, 0.18);
+  --hl-pink: rgba(220, 80, 140, 0.18);
+  --hl-gray: rgba(0, 0, 0, 0.08);
+  --tx-red: #c9362f;
+  --tx-orange: #c66a14;
+  --tx-green: #2e7d45;
+  --tx-blue: #1f6feb;
+  --tx-purple: #7b47c7;
+}
+
+/* Notes editor (P6b). BlockNote reads its own --bn-* variables; map them onto the app tokens so all
+   three themes apply and no colour is hard-coded here. */
+.nl-editor.bn-container,
+.nl-editor.bn-container[data-color-scheme] {
+  --bn-colors-editor-text: var(--text);
+  --bn-colors-editor-background: transparent;
+  --bn-colors-menu-text: var(--text);
+  --bn-colors-menu-background: var(--surface-2);
+  --bn-colors-tooltip-text: var(--text);
+  --bn-colors-tooltip-background: var(--surface-2);
+  --bn-colors-hovered-text: var(--text);
+  --bn-colors-hovered-background: var(--bg-3);
+  --bn-colors-selected-text: var(--text);
+  --bn-colors-selected-background: var(--bg-3);
+  --bn-colors-disabled-text: var(--text-3);
+  --bn-colors-disabled-background: var(--bg-2);
+  --bn-colors-border: var(--rule-2);
+  --bn-colors-side-menu: var(--text-3);
+  --bn-font-family: inherit;
+}
+.nl-editor [data-color='red'] { color: var(--tx-red); }
+.nl-editor [data-color='orange'] { color: var(--tx-orange); }
+.nl-editor [data-color='green'] { color: var(--tx-green); }
+.nl-editor [data-color='blue'] { color: var(--tx-blue); }
+.nl-editor mark { background: var(--hl-yellow); color: inherit; border-radius: 2px; padding: 0 2px; }
+.nl-editor mark[data-c='blue'] { background: var(--hl-blue); }
+.nl-editor mark[data-c='green'] { background: var(--hl-green); }
+.nl-editor mark[data-c='pink'] { background: var(--hl-pink); }
+.nl-editor mark[data-c='gray'] { background: var(--hl-gray); }
+.nl-editor .nt-br-anchor { background: var(--hl-blue); border-radius: 2px; cursor: pointer; }
+
+/* Notes blocks that BlockNote does not lay out itself. A closed toggle hides its children; a
+   columns block lays its column children side by side. */
+.nl-editor .bn-block:has(> .bn-block-content .nl-toggle[data-open='false']) > .bn-block-group { display: none; }
+.nl-editor .bn-block:has(> .bn-block-content .nl-columns-marker) > .bn-block-group { display: flex; gap: 16px; margin-left: 0; }
+.nl-editor .bn-block:has(> .bn-block-content .nl-columns-marker) > .bn-block-group > .bn-block-outer { flex: 1; min-width: 0; }
+.nl-editor .nl-flash { background: var(--hl-yellow); transition: background 0.3s; }
+.nl-editor [data-content-type='equation'] [data-placeholder]:empty::before { content: attr(data-placeholder); color: var(--text-3); }
+
+/* Notes branch panels use their own drawer width so resizing one never moves chat's (ADR-028). */
+.nl-note-stack { width: var(--nt-drawer-w); }
+.nl-note-stack .branch.reader { width: min(680px, calc(100vw - var(--drawer-gap) - var(--drawer-gap))); }
+
+.nl-editor .bn-editor { background-color: transparent; color: var(--text); }
+
+/* @blocknote/ariakit hard-codes a blue (#007acc) for the active menu row, primary buttons and focus
+   outlines; the app's own tokens replace it. */
+.bn-ak-menu-item[data-active-item] { background-color: var(--bg-3); color: var(--text); }
+.bn-ak-primary { background-color: var(--text); color: var(--bg); }
+.bn-ak-button { outline-color: var(--rule-2); }
+.bn-ak-popover:focus-visible, .bn-ak-popover[data-focus-visible], .bn-ak-input:focus-visible, .bn-ak-input[data-focus-visible] { outline-color: var(--rule-2); }
+
+/* Notes home: the bento grid (ported from notes.css .nt-bento*). The eight tints are the legacy values;
+   the grey theme reuses the dark ones, as legacy does. */
+:root {
+  --bento-t0-bg: #161915; --bento-t0-fg: #8fb596;
+  --bento-t1-bg: #14171c; --bento-t1-fg: #8fb2e6;
+  --bento-t2-bg: #1b1613; --bento-t2-fg: #e0a17d;
+  --bento-t3-bg: #1a1812; --bento-t3-fg: #d9ba6c;
+  --bento-t4-bg: #17151b; --bento-t4-fg: #b6a3de;
+  --bento-t5-bg: #1b1518; --bento-t5-fg: #de9baf;
+  --bento-t6-bg: #161618; --bento-t6-fg: #9c9ea8;
+  --bento-t7-bg: #121818; --bento-t7-fg: #7fc2bb;
+}
+html[data-theme='light'] {
+  --bento-t0-bg: #f3f7f2; --bento-t0-fg: #4b6b4f;
+  --bento-t1-bg: #f2f5fa; --bento-t1-fg: #3e5c82;
+  --bento-t2-bg: #f9f3ef; --bento-t2-fg: #a65a3c;
+  --bento-t3-bg: #faf6ec; --bento-t3-fg: #8c6f2c;
+  --bento-t4-bg: #f5f2fa; --bento-t4-fg: #6b5a96;
+  --bento-t5-bg: #faf1f3; --bento-t5-fg: #9c5468;
+  --bento-t6-bg: #f3f3f5; --bento-t6-fg: #52545c;
+  --bento-t7-bg: #eff6f6; --bento-t7-fg: #2e6b66;
+}
+
+.nl-index { margin: 0 auto; width: 100%; max-width: 1100px; padding: 32px 28px 64px; }
+.nl-ix-head { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; }
+.nl-ix-titlewrap { display: flex; flex: 1; min-width: 0; align-items: center; gap: 12px; }
+.nl-ix-icon { display: grid; flex: 0 0 34px; place-items: center; width: 34px; height: 34px; border-radius: 8px; background: var(--surface); border: 1px solid var(--rule); color: var(--text-2); }
+.nl-ix-title { font-size: 22px; font-weight: 600; letter-spacing: -0.01em; line-height: 1.1; color: var(--text); }
+.nl-ix-sub { margin-top: 3px; font-family: var(--mono); font-size: 11.5px; color: var(--text-3); }
+.nl-ix-new { display: inline-flex; flex: 0 0 auto; align-items: center; gap: 6px; height: 32px; padding: 0 14px; border-radius: 7px; background: var(--text); border: 1px solid var(--text); color: var(--bg); font-size: 13px; font-weight: 500; cursor: pointer; }
+.nl-ix-new:hover { opacity: 0.88; }
+.nl-ix-empty { display: flex; align-items: center; gap: 10px; width: 100%; padding: 22px 18px; border: 1px dashed var(--rule-2); border-radius: 10px; color: var(--text-3); font-size: 14px; text-align: left; cursor: pointer; }
+.nl-ix-empty:hover { background: var(--bg-2); color: var(--text-2); }
+
+.nl-bento { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); grid-auto-rows: 150px; grid-auto-flow: dense; gap: 14px; }
+.nl-bento-item { position: relative; display: flex; flex-direction: column; text-align: left; padding: 16px 18px; border: 1px solid var(--rule); border-radius: 14px; background: var(--tbg, var(--surface)); color: inherit; cursor: pointer; overflow: hidden; transition: filter 120ms, border-color 120ms; }
+.nl-bento-item:hover { border-color: var(--rule-2); filter: brightness(1.04); }
+.nl-bento-item:focus-visible { outline: 2px solid var(--rule-2); outline-offset: 2px; }
+html[data-theme='light'] .nl-bento-item:hover { filter: brightness(0.98); }
+.nl-bento-item.wide { grid-column: span 2; }
+.nl-bento-item.tall { grid-row: span 2; }
+.nl-bento-item.big { grid-column: span 2; grid-row: span 2; }
+@media (max-width: 640px) { .nl-bento-item.wide, .nl-bento-item.tall, .nl-bento-item.big { grid-column: span 1; grid-row: span 1; } }
+.nl-bloom { position: absolute; z-index: 0; bottom: -20px; right: -20px; display: block; line-height: 0; pointer-events: none; opacity: 0.16; color: var(--tfg); }
+.nl-ix-name { position: relative; z-index: 1; font-size: 15px; font-weight: 600; color: var(--text); }
+.nl-ix-name.placeholder { color: var(--text-3); font-style: italic; font-weight: 400; }
+.nl-ix-meta { position: relative; z-index: 1; margin-top: auto; padding-top: 10px; font-family: var(--mono); font-size: 11px; color: var(--text-3); }
+.nl-ix-acts { position: absolute; z-index: 2; top: 10px; right: 10px; display: flex; gap: 2px; opacity: 0; transition: opacity 100ms; }
+.nl-bento-item:hover .nl-ix-acts, .nl-bento-item:focus-within .nl-ix-acts { opacity: 1; }
+.nl-ix-acts button { display: grid; place-items: center; width: 26px; height: 26px; border-radius: 6px; background: var(--surface); border: 1px solid var(--rule); color: var(--text-3); cursor: pointer; }
+.nl-ix-acts button:hover { background: var(--bg-3); color: var(--text); }
+.nl-ix-acts button.nl-ix-del:hover { color: var(--tx-red); }
+.nl-bento-add { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; min-height: 150px; border: 1px dashed var(--rule-2); border-radius: 14px; color: var(--text-3); font-size: 13px; cursor: pointer; }
+.nl-bento-add:hover { background: var(--bg-2); color: var(--text-2); }
+
+/* The formatting toolbar as the classic page has it: a compact bar of icon buttons with dividers. */
+.nl-editor .bn-formatting-toolbar, .bn-formatting-toolbar {
+  display: flex; align-items: center; gap: 1px; padding: 4px 6px; height: auto;
+  background: var(--surface); border: 1px solid var(--rule-2); border-radius: 10px; box-shadow: var(--shadow-lg);
+}
+.bn-formatting-toolbar .bn-ak-button {
+  height: 28px; min-width: 28px; padding: 0 7px; gap: 4px; font-size: 13px; font-weight: 500; border-radius: 6px;
+  background: transparent; color: var(--text-2); box-shadow: none;
+}
+.bn-formatting-toolbar .bn-ak-button:hover { background: var(--bg-2); color: var(--text); }
+.bn-formatting-toolbar .bn-ak-button[aria-pressed='true'], .bn-formatting-toolbar .bn-ak-button[data-selected='true'] { background: var(--bg-3); color: var(--text); }
+.bn-ak-menu { background: var(--surface-2); color: var(--text); border: 1px solid var(--rule-2); border-radius: 10px; box-shadow: var(--shadow-lg); font-size: 13px; }
+
+/* Body text and to-do boxes, as classic. */
+.nl-editor .bn-editor { font-size: 15px; line-height: 1.6; }
+.nl-editor [data-content-type='checkListItem'] input[type='checkbox'] {
+  appearance: none; -webkit-appearance: none; width: 18px; height: 18px; margin: 2px 8px 0 0; flex: none;
+  border: 1.5px solid var(--rule-2); border-radius: 5px; background: transparent; display: inline-grid; place-items: center; cursor: pointer;
+}
+.nl-editor [data-content-type='checkListItem'] input[type='checkbox']:checked { background: var(--text); border-color: var(--text); }
+.nl-editor [data-content-type='checkListItem'] input[type='checkbox']:checked::after { content: '\2713'; color: var(--bg); font-size: 12px; line-height: 1; }

@@ -4,6 +4,35 @@ Each entry: **Decision ID · status · context · decision · alternatives rejec
 
 ---
 
+## ADR-042 — P6a: Notes converter targets a plain-data BlockNote-shaped model; storage stays legacy; unmappable content is kept verbatim
+
+- **Status:** accepted (P6a); editor wiring (P6b+) still to come
+- **Context:** BlockNote parses unknown inline markup away, which for Notes means silently losing branch anchors (and, historically, comment spans) and then having them pruned. The handoff names this the highest-risk item in the plan.
+- **Decision:** `web/src/notes/` converts legacy blocks to a plain-data, BlockNote-shaped model (no `@blocknote` import yet) and back. Persistence stays in the legacy shape (ADR-007); BlockNote is a view. Inline HTML maps to structured nodes only when tag, attributes and every descendant are exactly what the app emits, else the whole top-level piece is a `raw` node. Block-level extras (unknown fields, absent-vs-default, generated ids, non-object blocks) live in a sidecar keyed by block id; malformed or unknown blocks are `opaque` and stored whole.
+- **Guarantee:** round trip is exact; inline HTML is compared per character plus ancestor-style set, so nesting order, `<strong>` vs `<b>`, and attribute order are normalised. A second pass is byte-stable.
+- **P6b amendment:** BlockNote is now installed (`@blocknote/{core,react,ariakit}`, MPL-2.0; Ariakit because the Mantine UI needs React 19). `adapter.ts` maps the model to BlockNote's block format and `schema.tsx` holds the custom specs. A block unchanged since load is written back as the original legacy block, byte for byte; only edited blocks are re-serialised. Wrappers with nothing inside, and any `code` run combined with another style or inside a link, travel as `raw` because BlockNote drops or throws on them. Tables that are empty or ragged are kept opaque. The real-editor round trip test is `web/tests/notes/editor.roundtrip.test.ts`.
+- **Alternatives rejected:** installing BlockNote now and testing through it (couples the proof to editor quirks; that test belongs in P6b where the real editor is mounted); storing BlockNote JSON as the new format (breaks "both apps work" and ADR-007).
+- **Consequences/tradeoffs:** Re-serialised inline HTML is not byte-identical to the stored string, so P6b must write back only blocks whose BlockNote content actually changed. Columns and `children` of a cols block use synthetic `column`/`columnsChildren` children. `@blocknote/xl-multi-column` is avoided (licence).
+- **Related files:** `web/src/notes/*`, `web/tests/notes/*`
+
+## ADR-054 — P6c/P6d: branch anchors are not auto-pruned; anchoring refuses what it cannot keep; equations export as `$$ $$`
+
+- **Status:** accepted
+- **Context:** Legacy `pruneAnchors` deletes a branch record whenever its anchor text is no longer in the block. In an editor whose parse can drop or reshape inline content, an automatic delete turns any bug into lost conversations. Separately, an anchor that contains a link or an equation cannot be expressed by the converter, which would keep it only as `raw` (no longer clickable).
+- **Decision:** `/web/` never deletes a branch record on its own; only the user's Delete does (and it unwraps the anchor in the same step). Branching is refused, with a message, on a selection that spans blocks, sits in a non-text block, or holds a link, equation or mention. Records are written when the anchor is made and message edits bump `updatedAt`; geometry does not. Export prints `eq` blocks as `$$ TeX $$` (legacy tested for `equation`, so printed them bare). Page icons keep the `img:<dataURL>` token (ADR-021). Embeds only frame a fixed list of hosts.
+- **Alternatives rejected:** porting auto-prune (data-loss risk); letting a link live inside an anchor (silently demotes it to raw); copying legacy's equation bug for byte parity.
+- **Consequences/tradeoffs:** Orphaned records can accumulate when someone deletes anchored text; the classic app will still prune them on its next render of that note. Export differs from legacy for equations only.
+- **Related files:** `web/src/notes/{editor-anchors,note-branches,export-markdown,embeds}.ts`, `web/src/notes/NoteBranchPanel.tsx`
+
+## ADR-053 — P6b: the Notes pre-write backup is written by the server, and Notes stay locked until it confirms
+
+- **Status:** accepted
+- **Context:** ADR-042 requires a backup before BlockNote writes. A browser download cannot be confirmed: the desktop webview silently ignores blob downloads, the native save bridge is fire-and-forget, and `/__notlinear_save_file` forces a `.md` name.
+- **Decision:** New additive endpoint `/__notlinear_backup_notes` (FastAPI only) writes the posted dump to `~/.notlinear/backups/notlinear-notes-backup-<UTC>.json`, mode 0600, atomic, and returns `{path, bytes, records}`. The client sets `nl_notes_v2_backed_up` only on a response with a path and a non-zero byte count; `notes-repo` refuses every write without it. The file uses `notlinear-backup/v1`, so `tools/import-data.html` restores it. The dump carries no localStorage, so no API keys.
+- **Alternatives rejected:** browser download only (unverifiable in the desktop app); download plus server file (more surface for the same guarantee).
+- **Consequences/tradeoffs:** The twelve frozen paths stay frozen; this is a thirteenth. Not on the legacy server (its contract tests skip it). Each backup is a new file and none is pruned. It covers the realm that took it, as the older backup tools do. The test fixture must isolate `notes_backup.BACKUP_DIR` (done in `conftest.py`, per BUGS #053).
+- **Related files:** `backend/app/services/notes_backup.py`, `backend/app/routers/notes.py`, `web/src/notes/notes-repo.ts`, `tests/contract/test_notes_backup.py`
+
 ## ADR-052 — PDFs in the linked folder: text via `pypdf` in the FastAPI service only; long files are excerpted
 - **Status:** accepted 2026-10-05. Amends the frozen `/__notlinear_scan_project` behaviour (response shape unchanged; more files in `contextFiles`).
 - **Decision:** `project_scan.py` accepts `.pdf`, extracts text with `pypdf` (pure Python, imported lazily so its absence degrades to a per-file `error`), caches by (path, size, mtime), caps at 60 MB and 1.5M chars. `server_legacy.py` (the oracle, deleted later) is left alone, so parity tests, which scan a PDF-free directory, still hold. In `/web/`, files over 30,000 characters send start + best keyword window instead of only the start, because a book's first 3000 characters are front matter.

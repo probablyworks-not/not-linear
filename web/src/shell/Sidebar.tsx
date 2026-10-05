@@ -9,6 +9,7 @@ import { visibleThreads, MAIN_THREAD_ID } from '../db/thread-ops';
 import { flags } from '../flags';
 import { ProjectsSidebarSection } from '../projects/ProjectsSidebarSection';
 import { RecentBranches } from '../branch/RecentBranches';
+import { NotesSidebarSection } from '../notes/NotesSidebarSection';
 import { SidebarSection } from './SidebarSection';
 import { GlyphButton } from '../ui/GlyphButton';
 import { THREAD_ICON_CYCLE } from '../lib/mind-garden';
@@ -126,6 +127,8 @@ export function Sidebar() {
             })}
           </div>
           </SidebarSection>
+
+          {flags.notesV2 && <NotesSidebarSection />}
 
           {flags.chat && <RecentBranches />}
         </div>
