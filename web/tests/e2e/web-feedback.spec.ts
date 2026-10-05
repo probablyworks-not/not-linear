@@ -189,7 +189,7 @@ test.describe('saving', () => {
     const m = await mockFeedback(page);
     await openWeb(page);
     await page.getByRole('button', { name: 'Open left pane' }).click();
-    await page.locator('[data-thread="pricing"]').getByRole('button').first().click();
+    await page.locator('[data-thread="pricing"]').getByRole('button', { name: 'Pricing research', exact: true }).click();
     await openPanel(page);
     await text(page).fill('x');
     await panel(page).getByRole('button', { name: 'Save' }).click();

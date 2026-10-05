@@ -1,10 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { clsx } from 'clsx';
 import { PanelLeftOpen } from 'lucide-react';
 import { useUiStore } from '../state/ui-store';
 
 /** Sticky bar with the sidebar toggle and breadcrumb; gains a hairline once content scrolls under it. */
-export function Topbar({ trail }: { trail: string }) {
+export function Topbar({ trail }: { trail: ReactNode }) {
   const open = useUiStore(s => s.sidebarOpen);
   const setOpen = useUiStore(s => s.setSidebarOpen);
   const [scrolled, setScrolled] = useState(false);
@@ -19,6 +19,7 @@ export function Topbar({ trail }: { trail: string }) {
 
   return (
     <div
+      data-topbar
       className={clsx(
         'sticky top-0 z-20 flex items-center gap-3 border-b bg-bg px-7 py-3.5 transition-colors duration-150',
         scrolled ? 'border-rule shadow-md' : 'border-transparent',

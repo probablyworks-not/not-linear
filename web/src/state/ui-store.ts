@@ -22,6 +22,11 @@ export interface UiState {
   settingsOpen: boolean;
   modesOpen: boolean;
   searchOpen: boolean;
+  highlightsOpen: boolean;
+  threadMapOpen: boolean;
+  canvasOpen: boolean;
+  ctxOpen: boolean;
+  imagePreview: { src: string; name: string } | null;
   projectsViewOpen: boolean;
   /** The project whose panel is open, if any. */
   activeProjectId: string | null;
@@ -37,6 +42,11 @@ export interface UiActions {
   setSettingsOpen(open: boolean): void;
   setModesOpen(open: boolean): void;
   setSearchOpen(open: boolean): void;
+  setHighlightsOpen(open: boolean): void;
+  setThreadMapOpen(open: boolean): void;
+  setCanvasOpen(open: boolean): void;
+  setCtxOpen(open: boolean): void;
+  setImagePreview(image: { src: string; name: string } | null): void;
   setProjectsViewOpen(open: boolean): void;
   setActiveProject(pid: string | null, opts?: { selectName?: boolean }): void;
   /** Reads nl_tabs_v1; call after the app store has hydrated. */
@@ -60,6 +70,11 @@ export const useUiStore = create<UiState & UiActions>((set, get) => ({
   settingsOpen: false,
   modesOpen: false,
   searchOpen: false,
+  highlightsOpen: false,
+  threadMapOpen: false,
+  canvasOpen: false,
+  ctxOpen: false,
+  imagePreview: null,
   projectsViewOpen: false,
   activeProjectId: null,
   selectProjectName: false,
@@ -71,6 +86,11 @@ export const useUiStore = create<UiState & UiActions>((set, get) => ({
   setSettingsOpen(open) { set({ settingsOpen: open }); },
   setModesOpen(open) { set({ modesOpen: open }); },
   setSearchOpen(open) { set({ searchOpen: open }); },
+  setHighlightsOpen(open) { set({ highlightsOpen: open }); },
+  setThreadMapOpen(open) { set({ threadMapOpen: open }); },
+  setCanvasOpen(open) { set({ canvasOpen: open }); },
+  setCtxOpen(open) { set({ ctxOpen: open }); },
+  setImagePreview(image) { set({ imagePreview: image }); },
   setProjectsViewOpen(open) { set({ projectsViewOpen: open }); },
   setActiveProject(pid, opts) { set({ activeProjectId: pid, selectProjectName: !!opts?.selectName }); },
 

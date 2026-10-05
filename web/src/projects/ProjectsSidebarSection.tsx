@@ -1,8 +1,11 @@
 import { Folder, LayoutGrid, MoreHorizontal, Plus } from 'lucide-react';
 import { useAppStore } from '../state/app-store';
 import { useUiStore } from '../state/ui-store';
-import { newProject, openProjectPanel } from '../state/actions';
+import { newProject, openProjectPanel, setProjectGlyph } from '../state/actions';
+import { GlyphButton } from '../ui/GlyphButton';
+import { PROJECT_ICON_CYCLE } from '../lib/mind-garden';
 import { projectList } from '../db/project-ops';
+import { SidebarSection } from '../shell/SidebarSection';
 
 /** Sidebar "Projects": the list, a way to the full grid, and a way to make one (index.html:105). */
 export function ProjectsSidebarSection() {
@@ -12,23 +15,28 @@ export function ProjectsSidebarSection() {
   const iconBtn = 'grid h-[18px] w-[18px] place-items-center rounded text-text-3 hover:bg-bg-3 hover:text-text';
 
   return (
-    <>
-      <div className="mx-2 mb-1 mt-3.5 flex items-center justify-between font-mono text-xs uppercase tracking-widest text-text-3">
-        <span>Projects</span>
-        <span className="flex gap-0.5">
+    <SidebarSection
+      section="projects" label="Projects"
+      actions={(
+        <>
           <button type="button" title="View all projects" aria-label="View all projects" className={iconBtn} onClick={() => setProjectsViewOpen(true)}>
             <LayoutGrid size={13} />
           </button>
           <button type="button" title="New project" aria-label="New project" className={iconBtn} onClick={() => { void newProject(); }}>
             <Plus size={13} />
           </button>
-        </span>
-      </div>
+        </>
+      )}
+    >
       <div role="list" aria-label="Projects">
-        {list.map(p => (
+        {list.map((p, idx) => (
           <div key={p.id} role="listitem" data-project={p.id} className="group relative flex w-full items-center rounded-md p-0 text-sm leading-tight text-text-2 hover:bg-bg-2 hover:text-text">
-            <button type="button" onClick={() => { void openProjectPanel(p.id); }} className="flex min-w-0 flex-1 items-center gap-[9px] px-2 py-1.5 text-left">
-              <Folder size={15} aria-hidden className="flex-none" />
+            <GlyphButton
+              value={(p as { emoji?: string }).emoji} cycle={PROJECT_ICON_CYCLE} index={idx} size={22} fallback={<Folder size={15} aria-hidden />}
+              onPick={token => { void setProjectGlyph(p.id, token); }}
+              className="ml-2 grid h-[22px] w-[22px] flex-none cursor-pointer place-items-center rounded-md hover:bg-bg-3"
+            />
+            <button type="button" onClick={() => { void openProjectPanel(p.id); }} className="flex min-w-0 flex-1 items-center gap-[9px] py-1.5 pl-1 pr-2 text-left">
               <span className="truncate">{p.name || 'Untitled project'}</span>
             </button>
             <button
@@ -41,6 +49,6 @@ export function ProjectsSidebarSection() {
           </div>
         ))}
       </div>
-    </>
+    </SidebarSection>
   );
 }

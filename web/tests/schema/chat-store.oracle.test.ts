@@ -104,7 +104,7 @@ const SEEDS: Array<{ name: string; state: PersistedState }> = [
           title: 'Branched', stream: '<p>a <span class="branched" data-bid="b1">b</span></p>',
           branchSnapshots: {
             b1778130159563: { id: 'b1778130159563', bodyHTML: '<p>branch body</p>', parentBid: null, depth: 0 },
-          },
+          } as never, // deliberately partial: legacy snapshots predate several fields
           branchRecents: {
             b1778130159563: {
               id: 'b1778130159563', anchorBid: 'b1', createdAt: 1778130159563,
@@ -112,7 +112,7 @@ const SEEDS: Array<{ name: string; state: PersistedState }> = [
               mainTurnId: null, mainTurnPrompt: 'why?',
             },
           },
-          highlights: [{ id: 'h1', text: 'b', source: 'assistant' }],
+          highlights: [{ id: 'h1', text: 'b', source: 'assistant' }] as never, // deliberately off-spec: unknown values must survive
           mainMessages: [{ role: 'user', content: 'hi' }],
           model: 'sonnet', provider: 'claude',
           tokenIn: 10, tokenOut: 20, cost: 0.0003, unread: false,

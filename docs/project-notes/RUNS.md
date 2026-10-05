@@ -4,6 +4,20 @@ Each entry: **date/time · task or bug ID · command category · result · impor
 
 ---
 
+## 2026-10-05 — TASK-P5b-d — full gate — pass (automated only)
+- **Command category:** test / lint / build
+- **Result:** `pnpm test` 762 (49 files); typecheck, lint, build (`$?` = 0); `playwright test` 218 passed + 1 flake (`web-feedback` "Escape discards" failed once under full-suite load, passed 3/3 alone; timing, untouched code); contract fastapi and legacy, proxy: no failures.
+- **Output:** the first full run took 35+ minutes and showed 31 failures from three causes, all mine: `Glyph` crashing on an empty cycle (blank page whenever the chat header rendered after legacy had written state), two old e2e mocks missing `content_block_start`, and two specs clicking `getByRole('button').first()` in a sidebar row that now starts with a glyph button. Lint also caught literal hex colours in the icon palette (scoped disable, with reason).
+- **Not run:** any real Claude/DeepSeek request; the human smoke test.
+- **Follow-up:** maintainer smoke test with a real key; commit P5 when told.
+
+## 2026-10-04 — TASK-P5a — full gate — pass (automated only)
+- **Command category:** test / lint / build
+- **Result:** pass. `pnpm test` 439 (36 files); `pnpm typecheck`; `pnpm lint`; `pnpm build`; `playwright test` 156 (147 + 9 in `web-chat.spec.ts`); `pytest tests/contract` 146 (fastapi) and 118 + 28 skipped (legacy); `pytest tests/proxy` 7.
+- **Output:** the two real failures on the way were both mine and both caught by tests (retry; a test race), plus one legacy quirk (BUGS.md #056). A mid-run `pnpm build | tail && playwright` hid a failing build behind the pipe and ran the specs against a stale `web/dist`: build first, check `$?`, then run.
+- **Not run:** a real Claude or DeepSeek request (all mocked); the manual steps (DeepSeek rate-limit fallback against the real API, nested branch reopen, files-and-folder attach, light-mode contrast, update prompt); the human smoke test.
+- **Follow-up:** maintainer smoke test with a real key before P5b.
+
 ## 2026-10-04 — TASK-P4.5/6/7 — full gate — pass (automated only)
 - **Command category:** test / lint / build
 - **Result:** pass, twice in a row

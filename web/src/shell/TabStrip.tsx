@@ -6,6 +6,7 @@ import { useUiStore } from '../state/ui-store';
 import { isNoteTabId, isSingletonTab, SINGLETON_TABS } from '../state/tabs';
 import { selectThread } from '../state/actions';
 import { mountView } from '../registry/views';
+import { Glyph } from '../ui/Glyph';
 import { MAIN_THREAD_ID, STATIC_THREAD_IDS, visibleThreads } from '../db/thread-ops';
 
 /** Which registry view a tab belongs to. */
@@ -63,7 +64,10 @@ export function TabStrip() {
               )}
             >
               <button type="button" onClick={() => open(tab.id)} className="flex items-center gap-1.5">
-                <Icon size={13} aria-hidden />
+                {/* A chosen glyph replaces the default icon; with none chosen the tab keeps its icon (as legacy, app.js:6414). */}
+                {threadState[tab.id]?.emoji
+                  ? <Glyph value={threadState[tab.id]?.emoji} cycle={[]} index={0} size={14} fallback={<Icon size={13} aria-hidden />} />
+                  : <Icon size={13} aria-hidden />}
                 <span className="max-w-[180px] truncate">{label}</span>
               </button>
               <button

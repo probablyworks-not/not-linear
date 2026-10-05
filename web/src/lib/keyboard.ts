@@ -11,6 +11,10 @@ import { useEffect } from 'react';
 export const ESC_PRIORITY = {
   // The capture preview wins over everything: legacy handles its Escape in the capture phase.
   feedbackPreview: 170,
+  // Legacy closes the image preview on its own Escape listener, ahead of the ladder; it sits just under the capture preview.
+  imagePreview: 160,
+  // The icon picker closes on its own Escape in legacy, before anything else on the page.
+  glyphPicker: 165,
   branchCanvas: 150,
   storyPlayer: 140,
   searchPalette: 130,
@@ -22,6 +26,7 @@ export const ESC_PRIORITY = {
   ctxRankingPopover: 70,
   modelMenu: 60,
   modeMenu: 50,
+  branchMenu: 48,
   attachMenu: 45,
   ctxPanel: 40,
   prefs: 30,

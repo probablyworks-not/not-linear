@@ -3,11 +3,15 @@ import { clsx } from 'clsx';
 import { FileText, MessageSquare, PanelLeftClose, Pencil, Search, Settings, Trash2 } from 'lucide-react';
 import { useAppStore } from '../state/app-store';
 import { useUiStore } from '../state/ui-store';
-import { deleteChat, newChat, selectThread } from '../state/actions';
+import { deleteChat, newChat, selectThread, setThreadGlyph } from '../state/actions';
 import { ESC_PRIORITY, useEscLayer } from '../lib/keyboard';
 import { visibleThreads, MAIN_THREAD_ID } from '../db/thread-ops';
 import { flags } from '../flags';
 import { ProjectsSidebarSection } from '../projects/ProjectsSidebarSection';
+import { RecentBranches } from '../branch/RecentBranches';
+import { SidebarSection } from './SidebarSection';
+import { GlyphButton } from '../ui/GlyphButton';
+import { THREAD_ICON_CYCLE } from '../lib/mind-garden';
 
 const SIDE_ITEM = 'relative flex w-full items-center gap-[9px] rounded-md text-left text-sm leading-tight text-text-2 hover:bg-bg-2 hover:text-text';
 
@@ -84,24 +88,27 @@ export function Sidebar() {
 
           {flags.projects && <ProjectsSidebarSection />}
 
-          <div className="mx-2 mb-1 mt-3.5 font-mono text-xs uppercase tracking-widest text-text-3">Threads</div>
+          <SidebarSection section="threads" label="Threads">
           <div role="list">
             {/* A chat filed in a project is reached through the project, not the flat list (app.js:5348). */}
-            {rows.filter(r => !(flags.projects && r.projectId && projects[r.projectId])).map(row => {
+            {rows.filter(r => !(flags.projects && r.projectId && projects[r.projectId])).map((row, rowIndex) => {
               const active = row.id === activeTabId;
               return (
                 <div
                   key={row.id} role="listitem" data-thread={row.id} data-title={row.title}
                   className={clsx(SIDE_ITEM, 'group p-0', active && 'bg-bg-2 text-text')}
                 >
+                  <GlyphButton
+                    value={row.emoji} cycle={THREAD_ICON_CYCLE} index={rowIndex} size={22}
+                    fallback={row.isStatic ? <FileText size={15} aria-hidden /> : <MessageSquare size={15} aria-hidden />}
+                    onPick={token => { void setThreadGlyph(row.id, token); }}
+                    className="ml-2 grid h-[22px] w-[22px] flex-none cursor-pointer place-items-center rounded-md text-sm hover:bg-bg-3"
+                  />
                   <button
                     type="button" onClick={() => { void selectThread(row.id); }}
                     aria-current={active ? 'page' : undefined}
-                    className="flex min-w-0 flex-1 items-center gap-[9px] px-2 py-1.5 text-left"
+                    className="flex min-w-0 flex-1 items-center gap-[9px] py-1.5 pl-1 pr-2 text-left"
                   >
-                    <span className="grid h-4 w-4 flex-none place-items-center text-sm">
-                      {row.emoji ?? (row.isStatic ? <FileText size={15} aria-hidden /> : <MessageSquare size={15} aria-hidden />)}
-                    </span>
                     <span className="truncate">{row.title}</span>
                     {row.unread && <span aria-label="Unread" className="ml-auto h-1.5 w-1.5 flex-none rounded-full bg-accent-2" />}
                   </button>
@@ -118,6 +125,9 @@ export function Sidebar() {
               );
             })}
           </div>
+          </SidebarSection>
+
+          {flags.chat && <RecentBranches />}
         </div>
 
         {/* Identity + the way into Settings (flags.settings). */}

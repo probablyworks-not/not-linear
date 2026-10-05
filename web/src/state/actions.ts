@@ -149,3 +149,19 @@ export async function linkProjectFolder(pid: string): Promise<void> {
 export async function unlinkProjectFolder(pid: string): Promise<void> {
   if (await useAppStore.getState().setProjectPath(pid, '')) toast('Folder unlinked');
 }
+
+/** Saves the icon chosen for a thread (`thread.emoji`, the field both apps read and write). */
+export async function setThreadGlyph(threadId: string, token: string): Promise<void> {
+  await useAppStore.getState().updateThreads(s => {
+    const t = s.threads[threadId] ?? (s.deletedThreads.includes(threadId) ? undefined : (s.threads[threadId] = { kind: 'chat', title: 'Untitled chat', stream: '' }));
+    if (t) t.emoji = token;
+  });
+}
+
+/** The same for a project (`project.emoji`). */
+export async function setProjectGlyph(projectId: string, token: string): Promise<void> {
+  await useAppStore.getState().updateThreads(s => {
+    const p = s.projects[projectId];
+    if (p) (p as { emoji?: string }).emoji = token;
+  });
+}

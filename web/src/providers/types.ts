@@ -21,11 +21,26 @@ export type ToolName =
 export interface TokenUsage {
   inputTokens: number;
   outputTokens: number;
+  /** DeepSeek bills cached input tokens at a different rate. */
+  cacheHitTokens?: number;
+  /** Why the model stopped; 'max_tokens' is what offers "Continue". */
+  stopReason?: string;
+  /** How many provider requests the reply took (more than one when tools ran). */
+  requestCount?: number;
+  /**
+   * What the model was actually sent, for the "Context sent to model" disclosure under a reply:
+   * the system prompt, the FINAL request's messages, and the names of the tools offered.
+   */
+  context?: { system: string; messages: unknown[]; tools: string[] };
 }
+
+/** A provider-shaped content block (Anthropic's text, image and document blocks). */
+export type ContentBlock = { type: string; [k: string]: unknown };
 
 export interface ChatMessage {
   role: 'user' | 'assistant';
-  content: string;
+  /** Plain text, or blocks when a message carries a native PDF or image. */
+  content: string | ContentBlock[];
 }
 
 /**
@@ -62,11 +77,19 @@ export interface ProviderCapabilities {
   maxToolRounds: number;
 }
 
+/**
+ * Runs one tool the model asked for and returns text for it to read. Throws only for an abort
+ * or a fatal tool failure (`isToolFatal`); every other failure is a returned string.
+ */
+export type ToolRunnerLike = (name: string, input: Record<string, unknown>, signal: AbortSignal) => Promise<string>;
+
 export interface ChatRequest {
   messages: ChatMessage[];
   systemPrompt: string;
   /** Tool *specs*, never a provider-shaped array — see tool-specs.ts. */
   tools: readonly ToolSpecLike[];
+  /** How to run them. A request with tools and no runner offers none. */
+  toolRunner?: ToolRunnerLike;
   model: string;
   thinking: boolean;
   /** Replaces the onController/onAbort callback pair. */

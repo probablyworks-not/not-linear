@@ -108,6 +108,12 @@ export interface AppActions {
   newChatInProject(pid: string): Promise<string | null>;
   /** The caller owns the confirm. Chats are kept and move back to Threads. */
   deleteProject(pid: string): Promise<boolean>;
+  /**
+   * Applies `mutate` to the shared row and takes the result into memory. For chat turns, which
+   * write a thread's stream and messages (see db/turn-ops.ts). Prefs are left alone, as in the
+   * other thread actions, so a pref being typed is not rolled back.
+   */
+  updateThreads<T>(mutate: (state: PersistedState) => T): Promise<T | null>;
   /** Re-reads localStorage.nl_api_keys, which the other app may have changed. */
   refreshApiKeys(): void;
   connectApiKey(provider: string, key: string): void;
@@ -221,6 +227,17 @@ export const useAppStore = create<AppState & AppActions>((set, get) => ({
   async createThread() {
     try {
       const { state, result } = await updateChatState(s => createThreadIn(s, Date.now()));
+      set({ ...threadFields(state), error: null });
+      return result;
+    } catch (e) {
+      set({ error: e instanceof Error ? e.message : String(e) });
+      return null;
+    }
+  },
+
+  async updateThreads(mutate) {
+    try {
+      const { state, result } = await updateChatState(mutate);
       set({ ...threadFields(state), error: null });
       return result;
     } catch (e) {

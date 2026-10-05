@@ -61,10 +61,17 @@ export interface PersistedThread {
    * appears 22 times in app.js, `.branches` once). Branches persist as two
    * id-keyed maps instead.
    */
-  branchSnapshots?: Record<string, unknown>;
-  branchRecents?: Record<string, unknown>;
+  branchSnapshots?: Record<string, PersistedBranchSnapshot>;
+  branchRecents?: Record<string, PersistedBranchRecent>;
 
-  highlights?: unknown[];
+  highlights?: PersistedHighlight[];
+  /**
+   * Structured anchors (ADR-038 / ADR-051): where each highlight and branch anchor sits, as
+   * offsets into a message's text. Additive; legacy never reads it and, because it saves whole
+   * thread objects, never drops it. The saved HTML spans stay the record legacy reads, so this
+   * is re-derived from them on every React write that touches marks.
+   */
+  highlightsV2?: MarkRecord[];
 
   /** Transcript and breadcrumb state. */
   mainMessages?: unknown[];
@@ -93,6 +100,71 @@ export interface PersistedThread {
 
   /** Threads carry fields this layer has no business narrowing. */
   [key: string]: unknown;
+}
+
+/** What a branch panel persists (app.js captureBranchSnapshot). */
+export interface PersistedBranchSnapshot {
+  id: string;
+  parentBid: string | null;
+  anchorBid: string;
+  quote: string;
+  depth: number;
+  createdAt: number;
+  touchedAt: number;
+  mainTurnId: string | null;
+  mainTurnPrompt: string;
+  /** The panel body as rendered HTML: another dual-written blob. */
+  bodyHTML: string;
+  messages: Array<{ role: string; content: string | unknown[]; [k: string]: unknown }>;
+  tokenIn: number;
+  tokenCacheHit: number;
+  tokenOut: number;
+  cost: number;
+  provider?: string;
+  model?: string;
+  modelPref: string | null;
+}
+
+/** The sidebar's "Recent branches" row (app.js rememberBranchRecent). */
+export interface PersistedBranchRecent {
+  id: string;
+  quote: string;
+  parentBid: string | null;
+  anchorBid: string;
+  depth: number;
+  createdAt: number;
+  touchedAt: number;
+  mainTurnId: string | null;
+  mainTurnPrompt: string;
+}
+
+/** An entry in a thread's `highlights` list (app.js saveHighlightSelection). */
+export interface PersistedHighlight {
+  id: string;
+  threadId: string;
+  threadTitle: string;
+  text: string;
+  createdAt: number;
+  source: 'doc' | 'main-chat' | 'branch';
+  branchId?: string;
+  branchQuote?: string;
+  parentBranchId?: string | null;
+  anchorBid?: string;
+  depth?: number;
+}
+
+/** One entry of `highlightsV2`: a mark, located. */
+export interface MarkRecord {
+  id: string;
+  kind: 'highlight' | 'branch';
+  scope: 'stream' | 'doc' | 'branch';
+  /** Set when scope is 'branch': the panel the text is in. */
+  branchId?: string;
+  /** The message's `data-turn-id`, or `legacy-<n>` for one saved before turn ids existed. */
+  turnId: string;
+  /** Which element's text the offsets index. */
+  part: 'ai' | 'user' | 'doc';
+  runs: Array<{ start: number; end: number; text: string }>;
 }
 
 /** A sidebar button for a non-static thread, recreated on load. */

@@ -5,6 +5,7 @@ Moved verbatim from backend/server.py as part of P2. No logic changes.
 
 from __future__ import annotations
 
+import logging
 import os
 import re
 from datetime import datetime, timezone
@@ -14,6 +15,8 @@ from ..config import REPO_ROOT
 # Scan caps and skip lists, copied verbatim from backend/server.py:134-159.
 CP_CONVENTION_STEMS = ("readme", "changelog", "bugs", "tasks")
 CP_MAX_FILE_BYTES = 1_000_000   # cap per file we read into text
+CP_MAX_PDF_BYTES = 60_000_000   # larger PDFs are flagged tooBig, not read
+CP_MAX_PDF_TEXT_CHARS = 1_500_000  # cap on text kept from one PDF (a long book is ~500k)
 CP_MAX_LISTING = 500            # cap the shallow top-level listing
 CP_MAX_MARKDOWN_FILES = 200     # cap recursive markdown previews
 CP_MAX_CONTEXT_FILES = 300      # cap for the combined markdown+code context list
@@ -69,6 +72,39 @@ def _cp_read_text_slot(file_path, filename):
     except OSError as exc:
         slot["error"] = str(exc)
         slot["text"] = ""
+    return slot
+
+
+# Extracted PDF text, keyed by (path, size, mtime) so an unchanged book is read
+# once per server run, not on every question (a 250-page book takes seconds).
+_PDF_TEXT_CACHE = {}
+
+
+# PDF text for the linked-folder context. Text only, no OCR: a scanned PDF with
+# no text layer yields "" and the client skips empty files. pypdf is imported
+# lazily and its absence degrades to an "error" field, like any unreadable file.
+def _cp_read_pdf_slot(file_path, filename):
+    slot = {"present": True, "filename": filename, "text": ""}
+    try:
+        slot.update(_cp_entry_meta(file_path))
+        if slot["size"] > CP_MAX_PDF_BYTES:
+            slot["tooBig"] = True
+            return slot
+        key = (str(file_path), slot["size"], slot["mtime"])
+        if key not in _PDF_TEXT_CACHE:
+            from pypdf import PdfReader  # reason: optional dependency, see requirements.txt
+            logging.getLogger("pypdf").setLevel(logging.ERROR)  # font warnings are noise here
+            parts, total = [], 0
+            for page in PdfReader(str(file_path)).pages:
+                text = page.extract_text() or ""
+                parts.append(text)
+                total += len(text)
+                if total >= CP_MAX_PDF_TEXT_CHARS:
+                    break
+            _PDF_TEXT_CACHE[key] = "\n".join(parts)[:CP_MAX_PDF_TEXT_CHARS]
+        slot["text"] = _PDF_TEXT_CACHE[key]
+    except Exception as exc:  # reason: a malformed PDF must not fail the whole scan
+        slot["error"] = "%s: %s" % (type(exc).__name__, exc)
     return slot
 
 
@@ -133,7 +169,7 @@ def _cp_context_files(base):
             if ".min." in filename.lower():
                 continue
             ext = os.path.splitext(filename)[1].lower()
-            if ext not in CP_TEXT_EXTENSIONS:
+            if ext not in CP_TEXT_EXTENSIONS and ext != ".pdf":
                 continue
             file_path = Path(root) / filename
             try:
@@ -145,7 +181,7 @@ def _cp_context_files(base):
             except (OSError, ValueError):
                 continue
             rel_path = os.path.relpath(resolved, base)
-            slot = _cp_read_text_slot(resolved, filename)
+            slot = (_cp_read_pdf_slot if ext == ".pdf" else _cp_read_text_slot)(resolved, filename)
             slot["relativePath"] = rel_path
             context_files.append(slot)
             if len(context_files) >= CP_MAX_CONTEXT_FILES:

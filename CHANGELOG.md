@@ -2,7 +2,29 @@
 
 All notable repository changes made by AI agents should be recorded here.
 
+## 2026-10-05
+
+- Agent: Claude Sonnet 5.5
+- Summary: **PDFs in a project's linked folder are now read as text** (FastAPI backend only), and long files are sent as an excerpt. A user's folder of books returned only its `.html` file because `.pdf` was not an accepted extension.
+- Files changed: `backend/app/services/project_scan.py`, `requirements.txt` (+`pypdf>=5.0,<7.0`), `web/src/chat/project-context.ts`, `tests/contract/test_project_scan_pdf.py` (new), `web/tests/chat/project-context.test.ts`.
+- Behavior changes: `/__notlinear_scan_project` now returns `.pdf` files in `contextFiles` with extracted text (no OCR; a scanned PDF gives empty text and is skipped; over 60 MB is `tooBig`; text capped at 1.5M chars; cached per path+size+mtime). In `/web/`, a file over 30,000 characters is sent as its first 1,000 characters plus the 2,500-character stretch mentioning the question's keywords most (shorter files unchanged). The legacy server and legacy app are NOT changed and still ignore PDFs.
+- Verification: 4 new pytest, 3 new vitest; timed on a real folder (250-page book 2s, 6.6s for the whole scan first time, instant after).
+
+- Agent: Claude Sonnet 5.5
+- Summary: **P5b–d — highlights, branches, read-only views and the tool loop in `/web/`, plus legacy parity for panels, attachments, project-folder context and Mind Garden icons.** Done in one session at the maintainer's request (overriding one-phase-per-session), UNCOMMITTED by their instruction until all of P5 is done.
+- Files changed: `web/src/{branch,chat,tools,attachments,providers,db,state,shell,projects,ui,lib,styles}/*`, `web/tests/{chat,tools,helpers,e2e}/*`, `docs/project-notes/*`, `FEATURES.md`, `BUGS.md`, `docs/REFACTOR-HANDOFF.md`.
+- Behavior changes: none in legacy. In `/web/`: select text to highlight, Branch (⌘B) or Ask; branch panels stack, drag-resize, collapse, reader mode, promote to main, delete, reopen from anchors and from Recent branches; per-branch model/mode; thread map, branch canvas, breadcrumbs, Highlights panel; web search and page-fetch tool loops for Claude and DeepSeek with status lines; per-message actions, Continue, usage line; attachments and the Context panel; project linked-folder context with a Sources bar and ranking override; Mind Garden icons for threads, projects and the title. Additive `highlightsV2` index on threads (legacy ignores it; spans stay authoritative).
+- Verification: 762 vitest, 219 Playwright (one screenshot-Escape feedback test flaked once under full-suite load and passed 3/3 alone), contract suites, proxy, typecheck, lint, build. Real Claude/DeepSeek calls NOT made (mocked); human smoke test NOT run.
+
 ## 2026-10-04
+
+- Agent: Claude Sonnet 5.5
+- Summary: **P5a — chat in `/web/`, one thread, no branches or tools.** A composer and a streaming message list, with the Claude and DeepSeek providers, the Claude→DeepSeek rate-limit fallback (#023), and a dual-write (ADR-038) so a thread written by either app opens and continues in the other. Behind `flags.chat`.
+- Files changed: `web/src/chat/*` (new), `web/src/providers/{claude,deepseek,sse}.ts` (new) and `types.ts`, `web/src/lib/{api-client,markdown}.ts` (new), `web/src/db/turn-ops.ts` (new), `web/src/{flags.ts,shell/AppShell.tsx,state/app-store.ts,styles/app.css}`, `web/package.json` (+`mermaid`, `highlight.js`), `web/tests/chat/*` and `web/tests/e2e/web-chat.spec.ts`, `docs/project-notes/*`, `FEATURES.md`, `BUGS.md`, `docs/REFACTOR-HANDOFF.md`.
+- Behavior changes: none in legacy. In `/web/`, opening a thread now shows its conversation and a composer. Models other than Claude and DeepSeek are explained rather than silently swapped (OpenAI and Gemini providers are not ported yet). No tools, so no web search, in `/web/` chat until P5d.
+- Found, not fixed (legacy): a response that *starts* with `## Heading` renders as a stray `#` paragraph plus an h1 (BUGS.md #056). The port is verbatim so `/web/` shows the same; fixing it would make the two apps' saved HTML diverge.
+- Observed: one thread in the real-data fixture holds a malformed fragment (`</sp<span class="branched"…`) that the HTML parser swallows along with a branch anchor. Legacy drops it on every load; the round-trip test therefore compares against the parsed form.
+- Verification: 439 vitest (75 new), 156 Playwright (9 new), 146 + 118 contract, 7 proxy, typecheck, lint, build. Human smoke test NOT run; a real Claude/DeepSeek call was NOT made (every provider call in the tests is mocked).
 
 - Agent: Claude Sonnet 5.5
 - Summary: P4 items 5-7 — project rules, files and linked folder (with the attachment machinery), the Feedback panel with screenshot, recording and annotation, and the Runtime logs viewer with the logs.md sync, all in `/web/`. P4 is now built; the composer-dependent parts (`+` menu, branch-transcript attach) are P5.

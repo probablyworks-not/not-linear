@@ -4,6 +4,38 @@ Each entry: **Decision ID · status · context · decision · alternatives rejec
 
 ---
 
+## ADR-052 — PDFs in the linked folder: text via `pypdf` in the FastAPI service only; long files are excerpted
+- **Status:** accepted 2026-10-05. Amends the frozen `/__notlinear_scan_project` behaviour (response shape unchanged; more files in `contextFiles`).
+- **Decision:** `project_scan.py` accepts `.pdf`, extracts text with `pypdf` (pure Python, imported lazily so its absence degrades to a per-file `error`), caches by (path, size, mtime), caps at 60 MB and 1.5M chars. `server_legacy.py` (the oracle, deleted later) is left alone, so parity tests, which scan a PDF-free directory, still hold. In `/web/`, files over 30,000 characters send start + best keyword window instead of only the start, because a book's first 3000 characters are front matter.
+- **Alternatives rejected:** OCR (heavy, new system dependency); extracting in the browser (it cannot read disk); changing legacy as well (a frozen oracle); a bigger prefix (still front matter).
+- **Consequences:** a new Python dependency, so `pip install -r requirements.txt` must be re-run. Scanned PDFs are silently empty. The excerpt is by keyword count, so "first chapter" can land on the table of contents. Legacy and `/web/` now differ for long files.
+
+---
+
+## ADR-051 — P5b–d: spans stay authoritative; `highlightsV2` is a derived index; branch context from saved ancestors
+- **Status:** accepted 2026-10-05. Amends ADR-038 and ADR-050.
+- **Decision:** (1) Highlights and branch anchors live as spans in saved HTML (`data-bid`/`data-hid`), exactly as legacy writes them; `highlightsV2[]` is an additive index rebuilt from the spans, and legacy preserves it because it saves whole thread objects. (2) `anchor.ts`/`marks-v2.ts` are pure (no React), compared with legacy on the real fixture. (3) A branch's model context walks the saved ancestor chain (`branchSnapshots`), so a reopened branch is sent the same history whether or not its parents are open. (4) Branch panels persist in `branchSnapshots[id]` (incl. `bodyHTML`), `branchRecents`; writes go through `db/branch-ops.ts` → `chat-repo`. (5) Tool loops live in the providers; runners in `tools/`, compared with legacy `executeTool`; the oracle is kept until P6.
+- **Alternatives rejected:** `highlightsV2` as the source of truth (legacy would not see edits); open-panels-only context (silent history loss after reload).
+- **Consequences:** legacy bug-for-bug quirks pinned in tests (3-deep snap, DeepSeek hold-back). The Tabler icon stylesheet is linked from `web/index.html` so saved markup with `ti ti-*` icons draws; `chat.css` and `emoji-picker.css` are imported by path from `frontend/styles/` so there is one copy. Mind Garden icons are fetched once from `/frontend/mind-garden-icons.html`; palette hexes are literals (saved inside `icon:<id>:<hex>` tokens), with a scoped eslint disable.
+
+---
+
+## ADR-050 — P5a: chat in `/web/` upserts one turn into the saved HTML and reuses legacy's markdown and chat CSS
+- **Status:** accepted 2026-10-04. Amends ADR-038 (the dual-write mechanism).
+- **Context:** ADR-038 requires React to write HTML legacy can read. Regenerating a thread's whole `stream` from structured turns would drop anything the structured model does not carry (image chips, file chips, branch anchors, highlights, the usage `<details>`). The renderer and stylesheet are the other half: a reply must look the same in either app.
+- **Decision:**
+  1. **Append-only upsert.** `chat/stream-html.ts` replaces or appends exactly one turn in the existing HTML (`data-turn-id`); everything else is untouched. Tested against the real fixture: appending a turn to all 44 threads keeps every `data-bid` and `data-hid` that an HTML parser keeps.
+  2. **One renderer.** `lib/markdown.ts` is `core/markdown.js` ported string for string and compared with the legacy module in a test. `marked`/`dompurify` rejected (they would emit different HTML). mermaid and highlight.js become npm dependencies (`highlight.js/lib/common`), run after render. KaTeX is not added: only Notes uses it.
+  3. **One stylesheet.** `web/src/styles/app.css` imports `frontend/styles/chat.css` by path, as it already does for `tokens.css`, so markup styling has a single copy. Its message sizes (14.5/15px) predate the 12/13/14 rule; accepted for message markup so a saved reply looks identical in both apps. The composer and shell are Tailwind and follow the rule.
+  4. **History recovery departs from legacy in one place:** an assistant element holding only an error block is not read back as something the model said.
+  5. **Providers are tool-less** in P5a; `ChatRequest.tools` is passed empty and the providers omit `tools`. The tool loop is P5d.
+  6. **Usage fields:** `TokenUsage` gains optional `cacheHitTokens` and `stopReason` (additive).
+- **Alternatives rejected:** regenerate `stream` from structured turns every save; a new `turns` field in the row (the schema is frozen); a markdown library; copying `chat.css` into `web/` (two copies drift).
+- **Consequences/tradeoffs:** saved error blocks carry Tabler icon markup (`<i class="ti ...">`) that `/web/` cannot draw, so the icon is blank there. `chat.css` carries branch and composer rules `/web/` does not use. The first place a legacy bug in the renderer (BUGS.md #056) shows up in `/web/` too, deliberately.
+- **Related files:** `web/src/chat/*`, `web/src/db/turn-ops.ts`, `web/src/lib/markdown.ts`, `web/src/providers/{claude,deepseek,sse}.ts`, `web/tests/chat/*`, `web/tests/e2e/web-chat.spec.ts`
+
+---
+
 ## ADR-049 — P4 items 5-7: attachments, feedback and runtime logs in `/web/`
 - **Status:** accepted 2026-10-04.
 - **Context:** Three leaf features share one hazard: they reach native dialogs, the filesystem or `logs.md`, and legacy has fixed bugs in each (#021, #022, #053, #055). Two of them also depend on the chat composer, which is P5.

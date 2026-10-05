@@ -4,6 +4,19 @@ Each entry: **ID · Status · Goal · Context · Files likely involved · Accept
 
 ---
 
+## TASK-P5b-d — Highlights, branches, views, tool loop and parity in `/web/`
+- **Status:** Done pending smoke test. UNCOMMITTED by the maintainer's instruction ("commit everything together in phase 5").
+- **Goal:** the same functionality as legacy for highlights, branch panels (drag, resize, collapse, reader, promote-to-main, responsive), Recent branches, thread map, canvas, tools, attachments, folder context, Mind Garden icons; both apps read each other's data.
+- **Not included:** OpenAI/Gemini, Notes, doc-main before legacy saves it, popover bold/italic/link.
+- **Verification:** RUNS.md TASK-P5b-d; `web/tests/{chat,tools}/*`, `web/tests/e2e/web-{chat,branches,tools,actions,attachments,folder-context,sidebar}.spec.ts`; ADR-051.
+
+## TASK-P5a — Chat in `/web/`: render and stream, one thread, no branches
+- **Status:** Done pending smoke test. Behind `flags.chat`.
+- **Goal:** send a message in `/web/`, watch it stream, reload, and open and continue the same thread in legacy (ADR-038, ADR-050).
+- **Acceptance criteria:** Claude and DeepSeek stream; Claude 429 with a DeepSeek key falls back before any text and bills the model that answered; a thread written by either app opens and continues in the other; other threads, prefs and branch data are never touched; keys are never logged; every failure shows a calm message with Try again or Open settings.
+- **Not in P5a:** tools (P5d), highlights and branches (P5b), visualisations (P5c), OpenAI/Gemini, attachments in the composer, Continue, per-message usage details, `doc-main` before legacy has saved it.
+- **Verification:** RUNS.md TASK-P5a; `web/tests/chat/*`, `web/tests/e2e/web-chat.spec.ts`; ADR-050.
+
 ## TASK-P4.5 — Attachments machinery; project rules, files, linked folder
 - **Status:** Done pending smoke test. Composer `+` menu and branch-transcript attach deferred to P5.
 - **Acceptance criteria:** file rules and reader identical to legacy; picker keeps #021/#022 behaviour; project files stored text-only; both apps store the same files for the same picks.

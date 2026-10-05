@@ -14,3 +14,6 @@ import 'fake-indexeddb/auto';
 import Dexie from 'dexie';
 
 (globalThis as unknown as { Dexie: typeof Dexie }).Dexie = Dexie;
+
+// jsdom logs "not implemented" for scrolling; the app calls it freely and no test needs it to move anything.
+window.scrollTo = (() => {}) as typeof window.scrollTo;

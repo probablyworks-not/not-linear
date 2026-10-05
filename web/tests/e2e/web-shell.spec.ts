@@ -75,7 +75,7 @@ test.describe('tabs persist to nl_tabs_v1', () => {
   test('opening a thread adds a tab, and reload restores it and the active one', async ({ page }) => {
     await openWeb(page);
     await showSidebar(page);
-    await webRow(page, 'Pricing research').getByRole('button').first().click();
+    await webRow(page, 'Pricing research').getByRole('button', { name: 'Pricing research', exact: true }).click();
     await expect(page.getByRole('tab', { name: /Pricing research/ })).toHaveAttribute('aria-selected', 'true');
 
     const stored = await page.evaluate(() => JSON.parse(localStorage.getItem('nl_tabs_v1') ?? 'null'));

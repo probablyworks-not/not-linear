@@ -5,7 +5,7 @@ four hardening changes and the provider registry)** are committed on branch
 `refactor/p0-repo-hygiene`. **P3 (React shell) is implemented and automated-green but
 UNCOMMITTED and awaiting the human smoke test.** `main` is untouched at `ccf7504`.
 
-**P3 is committed (`cd5c67e`). P4.1a (Settings + API keys) and P4.1b (Modes manager) are implemented, automated-green and committed after it; the maintainer smoke-tested P3/P4.1 on 2026-10-04 and it passed. P4 item 2 (search palette, threads only) is implemented and committed, not yet smoke-tested. P4 item 3 (changelog viewer) is implemented and committed, NOT the Product story, which the maintainer asked to leave out for now. P4 item 4 (Projects grid and chat-linking) is implemented and committed, not yet smoke-tested; project rules/files/folder are deferred to item 5. P4 items 5-7 (attachments machinery with project rules/files/folder, feedback, runtime logs) are implemented and committed, and legacy bug #055 was fixed on the way. **P4 is complete pending the maintainer's smoke test.** Next: P5a, with the dual-write decision already made (ADR-038).**
+**P3 is committed (`cd5c67e`). P4.1a (Settings + API keys) and P4.1b (Modes manager) are implemented, automated-green and committed after it; the maintainer smoke-tested P3/P4.1 on 2026-10-04 and it passed. P4 item 2 (search palette, threads only) is implemented and committed, not yet smoke-tested. P4 item 3 (changelog viewer) is implemented and committed, NOT the Product story, which the maintainer asked to leave out for now. P4 item 4 (Projects grid and chat-linking) is implemented and committed, not yet smoke-tested; project rules/files/folder are deferred to item 5. P4 items 5-7 (attachments machinery with project rules/files/folder, feedback, runtime logs) are implemented and committed, and legacy bug #055 was fixed on the way. **P4 is complete pending the maintainer's smoke test.** **P5 (a–d: chat, highlights and branches, read-only views, tool loop, plus attachments, folder context and Mind Garden icons) is implemented and automated-green, UNCOMMITTED and not smoke-tested; see ADR-050/051.** Next: the maintainer's smoke test of P4 and P5 with a real key, then commit P5 when they say so, then P6 (Notes; delete the tool oracle then).**
 
 This file is the context a new session needs. Read it instead of re-deriving the
 state, then read `AGENTS.md` and `CLAUDE.md` for the standing rules.
@@ -188,6 +188,26 @@ blocks Dexie's upgrade to v10 and the app silently never renders (blank body, no
 
 **Do not delete anything under "Landmines" with a range-replace.** See the note above.
 
+**`pnpm build | tail && playwright test` hides a failing build.** The pipeline's status is `tail`'s, so the
+specs ran against a stale `web/dist` (no chat) and every one failed for the wrong reason. Build first, check
+`$?`, then run Playwright.
+
+**Thread ids are `chat-<Date.now()>`**, in both apps. Two `createThread()` calls in the same millisecond are one
+thread; a test that makes "another thread" must wait a few ms.
+
+**`.msg.ai` count is not "the reply arrived".** The live bubble renders before the request is sent. Wait for
+the reply text, for the Stop button to be gone, or poll the persisted row.
+
+**Legacy bug #056 (open): a reply that starts with `## Heading` renders as `<p>#</p><h1>`.** `lib/markdown.ts`
+is a verbatim port and has it too, on purpose; fix both renderers together. The e2e markdown test starts its
+reply with a sentence to avoid it.
+
+**One fixture thread has malformed HTML** (`</sp<span class="branched"…`) that any HTML parser swallows along
+with a branch anchor; legacy loses it on every load. Compare against the parsed form, never the raw string.
+
+**`messagesFromStream` skips error-only assistant turns** (a deliberate departure from legacy's
+`renderedStreamMessages`, which reads "Claude is overloaded" back as something the model said).
+
 **Pointer events: read them before you `setState`.** `onPointerDown={e => setStrokes(s => [...s, [point(e)]])}`
 runs `point(e)` inside the updater, after React has reset `e.currentTarget`; the TypeError during render
 unmounts the WHOLE app. Compute from the event first. Only a real mouse-drag test finds this.
@@ -240,7 +260,7 @@ the one-session-per-phase cadence is not. P5 alone is four sessions.
 | P2 | Hardening (a-d) + provider registry | **done**, verified live |
 | P3 | React shell | **done, committed, smoke-tested** |
 | P4 | Leaf features | **in progress**: 4.1 Settings, keys and Modes done; **complete pending smoke test**: 4.1 Settings/keys/Modes, 2 search (threads only), 3 changelog (Product story deferred), 4 projects, 5 attachments (+ project rules/files/folder), 6 feedback, 7 runtime logs |
-| P5 | Chat core (four sub-sessions) | |
+| P5 | Chat core (four sub-sessions) | **P5a–d built in one session, uncommitted (maintainer: commit all of P5 together), pending smoke test** (`flags.chat`) |
 | P6 | Notes editor | |
 | P7 | Extension seams | |
 | P8 | Public launch | |
@@ -326,6 +346,13 @@ Do not decide this mid-phase.
   conversation mode (`:1079`). Dual-write via `serializeStreamHTML`.
   **Gate:** send a Claude message; confirm the **Claude→DeepSeek rate-limit
   fallback** (#023); open the same thread in legacy and see identical content.
+  **P5a as built (ADR-050):** `web/src/chat/*`, `providers/{claude,deepseek,sse}.ts`, `lib/{api-client,markdown}.ts`,
+  `db/turn-ops.ts`. Differences from the text above: the providers did not exist and were written here;
+  `serializeStreamHTML` became `upsertTurn` (one turn upserted into the saved HTML, never a regeneration);
+  KaTeX was not needed (Notes only) and `marked`/`dompurify` were rejected (legacy's renderer is hand-rolled).
+  Not done, by design: tools and the pseudo-tool/salvage paths (P5d), OpenAI and Gemini providers, composer
+  attachments, Continue, per-message usage details. The manual gate items (real rate-limit fallback, legacy
+  reading a thread React wrote) are covered by mocked Playwright only; do them once with a real key.
 - **P5b — highlights + branches.** `web/src/chat/anchor.ts` (zero React: pure
   DOM and string) plus a ~40-line `useSelectionAnchor` hook. `rangeToAnchor`/
   `anchorToRange` port `selectedTextSegments` + `wrapRangeTextSegments`
@@ -491,3 +518,14 @@ From `AGENTS.md` and `CLAUDE.md`, and all of them have teeth here:
 - Update the memory files every session: `CHANGELOG.md`,
   `docs/project-notes/{CHANGES,RUNS,DECISIONS,TASKS}.md`, `BUGS.md` on fixes, and
   `FEATURES.md` **in place** when a feature changes.
+
+
+## P5 status and landmines (2026-10-05)
+
+All four sub-phases were done in one session at the maintainer's request; nothing is committed yet. Not done: OpenAI/Gemini providers, `doc-main` before legacy has saved it, doc content marks, popover bold/italic/link, Notes (P6). Landmines that cost time:
+- **`pnpm build` before Playwright, and check `$?`.** e2e serves `web/dist`; `pnpm build | tail && playwright` hides a failing build and tests a stale bundle.
+- **One crash blanks the whole page and fails unrelated specs** ("Open left pane" not found). Reproduce with a `pageerror` listener before reading individual failures.
+- **Mock Claude streams need `content_block_start`**, as real Claude sends; the provider ignores text without it (as legacy does).
+- **Sidebar rows start with a glyph button**; select a row with `getByRole('button', { name: title, exact: true })` (substring also matches Delete).
+- Never read `e.currentTarget` inside a setState updater; sonner toasts and `pointer-events: none` panel actions (hover first) break clicks; Tailwind preflight strips list markers.
+- Full Playwright takes ~7 minutes with one worker; `web-feedback` "Escape discards" can flake under that load.

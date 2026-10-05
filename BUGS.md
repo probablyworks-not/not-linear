@@ -19,7 +19,17 @@ Areas that have broken two or more times. If your task touches any of these, you
 
 ## Active bugs
 
-None currently tracked.
+### #056 — A response that begins with a heading renders as a stray `#` paragraph plus a level-1 heading
+- Status: open (found while porting; not fixed, deliberately)
+- Date discovered: 2026-10-04
+- Agent: Claude Sonnet 5.5
+- Symptom: a reply whose very first line is `## Plan` shows a lone `#` paragraph followed by an h1 "Plan". `### x` gives `#` plus an h2. Headings later in the reply, after other text, are fine. `renderMarkdown('## Plan')` returns `<p>#</p><h1>Plan</h1>`.
+- Root cause: `normalizeMarkdownForDisplay()` in `frontend/core/markdown.js` inserts a block break before any `#{1,4}\s+` that follows a non-newline character. At the start of the text the first `#` of `##` is that non-newline character, so the regex splits `##` into `#` + `# `.
+- Fix: not applied. `web/src/lib/markdown.ts` is a verbatim port because ADR-038 dual-writes this HTML for legacy to re-read, so changing one renderer alone makes the two apps' saved replies differ. The fix is one lookbehind (`(?<=[^\n#])`) or `^`-anchoring, applied to both renderers at once, with a test that renders `'## A'` as `<h2>A</h2>`.
+- Files touched: none.
+- Test case: `renderMarkdown('## Plan')` must equal `<h2>Plan</h2>`; add `'## A'`, `'### A'` and `'text\n\n## A'` to `web/tests/chat/markdown-parity.test.ts` once fixed. The e2e markdown test starts its reply with a sentence to stay clear of this.
+- Prevention: a parity test against the legacy module proves two renderers agree, not that either is right; add a few expected-output cases when porting a renderer.
+- Related: ADR-050.
 
 ### #047 — Model picker menu could render outside the viewport once the option count grew, with no way to scroll to the missing entries
 - Date discovered: 2026-08-07
@@ -857,3 +867,11 @@ None currently tracked.
 - Prevention: smoke step 8 only passes if someone opens `logs.md`; the automated check now covers it. When adding a header requirement to an endpoint family, grep every `fetch(` to that family, not just the wrapper.
 - Related: #054, ADR-035.
 
+
+### #057 — Legacy quirks pinned in `/web/` (not fixed)
+- Status: open (documented, deliberate)
+- Date discovered: 2026-10-05
+- Agent: Claude Sonnet 5.5
+- Symptoms: branches snap to depth 3 at most; DeepSeek replies under ~180 characters arrive in one chunk (hold-back for the markup filter); the first request in DeepSeek thinking mode appends a synthesis instruction; saved-HTML history grows context for long chats.
+- Fix: none; changing one app breaks the other's saved data or the oracle tests. Revisit with both apps together.
+- Related: ADR-051.

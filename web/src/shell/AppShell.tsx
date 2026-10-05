@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, type ReactNode } from 'react';
 import { clsx } from 'clsx';
 import { useAppStore } from '../state/app-store';
 import { useUiStore } from '../state/ui-store';
@@ -17,6 +17,9 @@ import { ProjectsGrid } from '../projects/ProjectsGrid';
 import { ProjectPanel } from '../projects/ProjectPanel';
 import { FeedbackPanel } from '../feedback/FeedbackPanel';
 import { CapturePreview } from '../feedback/CapturePreview';
+import { ChatView } from '../chat/ChatView';
+import { Breadcrumbs } from '../chat/Breadcrumbs';
+import { ImagePreview } from '../ui/ImagePreview';
 import { flags } from '../flags';
 
 export function AppShell() {
@@ -36,7 +39,9 @@ export function AppShell() {
     return rows.find(r => r.id === activeTabId)?.title ?? 'Untitled chat';
   }, [threadState, dynamic, deleted, activeTabId]);
 
-  const trail = view === 'notes' ? 'Notes' : view === 'blank' ? 'New tab' : title;
+  const trail: ReactNode = view === 'notes' ? 'Notes'
+    : view === 'blank' ? 'New tab'
+    : flags.chat && activeTabId ? <Breadcrumbs threadId={activeTabId} fallbackTitle={title} /> : title;
 
   return (
     <div className="min-h-full">
@@ -48,25 +53,29 @@ export function AppShell() {
           // Errors read as a calm statement of what happened, not an apology.
           <div role="alert" className="mx-7 mt-2 rounded-md border border-rule-2 bg-surface-2 px-3 py-2 text-sm text-text-2">{error}</div>
         )}
-        <main className="flex flex-1 items-center justify-center px-7 py-16">
-          {view === 'blank' ? (
-            <div className="text-center">
-              <p className="mb-4 text-sm text-text-2">Start a chat, or pick one from the left pane.</p>
-              <button
-                type="button" onClick={() => { void newChat(); }}
-                className="rounded-lg border border-rule-2 bg-bg-2 px-3.5 py-2 text-sm text-text hover:bg-bg-3"
-              >
-                New chat
-              </button>
-            </div>
-          ) : (
-            <p className="max-w-sm text-center text-sm text-text-3" data-testid="pane-placeholder">
-              {view === 'notes'
-                ? 'Notes open in the classic app until the editor moves over.'
-                : 'This thread opens in the classic app until chat moves over. Everything you see in the left pane is the same data.'}
-            </p>
-          )}
-        </main>
+        {view === 'chat' && flags.chat && activeTabId ? (
+          <main className="flex flex-1 flex-col"><ChatView key={activeTabId} threadId={activeTabId} /></main>
+        ) : (
+          <main className="flex flex-1 items-center justify-center px-7 py-16">
+            {view === 'blank' ? (
+              <div className="text-center">
+                <p className="mb-4 text-sm text-text-2">Start a chat, or pick one from the left pane.</p>
+                <button
+                  type="button" onClick={() => { void newChat(); }}
+                  className="rounded-lg border border-rule-2 bg-bg-2 px-3.5 py-2 text-sm text-text hover:bg-bg-3"
+                >
+                  New chat
+                </button>
+              </div>
+            ) : (
+              <p className="max-w-sm text-center text-sm text-text-3" data-testid="pane-placeholder">
+                {view === 'notes'
+                  ? 'Notes open in the classic app until the editor moves over.'
+                  : 'This thread opens in the classic app until chat moves over. Everything you see in the left pane is the same data.'}
+              </p>
+            )}
+          </main>
+        )}
       </div>
       {flags.settings && <SettingsDialog />}
       {flags.modes && <ModesDialog />}
@@ -76,6 +85,7 @@ export function AppShell() {
       {flags.feedback && <FeedbackPanel />}
       {flags.feedback && <CapturePreview />}
       <ConfirmDialog />
+      <ImagePreview />
       <Toaster />
     </div>
   );

@@ -1,6 +1,12 @@
 /* Tokens are the single source of truth and live in the legacy app until the
    P6 gate moves them here. Imported by path so there is exactly one copy. */
 @import '../../../frontend/styles/tokens.css';
+/* Message markup (bubbles, markdown, code blocks, reasoning panel) is styled by the
+   one stylesheet that already defines it, so a reply looks the same in either app
+   (ADR-038 dual-writes this markup). Moves with tokens.css at the P6 cutover. */
+@import '../../../frontend/styles/chat.css';
+/* The icon picker and Mind Garden glyph styles, from the stylesheet that already defines them. */
+@import '../../../frontend/styles/emoji-picker.css';
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -10,3 +16,18 @@
   body { @apply bg-bg text-text font-sans text-base; margin: 0; -webkit-font-smoothing: antialiased; }
   ::selection { background: var(--accent-soft); color: var(--text); }
 }
+
+/* The branch drawer is hidden below 1100px, exactly as in legacy (base.css). It is the one
+   responsive rule branch panels have; the page stops making room for it at the same width. */
+@media (max-width: 1100px) {
+  .branch-stack { display: none; }
+}
+
+/* chat.css was written for the Tabler icon font (`<i class="ti">`); /web/ draws lucide SVGs. */
+.branch.collapsed [data-h="collapse"] svg { transform: rotate(180deg); }
+.branch-head .logo-ico { display: grid; place-items: center; }
+.branch-head .actions button svg { display: block; }
+
+/* Tailwind's reset removes list markers; legacy's markdown relied on the browser's defaults. */
+.msg.ai ul { list-style: disc; }
+.msg.ai ol { list-style: decimal; }
