@@ -21,7 +21,7 @@ export function Topbar({ trail, actions }: { trail: ReactNode; actions?: ReactNo
     <div
       data-topbar
       className={clsx(
-        'sticky top-0 z-20 flex items-center gap-3 border-b bg-bg px-7 py-3.5 transition-colors duration-150',
+        'sticky top-0 z-20 flex items-center gap-3 border-b bg-bg px-7 py-1.5 transition-colors duration-150',
         scrolled ? 'border-rule shadow-md' : 'border-transparent',
       )}
     >

@@ -57,7 +57,7 @@ export function TabStrip() {
   };
 
   return (
-    <div className="flex w-full items-end gap-0.5 border-b border-rule bg-bg px-7 pt-2">
+    <div className="flex w-full items-end gap-0.5 border-b border-rule bg-bg px-7 pt-1">
       <div role="tablist" aria-label="Open tabs" className="flex min-w-0 flex-1 items-end gap-0.5 overflow-x-auto [scrollbar-width:none]">
         {tabs.map(tab => {
           const active = tab.id === activeId;

@@ -22,6 +22,13 @@ export function LiveAiTurn({ turn }: { turn: LiveTurn }) {
           <WorkingStatus compact phase={phaseFromStatus(turn.status)} detail={statusDetail(turn.status)} />
         </div>
       )}
+      {!!turn.skills?.length && (
+        <div className="mb-1 flex flex-wrap gap-1" data-testid="skill-chips">
+          {turn.skills.map(n => (
+            <span key={n} className="rounded border border-rule-2 px-1.5 py-0.5 text-[12px] text-text-2">{n}</span>
+          ))}
+        </div>
+      )}
       {turn.thinking && (
         <div className={`ai-thinking active${open ? ' open' : ''}`}>
           <button type="button" className="thinking-toggle" onClick={() => setOpen(o => !o)}>

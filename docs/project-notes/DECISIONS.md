@@ -615,3 +615,12 @@ Each entry: **Decision ID · status · context · decision · alternatives rejec
 - **Alternatives rejected:** storing edited modes as full copies (defaults would never improve for edited modes); a new Dexie store for modes (unnecessary — the data is small and prefs-shaped).
 - **Consequences/tradeoffs:** Lives in the existing `kv:'state'` blob, so no Dexie version bump. A built-in mode renamed or removed in code leaves an orphaned override, which the read-time merge must tolerate.
 - **Related files:** `frontend/core/modes.js`, `frontend/views/modes-modal.js`, `frontend/core/store.js`, `frontend/providers/tools.js`
+
+## ADR-043 — Skills seam: bundled library + IndexedDB overrides, BM25 selection, prompt-only
+
+- **Status:** accepted 2026-10-05 (P7 item 1).
+- **Context:** `notlinear-skills/` ships 57 SKILL.md files with no loader. P7 requires skills as selectable system-prompt augmentations that work with any model, with no provider-file edits.
+- **Decision:** Built-ins are bundled at build time (`import.meta.glob`). User edits are per-field overrides, custom skills are stored whole, disabled/pinned/auto live in a separate Dexie db `notlinear-skills` (as notes, ADR-007; the chat schema and prefs keys are untouched). Selection is local BM25F over name, keywords, description, `when_to_use` and body, with new frontmatter keys `when_to_use`, `keywords`, `priority`, `always`, `auto`. The chosen skills are rendered into a block appended to `extraContext` in `run-and-persist.ts`, so main and branch turns on every provider receive them with zero provider edits. A CI script fails if a P7 commit touches a provider file.
+- **Alternatives rejected:** an LLM router (latency, cost, provider-dependent); disk-backed skills via new endpoints (backend coupling); a new prefs key (frozen schema); always-on foundation skills (about 1.7k tokens on every prompt, overlaps the base prompt).
+- **Consequences/tradeoffs:** Skill chips are shown on the live turn only (not persisted: chat schema is frozen). `tools:` is parsed and displayed but not wired. The 5th store is a small flat feature store. Appending via `extraContext` places skills last in the prompt, after tone.
+- **Related files:** `web/src/skills/*`, `web/src/db/skills.ts`, `web/src/chat/run-and-persist.ts`, `web/scripts/check-p7-providers-untouched.mjs`

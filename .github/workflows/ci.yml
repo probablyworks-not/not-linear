@@ -42,6 +42,8 @@ jobs:
         working-directory: web
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: pnpm/action-setup@v4
         with:
           version: 10
@@ -52,6 +54,8 @@ jobs:
           cache-dependency-path: web/pnpm-lock.yaml
       - run: pnpm install --frozen-lockfile
       - run: pnpm typecheck
+      # P7 gate: seams must not edit provider files. Needs full history to find the P7 commits.
+      - run: node scripts/check-p7-providers-untouched.mjs
       # Includes the no-literal-colour rule (bug #022), which is also exercised
       # by a test that feeds it offenders, so it cannot silently stop firing.
       - run: pnpm lint

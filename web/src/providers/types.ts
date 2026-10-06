@@ -16,7 +16,13 @@ export type ToolName =
   | 'web_search'
   | 'serper_search'
   | 'fetch_url'
-  | 'firecrawl_scrape';
+  | 'firecrawl_scrape'
+  // P7 connectors: offered only when a GitHub token is stored.
+  | 'github_search_repos'
+  | 'github_search_issues'
+  | 'github_search_code'
+  | 'github_get_issue'
+  | 'github_get_file';
 
 export interface TokenUsage {
   inputTokens: number;

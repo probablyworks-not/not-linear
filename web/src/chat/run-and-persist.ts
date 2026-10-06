@@ -17,6 +17,14 @@ import type { Attachment } from '../attachments/read-files';
 import { userBubbleInnerHTML, userContentFor } from './user-content';
 import { sourcesLabel } from './project-context';
 import type { TurnUsage } from './usage';
+import { flags } from '../flags';
+import { selectForTurn } from '../skills/skills-store';
+import { renderSkillsBlock } from '../skills/skills-prompt';
+
+function lastAssistantText(history: ChatMessage[]): string {
+  const m = [...history].reverse().find(h => h.role === 'assistant');
+  return typeof m?.content === 'string' ? m.content : '';
+}
 
 // One reply, start to finish, saved as it goes. The main thread and every branch panel run
 // this same flow; they differ only in WHERE a turn is written and which model and system
@@ -58,6 +66,8 @@ export interface Turn {
   displayText?: string;
   /** How many times this reply has already been continued. */
   continueCount?: number;
+  /** Skills the user picked for this message with /skills (P7). */
+  skills?: string[];
   /** Relevant files from a project's linked folder, appended to the system prompt. */
   extraContext?: string;
   /** Their names and how they were chosen, shown under the reply. */
@@ -135,7 +145,12 @@ export async function runAndPersist(host: TurnHost, turn: Turn): Promise<void> {
   try {
     const env = toolEnv();
     const tools = availableTools({ apiKeys: env.apiKeys, searxngUrl: env.searxngUrl });
-    const input = { messagesFor, systemPrompt: host.systemPrompt(turn.extraContext), plan, signal: controller.signal, tools, toolRunner: executeTool as never };
+    // P7 skills: appended to extraContext so both hosts (main + branch) and every provider get it with no provider edits.
+    const picked = flags.skills ? await selectForTurn(turn.userText, lastAssistantText(turn.history), turn.skills) : [];
+    if (flags.skills) useChatStore.getState().setSkillsUsed(key, picked.map(p => ({ name: p.skill.name, reason: p.reason, score: p.score })));
+    if (picked.length) useChatStore.getState().patchLive(key, { skills: picked.map(p => p.skill.name) });
+    const extra = [turn.extraContext, renderSkillsBlock(picked)].filter(Boolean).join('\n\n') || undefined;
+    const input = { messagesFor, systemPrompt: host.systemPrompt(extra), plan, signal: controller.signal, tools, toolRunner: executeTool as never };
     for await (const { ev, plan: used } of runTurn(input, depsFactory())) {
       if (ev.t === 'delta') {
         text += ev.text;

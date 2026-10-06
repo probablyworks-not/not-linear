@@ -20,6 +20,7 @@ export const ESC_PRIORITY = {
   searchPalette: 130,
   confirm: 120,
   modesModal: 110,
+  skillsModal: 111,
   projectPanel: 100,
   projectsView: 90,
   sidebar: 80,

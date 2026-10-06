@@ -15,6 +15,8 @@ export interface LiveTurn {
   thinking: string;
   /** "Searching…", "Claude rate limited — switching to DeepSeek…"; null when there is nothing to say. */
   status: string | null;
+  /** Names of the skills injected into this turn's system prompt (P7). Live only; not persisted. */
+  skills?: string[];
 }
 
 export interface FailedTurn {
@@ -28,7 +30,12 @@ export interface FailedTurn {
 /** A reply that was cut short this session, and how many times it has been continued. */
 export interface ContinueState { turnId: string; count: number }
 
+/** Which skills a reply was given and why (P7); kept in memory so the last turn's choice stays visible. */
+export interface SkillUse { name: string; reason: 'picked' | 'always' | 'pinned' | 'match'; score: number }
+
 interface ChatStore {
+  skillsUsed: Record<string, SkillUse[] | undefined>;
+  setSkillsUsed(key: string, used: SkillUse[]): void;
   live: Record<string, LiveTurn | undefined>;
   failed: Record<string, FailedTurn | undefined>;
   cont: Record<string, ContinueState | undefined>;
@@ -39,6 +46,8 @@ interface ChatStore {
 }
 
 export const useChatStore = create<ChatStore>((set) => ({
+  skillsUsed: {},
+  setSkillsUsed: (key, used) => set(s => ({ skillsUsed: { ...s.skillsUsed, [key]: used } })),
   live: {},
   failed: {},
   cont: {},

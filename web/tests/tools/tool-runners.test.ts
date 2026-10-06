@@ -242,3 +242,56 @@ describe('differential: the same inputs through legacy executeTool', () => {
     }
   });
 });
+
+describe('GitHub connector (P7)', () => {
+  const TOKEN = 'ghp_TESTONLY_needle_123456';
+  let seen: Array<{ url: string; auth: string | null }> = [];
+  const gh = (url: string, init?: RequestInit): Response => {
+    seen.push({ url, auth: new Headers(init?.headers).get('authorization') });
+    if (url.includes('/search/repositories')) return json({ items: [{ full_name: 'a/b', description: 'A thing', stargazers_count: 42, language: 'TS', pushed_at: '2026-01-02T00:00:00Z', html_url: 'https://github.com/a/b' }] });
+    if (url.includes('/search/issues')) return json({ items: [{ number: 7, title: 'Crash on start', state: 'closed', html_url: 'https://github.com/a/b/issues/7', comments: 3, repository_url: 'https://api.github.com/repos/a/b', reactions: { total_count: 5 } }] });
+    if (url.includes('/search/code')) return json({ items: [{ name: 'x.ts', path: 'src/x.ts', html_url: 'https://github.com/a/b/blob/main/src/x.ts', repository: { full_name: 'a/b' }, text_matches: [{ fragment: 'const x = 1' }] }] });
+    if (url.endsWith('/issues/7')) return json({ number: 7, title: 'Crash on start', state: 'closed', body: 'It crashes.', user: { login: 'ann' } });
+    if (url.includes('/issues/7/comments')) return json([{ user: { login: 'maint' }, body: 'Fixed in 1.2.' }]);
+    if (url.includes('/contents/src/x.ts')) return json({ type: 'file', encoding: 'base64', content: btoa('hello file') });
+    if (url.includes('/contents/missing')) return json({ message: 'Not Found' }, 404);
+    if (url.includes('/contents/')) return json([{ name: 'src', type: 'dir' }, { name: 'README.md', type: 'file' }]);
+    return json({}, 401);
+  };
+  beforeEach(() => {
+    seen = []; clearToolCache();
+    setToolEnvForTests(() => ({ apiKeys: { github: TOKEN } }));
+    vi.stubGlobal('fetch', vi.fn(async (url: string, init?: RequestInit) => gh(String(url), init)));
+  });
+  afterEach(() => { vi.unstubAllGlobals(); setToolEnvForTests(null); });
+  const run = (name: string, input: Record<string, unknown>) => executeTool(name, input as never, new AbortController().signal);
+
+  it('searches repos, issues and code', async () => {
+    expect(await run('github_search_repos', { query: 'x' })).toContain('a/b (★42, TS');
+    expect(await run('github_search_issues', { query: 'x' })).toContain('a/b#7 [issue, closed] Crash on start');
+    expect(await run('github_search_code', { query: 'x' })).toContain('a/b: src/x.ts');
+  });
+  it('reads an issue with its comments, a file, and a directory', async () => {
+    const issue = await run('github_get_issue', { repo: 'a/b', number: 7 });
+    expect(issue).toContain('It crashes.');
+    expect(issue).toContain('Fixed in 1.2.');
+    expect(await run('github_get_file', { repo: 'a/b', path: 'src/x.ts' })).toBe('hello file');
+    expect(await run('github_get_file', { repo: 'a/b', path: '' })).toContain('dir: src');
+  });
+  it('sends the token only in the Authorization header, never in the URL', async () => {
+    await run('github_search_repos', { query: 'x' });
+    expect(seen[0]!.auth).toBe(`Bearer ${TOKEN}`);
+    expect(seen.every(s => !s.url.includes(TOKEN))).toBe(true);
+  });
+  it('rejects a malformed repo and reports a missing path as a normal tool error', async () => {
+    expect(await run('github_get_file', { repo: '../etc', path: 'x' })).toContain('Tool error');
+    expect(await run('github_get_file', { repo: 'a/b', path: 'missing' })).toContain('Not found on GitHub');
+  });
+  it('a rejected token is fatal, and no token is fatal', async () => {
+    setToolEnvForTests(() => ({ apiKeys: {} }));
+    await expect(run('github_search_repos', { query: 'x' })).rejects.toSatisfy(isToolFatal);
+    setToolEnvForTests(() => ({ apiKeys: { github: 'bad' } }));
+    vi.stubGlobal('fetch', vi.fn(async () => json({}, 401)));
+    await expect(run('github_search_repos', { query: 'x' })).rejects.toSatisfy(isToolFatal);
+  });
+});

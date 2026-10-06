@@ -1,4 +1,4 @@
-import { lazy, Suspense, useMemo, type ReactNode } from 'react';
+import { lazy, Suspense, useMemo, useRef, type ReactNode } from 'react';
 import { clsx } from 'clsx';
 import { useAppStore } from '../state/app-store';
 import { useUiStore } from '../state/ui-store';
@@ -11,6 +11,7 @@ import { TabStrip } from './TabStrip';
 import { ConfirmDialog } from '../ui/ConfirmDialog';
 import { Toaster } from '../ui/toast';
 import { SettingsDialog } from '../settings/SettingsDialog';
+import { SkillsDialog } from '../skills/SkillsDialog';
 import { ModesDialog } from '../settings/ModesDialog';
 import { SearchPalette } from '../search/SearchPalette';
 import { ProjectsGrid } from '../projects/ProjectsGrid';
@@ -24,6 +25,7 @@ import { useNotesStore } from '../notes/notes-store';
 import { ExportButton } from '../notes/ExportButton';
 import { NOTE_TAB_PREFIX, isNoteTabId } from '../state/tabs';
 import { flags } from '../flags';
+import { useEdgeReveal } from '../lib/edge-reveal';
 
 // BlockNote is large; chat should not pay for it at startup.
 const NotesView = lazy(() => import('../notes/NotesView').then(m => ({ default: m.NotesView })));
@@ -50,6 +52,9 @@ export function AppShell() {
     return rows.find(r => r.id === activeTabId)?.title ?? 'Untitled chat';
   }, [threadState, dynamic, deleted, activeTabId]);
 
+  const barRef = useRef<HTMLDivElement>(null);
+  const bar = useEdgeReveal(barRef, 'top');
+
   const trail: ReactNode = view === 'notes' ? (flags.notesV2 && noteTitle ? `Notes / ${noteTitle}` : 'Notes')
     : view === 'blank' ? 'New tab'
     : flags.chat && activeTabId ? <Breadcrumbs threadId={activeTabId} fallbackTitle={title} /> : title;
@@ -58,8 +63,17 @@ export function AppShell() {
     <div className="min-h-full">
       <Sidebar />
       <div className={clsx('flex min-h-screen flex-col transition-[margin] duration-200 ease-out', sidebarOpen && 'md:ml-sidebar')}>
-        {/* Tabs and breadcrumb bar stay pinned together while the page scrolls. */}
-        <div className="sticky top-0 z-30 bg-bg">
+        {/* Tabs and breadcrumb bar float over the page and slide in when the pointer goes to the top edge. */}
+        <div
+          ref={barRef} data-shown={bar.visible} {...bar.focusProps}
+          className={clsx(
+            bar.autohide
+              ? 'fixed inset-x-0 top-0 z-30 bg-bg shadow-md transition-[transform,left] duration-150 ease-out'
+              : 'sticky top-0 z-30 bg-bg',
+            bar.autohide && sidebarOpen && 'md:left-sidebar',
+            !bar.visible && '-translate-y-full',
+          )}
+        >
           <TabStrip />
           <Topbar trail={trail} actions={view === 'notes' && flags.notesV2 && activeTabId && isNoteTabId(activeTabId) ? <ExportButton noteId={activeTabId.slice(NOTE_TAB_PREFIX.length)} /> : undefined} />
         </div>
@@ -95,6 +109,7 @@ export function AppShell() {
       </div>
       {flags.settings && <SettingsDialog />}
       {flags.modes && <ModesDialog />}
+      {flags.skills && <SkillsDialog />}
       {flags.search && <SearchPalette />}
       {flags.projects && <ProjectsGrid />}
       {flags.projects && <ProjectPanel />}

@@ -12,4 +12,6 @@ export const flags = {
   chat: true,
   // P6b: the BlockNote Notes editor. Writes stay locked until a server-confirmed backup exists.
   notesV2: true,
+  // P7: skills seam. SKILL.md library as BM25-selected system-prompt augmentations.
+  skills: true,
 } as const;

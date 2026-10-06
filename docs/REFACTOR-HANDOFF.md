@@ -262,7 +262,7 @@ the one-session-per-phase cadence is not. P5 alone is four sessions.
 | P4 | Leaf features | **in progress**: 4.1 Settings, keys and Modes done; **complete pending smoke test**: 4.1 Settings/keys/Modes, 2 search (threads only), 3 changelog (Product story deferred), 4 projects, 5 attachments (+ project rules/files/folder), 6 feedback, 7 runtime logs |
 | P5 | Chat core (four sub-sessions) | **P5a–d built in one session, uncommitted (maintainer: commit all of P5 together), pending smoke test** (`flags.chat`) |
 | P6 | Notes editor | **P6a-d built, automated-green, uncommitted** (converter, BlockNote editor behind `flags.notesV2`, backup gate, page tree/header, custom blocks, branches, export; ADR-042/053/054). Needs the maintainer's smoke test in the real app. Then the cutover as its own commit a week later |
-| P7 | Extension seams | |
+| P7 | Extension seams | item 1 (skills loader) built, uncommitted; items 2-4 not started; needs smoke test |
 | P8 | Public launch | |
 
 Two things from P2 to carry forward:

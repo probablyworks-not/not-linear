@@ -47,6 +47,7 @@ export const PROVIDERS: readonly { id: string; label: string; option: string }[]
   { id: 'deepseek', label: 'DeepSeek', option: 'DeepSeek (branches + context ranking)' },
   { id: 'serper', label: 'Serper', option: 'Serper (Web Search)' },
   { id: 'firecrawl', label: 'Firecrawl', option: 'Firecrawl (Web Scrape)' },
+  { id: 'github', label: 'GitHub', option: 'GitHub (repo & code research)' },
   { id: 'openai', label: 'OpenAI', option: 'OpenAI (GPT)' },
   { id: 'gemini', label: 'Gemini', option: 'Google (Gemini)' },
   { id: 'custom', label: 'Other', option: 'Other' },

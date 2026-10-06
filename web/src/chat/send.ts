@@ -71,7 +71,7 @@ export async function ensureThreadRow(threadId: string): Promise<boolean> {
   return !!useAppStore.getState().threadState[threadId];
 }
 
-export async function sendMessage(threadId: string, rawText: string): Promise<void> {
+export async function sendMessage(threadId: string, rawText: string, skills?: string[]): Promise<void> {
   const key = threadAttachKey(threadId);
   const files = [...(useAttachments.getState().files[key] ?? [])];
   const typed = rawText.trim();
@@ -83,7 +83,7 @@ export async function sendMessage(threadId: string, rawText: string): Promise<vo
   useAttachments.getState().clear(key);
   const folder = await folderContextFor(threadId, typed);
   await runAndPersist(mainHost(threadId), {
-    turnId: makeTurnId(), userText, history: historyFor(threadId), titleSeed, files,
+    turnId: makeTurnId(), userText, history: historyFor(threadId), titleSeed, files, skills,
     extraContext: folder.contextBlock, sources: { names: folder.sources, mode: folder.mode },
   });
 }

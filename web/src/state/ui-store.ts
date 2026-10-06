@@ -21,6 +21,7 @@ export interface UiState {
   sidebarOpen: boolean;
   settingsOpen: boolean;
   modesOpen: boolean;
+  skillsOpen: boolean;
   searchOpen: boolean;
   highlightsOpen: boolean;
   threadMapOpen: boolean;
@@ -41,6 +42,7 @@ export interface UiActions {
   setSidebarOpen(open: boolean): void;
   setSettingsOpen(open: boolean): void;
   setModesOpen(open: boolean): void;
+  setSkillsOpen(open: boolean): void;
   setSearchOpen(open: boolean): void;
   setHighlightsOpen(open: boolean): void;
   setThreadMapOpen(open: boolean): void;
@@ -69,6 +71,7 @@ export const useUiStore = create<UiState & UiActions>((set, get) => ({
   sidebarOpen: false, // legacy ships the sidebar collapsed
   settingsOpen: false,
   modesOpen: false,
+  skillsOpen: false,
   searchOpen: false,
   highlightsOpen: false,
   threadMapOpen: false,
@@ -85,6 +88,7 @@ export const useUiStore = create<UiState & UiActions>((set, get) => ({
   setSidebarOpen(open) { set({ sidebarOpen: open }); },
   setSettingsOpen(open) { set({ settingsOpen: open }); },
   setModesOpen(open) { set({ modesOpen: open }); },
+  setSkillsOpen(open) { set({ skillsOpen: open }); },
   setSearchOpen(open) { set({ searchOpen: open }); },
   setHighlightsOpen(open) { set({ highlightsOpen: open }); },
   setThreadMapOpen(open) { set({ threadMapOpen: open }); },

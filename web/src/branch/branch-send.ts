@@ -85,7 +85,7 @@ function messagesForBranch(thread: PersistedThread, threadId: string, id: string
   return p => buildBranchContext(historyFor(threadId), chain, text, t => userContentFor(p, t, files));
 }
 
-export async function sendBranchMessage(threadId: string, branchId: string, rawText: string): Promise<void> {
+export async function sendBranchMessage(threadId: string, branchId: string, rawText: string, skills?: string[]): Promise<void> {
   const b = useBranchStore.getState().open[branchId];
   const thread = useAppStore.getState().threadState[threadId];
   // A branch's message carries its own files AND its page's (app.js getBranchContextFiles); only its own are used up.
@@ -98,7 +98,7 @@ export async function sendBranchMessage(threadId: string, branchId: string, rawT
   useAttachments.getState().clear(key);
   const folder = await folderContextFor(threadId, typed);
   await runAndPersist(branchHost(threadId, b), {
-    turnId: makeTurnId(), userText: text, history: own, files,
+    turnId: makeTurnId(), userText: text, history: own, files, skills,
     extraContext: folder.contextBlock, sources: { names: folder.sources, mode: folder.mode },
     messagesFor: messagesForBranch(thread, threadId, branchId, own, text, files),
   });

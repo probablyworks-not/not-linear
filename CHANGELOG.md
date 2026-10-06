@@ -5,6 +5,18 @@ All notable repository changes made by AI agents should be recorded here.
 ## 2026-10-05
 
 - Agent: Claude Sonnet 5.5
+- Summary: **Auto-hiding top bar and composer in `/web/`.** The tab strip + breadcrumb bar and the composer float over the page and slide in when the pointer nears the top/bottom edge (or on focus, or while a draft/attachments exist; the composer stays up in an empty chat). Tighter bar padding, smaller chat title (36→26px), more reading room. `localStorage nl_autohide_bars = '0'` restores the old always-showing sticky bar; the e2e config sets it, `web-bars.spec.ts` covers hiding.
+- Files changed: `web/src/lib/edge-reveal.ts` (new), `web/src/shell/{AppShell,Topbar,TabStrip}.tsx`, `web/src/chat/{Composer,ChatView,ThreadHeader}.tsx`, `web/playwright.config.ts`, `web/tests/e2e/web-bars.spec.ts`.
+- Verified: typecheck, lint, build, unit tests, full e2e (281 pass). Not yet eyeballed in a browser.
+
+- Agent: Claude Sonnet 5.5
+- Summary: **P7 skills seam in `/web/`.** SKILL.md library loader, BM25 automatic selection (name/keywords/description/when-to-use/body), Skills dialog (enable, pin, edit, add, import/export, "test a message" preview), skill chips on the live reply. Prompt-only, so it works with Claude and DeepSeek alike; no provider file touched (CI gate added). Library files gained `when_to_use`/`keywords` (and `auto: false` for modes) via `web/scripts/add-skill-metadata.mjs`.
+- Files changed: `web/src/skills/*`, `web/src/db/skills.ts`, `web/src/chat/{run-and-persist,chat-store,LiveAiTurn}`, `web/src/{flags.ts,state/ui-store.ts,lib/keyboard.ts}`, `web/src/shell/AppShell.tsx`, `web/src/settings/SettingsDialog.tsx`, `web/tests/skills/`, `notlinear-skills/**/SKILL.md`, `.github/workflows/ci.yml`, `docs/project-notes/DECISIONS.md` (ADR-043).
+- Also: `/` skill picker in both composers (`web/src/skills/SkillPicker.tsx`) to apply chosen skills to one message.
+- Behavior changes: prompts gain an "Active skills" block only when a skill matches (none for plain chit-chat). Verified: typecheck, lint, 871 unit tests, build. NOT yet verified: browser click-through and e2e.
+
+
+- Agent: Claude Sonnet 5.5
 - Summary: **Notes pages in `/web/` restyled to match the classic design.** Compact icon toolbar (B I U S code Σ | A colour/highlight | Turn | link | Branch), hover-only "Add cover" and icon controls, 62px icon, 40px title, dashed tag pill, mono meta line with dots, square to-do boxes, 15px body text, plain icon-and-title page links, Export in the top bar, and the Ask-AI box aligned with the text and styled as classic.
 - Files changed: `web/src/notes/{NoteHeader,ExportButton,note-menus,custom-blocks,NotePage}.tsx`, `web/src/shell/{Topbar,AppShell}.tsx`, `web/src/styles/app.css`, `web/tests/e2e/web-notes-blocks.spec.ts`.
 - Behavior changes: none to data. The toolbar's separate Color and Highlight buttons are one menu; the block-type dropdown is a "Turn" menu.

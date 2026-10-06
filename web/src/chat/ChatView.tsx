@@ -117,7 +117,7 @@ export function ChatView({ threadId }: { threadId: string }) {
         className="flex min-w-0 flex-1 flex-col transition-[margin] duration-[240ms] ease-out"
         style={{ marginRight: makeRoom ? 'calc(var(--drawer-w) + var(--drawer-gap) * 2)' : 0 }}
       >
-        <div ref={box} onClick={onClick} className="mx-auto w-full max-w-[780px] flex-1 px-8 pb-8 pt-8" data-chat-stream data-testid="chat-stream">
+        <div ref={box} onClick={onClick} className="mx-auto w-full max-w-[780px] flex-1 px-8 pb-48 pt-6" data-chat-stream data-testid="chat-stream">
           <ThreadHeader threadId={threadId} fallbackTitle={fallbackTitle} />
           {empty ? (
             <div className="mt-24 text-center" data-testid="chat-empty">
@@ -150,10 +150,12 @@ export function ChatView({ threadId }: { threadId: string }) {
         </div>
         <Composer
           disabled={unavailable}
+          alwaysShow={empty}
           disabledReason="Open this thread in the classic app once to continue it here."
           streaming={!!live && isStreaming(threadId)}
           attachKey={threadAttachKey(threadId)}
-          onSend={text => { void sendMessage(threadId, text); }}
+          skillsKey={threadId}
+          onSend={(text, skills) => { void sendMessage(threadId, text, skills); }}
           onStop={() => stopStreaming(threadId)}
         />
       </div>

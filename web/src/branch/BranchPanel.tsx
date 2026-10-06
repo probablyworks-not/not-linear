@@ -232,8 +232,9 @@ export function BranchPanel({ branch: b, flags, registerEl, onLayout, onMenu }: 
       </div>
       <BranchComposer
         branchId={b.id}
+        skillsKey={branchKey(b.id)}
         streaming={streaming}
-        onSend={text => { void sendBranchMessage(b.threadId, b.id, text); }}
+        onSend={(text, skills) => { void sendBranchMessage(b.threadId, b.id, text, skills); }}
         onStop={() => stopBranch(b.id)}
       />
       {EDGES.map(({ edge, title }) => (

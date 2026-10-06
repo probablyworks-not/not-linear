@@ -173,9 +173,111 @@ export async function runFirecrawlScrape(url: string, signal: AbortSignal, opts:
   return windowText(md, opts, 6000);
 }
 
+// ---------- GitHub (P7 connector) ----------
+
+const GH = 'https://api.github.com';
+const REPO_RE = /^[\w.-]+\/[\w.-]+$/;
+const clip = (s: string | null | undefined, n: number): string => {
+  const t = (s ?? '').replace(/\r/g, '').trim();
+  return t.length > n ? t.slice(0, n) + '…' : t;
+};
+
+/** One GET against the GitHub REST API with the stored token (header only, never in the URL). */
+async function ghGet(path: string, signal: AbortSignal, label: string, accept = 'application/vnd.github+json'): Promise<unknown> {
+  const key = toolEnv().apiKeys.github;
+  if (!key) throw new ToolFatalError('GitHub token not set. Add it in Settings, or retry without GitHub tools.');
+  let res: Awaited<ReturnType<typeof loggedFetch>>;
+  try {
+    res = await loggedFetch(GH + path, {
+      method: 'GET', signal,
+      headers: { Authorization: `Bearer ${key}`, Accept: accept, 'X-GitHub-Api-Version': '2022-11-28' },
+    }, { provider: 'github', label, timeoutMs: SEARCH_TIMEOUT_MS });
+  } catch (e) {
+    if (isAbort(e)) throw e;
+    throw new ToolFatalError('Could not reach GitHub. Check your connection and GitHub token in Settings.');
+  }
+  if (!res.ok) {
+    await readLoggedErrorPayload(res, { provider: 'github', label, timeoutMs: SEARCH_TIMEOUT_MS });
+    if (res.status === 401) throw new ToolFatalError('GitHub token was rejected. Check it in Settings.');
+    if (res.status === 403 || res.status === 429) throw new ToolFatalError('GitHub rate limit or permission error. Wait a moment, or check the token\'s access.');
+    if (res.status === 404) throw new Error('Not found on GitHub (check the repo, number or path; private repos need a token with access).');
+    if (res.status === 422) throw new Error('GitHub rejected that search query. Simplify it or fix the qualifiers.');
+    throw new ToolFatalError(`GitHub failed with HTTP ${res.status}.`);
+  }
+  return readResponseBody(res, { kind: 'json', signal, provider: 'github', label, timeoutMs: SEARCH_TIMEOUT_MS });
+}
+
+const needRepo = (repo: unknown): string => {
+  const r = String(repo ?? '').trim();
+  // ".." and "." match the character class but would let the path climb out of /repos/.
+  if (!REPO_RE.test(r) || r.split('/').some(seg => /^\.+$/.test(seg))) throw new Error('repo must look like "owner/name".');
+  return r;
+};
+
+interface GhRepo { full_name: string; description: string | null; stargazers_count: number; language: string | null; pushed_at: string; html_url: string }
+interface GhIssue { number: number; title: string; state: string; html_url: string; comments: number; repository_url?: string; pull_request?: unknown; reactions?: { total_count?: number }; user?: { login?: string }; body?: string | null }
+interface GhCode { name: string; path: string; html_url: string; repository: { full_name: string }; text_matches?: Array<{ fragment?: string }> }
+
+export async function runGithubSearchRepos(query: string, signal: AbortSignal): Promise<string> {
+  const d = await ghGet(`/search/repositories?q=${encodeURIComponent(query)}&sort=stars&order=desc&per_page=8`, signal, 'search repos') as { items?: GhRepo[]; total_count?: number };
+  const items = d.items ?? [];
+  if (!items.length) return `No GitHub repositories found for: ${query}`;
+  return items.map((r, i) => `${i + 1}. ${r.full_name} (★${r.stargazers_count}${r.language ? `, ${r.language}` : ''}, pushed ${r.pushed_at.slice(0, 10)})\n   ${clip(r.description, 200) || 'No description'}\n   ${r.html_url}`).join('\n');
+}
+
+export async function runGithubSearchIssues(query: string, signal: AbortSignal): Promise<string> {
+  const d = await ghGet(`/search/issues?q=${encodeURIComponent(query)}&sort=reactions&order=desc&per_page=8`, signal, 'search issues') as { items?: GhIssue[] };
+  const items = d.items ?? [];
+  if (!items.length) return `No GitHub issues or pull requests found for: ${query}`;
+  return items.map((x, i) => {
+    const repo = x.repository_url?.replace('https://api.github.com/repos/', '') ?? '';
+    return `${i + 1}. ${repo}#${x.number} [${x.pull_request ? 'PR' : 'issue'}, ${x.state}] ${clip(x.title, 160)} (${x.comments} comments, ${x.reactions?.total_count ?? 0} reactions)\n   ${x.html_url}`;
+  }).join('\n');
+}
+
+export async function runGithubSearchCode(query: string, signal: AbortSignal): Promise<string> {
+  const d = await ghGet(`/search/code?q=${encodeURIComponent(query)}&per_page=8`, signal, 'search code', 'application/vnd.github.text-match+json') as { items?: GhCode[] };
+  const items = d.items ?? [];
+  if (!items.length) return `No GitHub code found for: ${query}`;
+  return items.map((c, i) => {
+    const frag = clip(c.text_matches?.[0]?.fragment, 300);
+    return `${i + 1}. ${c.repository.full_name}: ${c.path}\n   ${c.html_url}${frag ? `\n   ${frag.replace(/\n/g, '\n   ')}` : ''}`;
+  }).join('\n');
+}
+
+export async function runGithubGetIssue(repoIn: unknown, numberIn: unknown, signal: AbortSignal, opts: PageWindowOptions = {}): Promise<string> {
+  const repo = needRepo(repoIn);
+  const n = Math.trunc(Number(numberIn));
+  if (!Number.isFinite(n) || n < 1) throw new Error('number must be a positive issue or pull request number.');
+  const text = await fetchRawTextCached(`github_get_issue:${repo}#${n}`, async () => {
+    const issue = await ghGet(`/repos/${repo}/issues/${n}`, signal, 'get issue') as GhIssue;
+    const comments = await ghGet(`/repos/${repo}/issues/${n}/comments?per_page=50`, signal, 'get issue comments') as GhIssue[];
+    const head = `${repo}#${n} [${issue.pull_request ? 'PR' : 'issue'}, ${issue.state}] ${issue.title}\nby ${issue.user?.login ?? 'unknown'}\n\n${clip(issue.body, 4000)}`;
+    const rest = comments.map(c => `---\n${c.user?.login ?? 'unknown'}:\n${clip(c.body, 2000)}`).join('\n');
+    return rest ? `${head}\n\n## Comments (${comments.length})\n${rest}` : head;
+  });
+  return windowText(text, opts, 6000);
+}
+
+export async function runGithubGetFile(repoIn: unknown, pathIn: unknown, refIn: unknown, signal: AbortSignal, opts: PageWindowOptions = {}): Promise<string> {
+  const repo = needRepo(repoIn);
+  const path = String(pathIn ?? '').replace(/^\/+/, '');
+  const ref = refIn ? String(refIn) : '';
+  const text = await fetchRawTextCached(`github_get_file:${repo}:${ref}:${path}`, async () => {
+    const encoded = path.split('/').map(encodeURIComponent).join('/');
+    const d = await ghGet(`/repos/${repo}/contents/${encoded}${ref ? `?ref=${encodeURIComponent(ref)}` : ''}`, signal, 'get file');
+    if (Array.isArray(d)) return `Directory ${repo}/${path}:\n` + (d as Array<{ name: string; type: string }>).map(f => `${f.type === 'dir' ? 'dir:' : 'file:'} ${f.name}`).join('\n');
+    const f = d as { content?: string; encoding?: string; type?: string; size?: number };
+    if (f.type !== 'file' || f.encoding !== 'base64' || typeof f.content !== 'string') return `${repo}/${path} is a ${f.type ?? 'non-text item'} (${f.size ?? '?'} bytes) and cannot be shown as text.`;
+    const bin = atob(f.content.replace(/\s/g, ''));
+    return new TextDecoder().decode(Uint8Array.from(bin, ch => ch.charCodeAt(0)));
+  });
+  return windowText(text, opts, 6000);
+}
+
 // ---------- dispatch ----------
 
-export interface ToolInput { query?: string; url?: string; offset?: number }
+export interface ToolInput { query?: string; url?: string; offset?: number; repo?: string; number?: number; path?: string; ref?: string }
 
 /** What a provider calls. Throws only for abort and ToolFatalError; every other failure is a result string. */
 export type ToolRunner = (name: ToolName | string, input: ToolInput, signal: AbortSignal) => Promise<string>;
@@ -189,6 +291,11 @@ export const executeTool: ToolRunner = async (name, input, signal) => {
     else if (name === 'web_search') result = await runWebSearch(String(input.query), signal);
     else if (name === 'serper_search') result = await runSerperSearch(String(input.query), signal);
     else if (name === 'firecrawl_scrape') result = await runFirecrawlScrape(String(input.url), signal, { query: input.query, offset: input.offset });
+    else if (name === 'github_search_repos') result = await runGithubSearchRepos(String(input.query), signal);
+    else if (name === 'github_search_issues') result = await runGithubSearchIssues(String(input.query), signal);
+    else if (name === 'github_search_code') result = await runGithubSearchCode(String(input.query), signal);
+    else if (name === 'github_get_issue') result = await runGithubGetIssue(input.repo, input.number, signal, { query: input.query, offset: input.offset });
+    else if (name === 'github_get_file') result = await runGithubGetFile(input.repo, input.path, input.ref, signal, { query: input.query, offset: input.offset });
     else result = 'Unknown tool: ' + name;
     endBackendTrace(trace, 'end', { tool: name, outputChars: String(result || '').length, outputPreview: safeJsonForLog(result, 500) });
     return result;
@@ -208,6 +315,11 @@ export function toolResultTitle(name: string, input: ToolInput = {}): string {
   if (name === 'web_search') return `Web search: ${input.query || 'search'}`;
   if (name === 'firecrawl_scrape') return `Scrape: ${input.url || 'URL'}`;
   if (name === 'fetch_url') return `Page read: ${input.url || 'URL'}`;
+  if (name === 'github_search_repos') return `GitHub repos: ${input.query || 'search'}`;
+  if (name === 'github_search_issues') return `GitHub issues: ${input.query || 'search'}`;
+  if (name === 'github_search_code') return `GitHub code: ${input.query || 'search'}`;
+  if (name === 'github_get_issue') return `GitHub issue: ${input.repo || ''}#${input.number ?? ''}`;
+  if (name === 'github_get_file') return `GitHub file: ${input.repo || ''}/${input.path || ''}`;
   return name || 'Tool result';
 }
 
@@ -234,5 +346,10 @@ export function toolStatusLabel(name: string, input: ToolInput): string {
   if (name === 'serper_search') return `Searching Google for "${input.query}"…`;
   if (name === 'web_search') return `Searching for "${input.query}"…`;
   if (name === 'firecrawl_scrape') return `Scraping ${input.url}…`;
+  if (name === 'github_search_repos') return `Searching GitHub repos for "${input.query}"…`;
+  if (name === 'github_search_issues') return `Searching GitHub issues for "${input.query}"…`;
+  if (name === 'github_search_code') return `Searching GitHub code for "${input.query}"…`;
+  if (name === 'github_get_issue') return `Reading ${input.repo}#${input.number}…`;
+  if (name === 'github_get_file') return `Reading ${input.repo}/${input.path}…`;
   return `Reading ${input.url}…`;
 }

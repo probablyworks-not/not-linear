@@ -37,7 +37,8 @@ async function saveTitle(threadId: string, el: HTMLElement): Promise<void> {
 
 function EditableTitle({ threadId, html }: { threadId: string; html: string }) {
   const ref = useRef<HTMLHeadingElement>(null);
-  // Take the saved HTML in, but never while it is being typed into: that would move the caret.
+  // Take the saved HTML in (this also fills it on mount), but never while it is being typed into:
+  // that would move the caret. Not dangerouslySetInnerHTML: React would re-apply it on every save.
   useLayoutEffect(() => {
     const el = ref.current;
     if (el && document.activeElement !== el && el.innerHTML !== html) el.innerHTML = html;
@@ -47,8 +48,7 @@ function EditableTitle({ threadId, html }: { threadId: string; html: string }) {
   return (
     <h1
       ref={ref} contentEditable suppressContentEditableWarning spellCheck={false} data-testid="thread-title" aria-label="Chat title"
-      className="m-0 min-w-0 flex-1 text-[36px] font-semibold leading-[1.1] tracking-[-0.025em] outline-none [&_.accent]:font-medium [&_.accent]:text-accent"
-      dangerouslySetInnerHTML={{ __html: html }}
+      className="m-0 min-w-0 flex-1 text-[26px] font-semibold leading-[1.1] tracking-[-0.025em] outline-none [&_.accent]:font-medium [&_.accent]:text-accent"
       onInput={e => { const el = e.currentTarget; titleWriter.schedule(threadId, () => saveTitle(threadId, el)); }}
       onBlur={() => { void titleWriter.flush(threadId); }}
       // A title is one line: Enter commits it rather than starting a second paragraph.
@@ -66,7 +66,7 @@ export function ThreadHeader({ threadId, fallbackTitle }: { threadId: string; fa
   const setCanvasOpen = useUiStore(s => s.setCanvasOpen);
   const ctxOpen = useUiStore(s => s.ctxOpen);
   const setCtxOpen = useUiStore(s => s.setCtxOpen);
-  if (!thread) return <div className="h-20" />;
+  if (!thread) return <div className="h-10" />;
 
   const isDoc = thread.kind === 'doc';
   const title = cleanThreadTitle(thread.title, fallbackTitle);
@@ -78,14 +78,14 @@ export function ThreadHeader({ threadId, fallbackTitle }: { threadId: string; fa
   const item = 'inline-flex items-center gap-1.5';
 
   return (
-    <header className="mb-2">
+    <header className="mb-1">
       {eyebrow && <p className="m-0 mb-3 font-mono text-xs uppercase tracking-[0.14em] text-text-3" data-testid="thread-eyebrow">{eyebrow}</p>}
-      <div className="my-2 mb-3.5 flex items-center gap-3">
+      <div className="mb-1.5 flex items-center gap-2.5">
         {/* The same field as the sidebar glyph: pick it here and it changes there. No default icon: an empty title glyph is a smile. */}
         <GlyphButton
-          value={thread.emoji} cycle={[]} index={0} size={38} fallback={<Smile size={34} aria-hidden />}
+          value={thread.emoji} cycle={[]} index={0} size={26} fallback={<Smile size={24} aria-hidden />}
           onPick={token => { void setThreadGlyph(threadId, token); }}
-          className="grid h-11 w-11 flex-none cursor-pointer select-none place-items-center rounded-[9px] text-text-3 hover:bg-bg-2 hover:text-text"
+          className="grid h-8 w-8 flex-none cursor-pointer select-none place-items-center rounded-[9px] text-text-3 hover:bg-bg-2 hover:text-text"
         />
         <EditableTitle threadId={threadId} html={h1} />
       </div>

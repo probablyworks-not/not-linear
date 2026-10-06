@@ -597,3 +597,5 @@ Each entry: **ID · Status · Goal · Context · Files likely involved · Accept
 - **Files likely involved:** `frontend/views/notes.js`, `frontend/styles/notes.css`, `docs/project-notes/{CHANGES,TASKS}.md`, `CHANGELOG.md`.
 - **Acceptance criteria:** Notes breadcrumb (and sidebar Notes header) opens an index; index lists top-level notes as cards with icon + block/subpage counts, subpages nested beneath; "New page" creates and opens a note; per-card add-subpage/delete work; clicking a card opens that page; empty state invites creating the first page; chat/branches and db schema untouched.
 - **Verification:** `node --check` clean; assets HTTP 200 on :8765. Human GUI smoke for breadcrumb→overview→open/create/delete pending (no headless browser available).
+
+- **P7.1 Skills loader** — status: built, automated-green, awaiting maintainer smoke test and commit. Remaining P7: MCP registry, GitHub/Reddit connectors, `web/src/agent/` (not started).

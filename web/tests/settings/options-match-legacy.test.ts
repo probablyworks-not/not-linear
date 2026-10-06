@@ -57,13 +57,14 @@ describe('Settings options match the legacy app', () => {
 
   it('providers (value and visible option text)', () => {
     const legacy = [...doc.querySelectorAll('#api-provider option')].map(o => ({ id: o.getAttribute('value')!, option: o.textContent!.trim() }));
-    expect(PROVIDERS.map(p => ({ id: p.id, option: p.option }))).toEqual(legacy);
+    // `github` is a P7 provider that legacy has never heard of.
+    expect(PROVIDERS.filter(p => p.id !== 'github').map(p => ({ id: p.id, option: p.option }))).toEqual(legacy);
   });
 
   it('provider display labels agree with PROVIDER_LABELS in app.js', () => {
     const line = appJs.match(/const PROVIDER_LABELS = \{([^}]*)\}/)![1]!;
     const legacy = Object.fromEntries([...line.matchAll(/(\w+):'([^']+)'/g)].map(m => [m[1]!, m[2]!]));
-    expect(Object.fromEntries(PROVIDERS.map(p => [p.id, p.label]))).toEqual(legacy);
+    expect(Object.fromEntries(PROVIDERS.filter(p => p.id !== 'github').map(p => [p.id, p.label]))).toEqual(legacy);
   });
 
   it('context ranking options', () => {

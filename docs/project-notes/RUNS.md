@@ -646,3 +646,7 @@ vitest 855 passed (59 files); typecheck, lint, build clean. Playwright notes spe
 
 ## 2026-10-05 — Notes page restyle to the classic design
 vitest 855, lint clean, build clean. Playwright notes specs 52 passed after the colour-menu fix. Screenshots compared with the classic page (header, toolbar, to-dos). Full suite not re-run.
+
+## 2026-10-05 — P7.1 skills
+
+- `pnpm typecheck`, `pnpm lint`, `pnpm test` (871 pass), `pnpm build`: pass. Playwright `web-skills` (3) + web-modes/settings/chat/branches (62 total): pass. Manual browser click-through with a live model reply: NOT done.

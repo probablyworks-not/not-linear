@@ -26,6 +26,9 @@ export default defineConfig({
     // IndexedDB contents, which is the same trap the P-1 backup tools warn
     // about.
     baseURL: `http://${HOST}:${PORT}`,
+    // The auto-hiding bars (lib/edge-reveal.ts) would sit off-screen for tests that click tabs
+    // or the composer, so the suite keeps them showing. web-bars.spec.ts turns hiding back on.
+    storageState: { cookies: [], origins: [{ origin: `http://${HOST}:${PORT}`, localStorage: [{ name: 'nl_autohide_bars', value: '0' }] }] },
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
   },

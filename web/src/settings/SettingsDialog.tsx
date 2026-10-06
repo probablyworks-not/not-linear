@@ -63,6 +63,7 @@ function SettingsForm() {
   const setTheme = useAppStore(s => s.setTheme);
   const flushPrefs = useAppStore(s => s.flushPrefs);
   const setModesOpen = useUiStore(s => s.setModesOpen);
+  const setSkillsOpen = useUiStore(s => s.setSkillsOpen);
 
   const [folder, setFolder] = useState(prefs.folderName || 'Workspace');
   const [name, setName] = useState(prefs.name || '');
@@ -113,6 +114,17 @@ function SettingsForm() {
             className="w-full rounded-md border border-rule-2 bg-surface px-3 py-2 text-left text-sm text-text-2 hover:border-text-2 hover:bg-bg-2 hover:text-text"
           >
             New / manage modes
+          </button>
+        </Section>
+      )}
+
+      {flags.skills && (
+        <Section label="Skills" help="Reusable methods (pre-mortem, steelman, research playbooks…) added to the system prompt. Picked automatically per message from each skill's description and keywords; works with any model.">
+          <button
+            type="button" onClick={() => setSkillsOpen(true)}
+            className="w-full rounded-md border border-rule-2 bg-surface px-3 py-2 text-left text-sm text-text-2 hover:border-text-2 hover:bg-bg-2 hover:text-text"
+          >
+            Browse / edit skills
           </button>
         </Section>
       )}

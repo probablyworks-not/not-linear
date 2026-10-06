@@ -23,7 +23,7 @@ import type { ToolName } from './types';
 
 /** What decides whether a tool is offered at all. */
 export interface ToolContext {
-  apiKeys: Partial<Record<'serper' | 'firecrawl' | 'tavily' | 'exa', string>>;
+  apiKeys: Partial<Record<'serper' | 'firecrawl' | 'tavily' | 'exa' | 'github', string>>;
   searxngUrl?: string;
 }
 
@@ -118,7 +118,50 @@ export const TOOL_SPECS: readonly ToolSpec[] = [
     },
     available: (ctx) => Boolean(ctx.apiKeys.firecrawl),
   },
+  ...githubSpecs(),
 ];
+
+// GitHub connector (P7). All five need a token; they call api.github.com directly from the browser.
+function githubSpecs(): ToolSpec[] {
+  const on = (ctx: ToolContext): boolean => Boolean(ctx.apiKeys.github);
+  const repo = { type: 'string', description: 'The repository as "owner/name", e.g. "facebook/react"' };
+  return [
+    {
+      name: 'github_search_repos',
+      description: 'Search GitHub repositories, most-starred first. Use to find what exists in a space, the main libraries for a problem, or prior art. Supports GitHub qualifiers such as "language:python", "topic:llm", "stars:>500", "pushed:>2025-01-01". Stars show popularity, not correctness.',
+      jsonSchema: { type: 'object', properties: { query: { type: 'string', description: 'Search terms, with optional GitHub qualifiers' } }, required: ['query'] },
+      available: on,
+    },
+    {
+      name: 'github_search_issues',
+      description: 'Search GitHub issues and pull requests, most-reacted first. Use to find the real problems people hit and how they were fixed; read the resolution, not just the title. Supports qualifiers such as "repo:owner/name", "is:issue", "is:pr", "is:closed", "label:bug".',
+      jsonSchema: { type: 'object', properties: { query: { type: 'string', description: 'Search terms, with optional GitHub qualifiers' } }, required: ['query'] },
+      available: on,
+    },
+    {
+      name: 'github_search_code',
+      description: 'Search code on GitHub for concrete usage examples. Add qualifiers to narrow it: "repo:owner/name", "language:ts", "path:src/". Returns file paths with matching fragments; follow up with github_get_file to read one.',
+      jsonSchema: { type: 'object', properties: { query: { type: 'string', description: 'Code to search for, with optional GitHub qualifiers' } }, required: ['query'] },
+      available: on,
+    },
+    {
+      name: 'github_get_issue',
+      description: 'Read one GitHub issue or pull request with its comments (state, body, discussion). Long threads are returned one window at a time (~6000 chars); use offset to keep reading or query to jump to a term.',
+      jsonSchema: { type: 'object', properties: { repo, number: { type: 'number', description: 'The issue or pull request number' }, ...PAGE_WINDOW_PARAMS('thread') }, required: ['repo', 'number'] },
+      available: on,
+    },
+    {
+      name: 'github_get_file',
+      description: 'Read a file (or list a directory) from a GitHub repository. Long files are returned one window at a time (~6000 chars); use offset to keep reading or query to jump to a term.',
+      jsonSchema: {
+        type: 'object',
+        properties: { repo, path: { type: 'string', description: 'Path inside the repository, e.g. "src/index.ts" ("" for the root)' }, ref: { type: 'string', description: 'Branch, tag or commit (default: the default branch)' }, ...PAGE_WINDOW_PARAMS('file') },
+        required: ['repo', 'path'],
+      },
+      available: on,
+    },
+  ];
+}
 
 /** The tools actually offered for a given set of keys and settings. */
 export function availableTools(ctx: ToolContext): ToolSpec[] {

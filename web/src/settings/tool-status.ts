@@ -11,6 +11,11 @@ const LABEL: Record<ToolName, { label: string; needs: string | null }> = {
   web_search: { label: 'Web search (SearXNG)', needs: 'a SearXNG URL' },
   serper_search: { label: 'Web search (Serper)', needs: 'a Serper key' },
   firecrawl_scrape: { label: 'Web scrape (Firecrawl)', needs: 'a Firecrawl key' },
+  github_search_repos: { label: 'GitHub repo search', needs: 'a GitHub token' },
+  github_search_issues: { label: 'GitHub issue search', needs: 'a GitHub token' },
+  github_search_code: { label: 'GitHub code search', needs: 'a GitHub token' },
+  github_get_issue: { label: 'GitHub issue reader', needs: 'a GitHub token' },
+  github_get_file: { label: 'GitHub file reader', needs: 'a GitHub token' },
 };
 
 export interface ToolStatus { name: ToolName; label: string; on: boolean; needs: string | null }

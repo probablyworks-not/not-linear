@@ -96,6 +96,7 @@ Appears on any text selection in the doc or a branch body:
 - `+` opens a blank tab with quick actions: New chat, Existing chat (search palette), Projects, Notes.
 - Closing the active tab falls back to the next-most-recent, or `doc-main` if none remain.
 - Open tabs and the active tab id persist to `localStorage` (`nl_tabs_v1`).
+- (`/web/` only) The tab strip + breadcrumb bar and the chat composer auto-hide: they slide in when the pointer is within ~36px of the top/bottom edge or has focus; the composer also stays up with a draft/attachments or in an empty chat. `localStorage nl_autohide_bars='0'` keeps them always showing.
 
 ### Projects
 
@@ -503,3 +504,7 @@ Worth tracking separately since these look clickable but currently do nothing (o
 *Last compiled 2026-10-05 (6b and section 7 extended for P6b Notes and the backup endpoint; earlier: 2026-10-04, section 6b added for the P3 React shell and extended for P4.1a Settings; section 7 updated for the P2 FastAPI move; the rest 2026-08-02) by direct codebase inspection (`frontend/app.js`, `frontend/views/notes.js`, `frontend/core/*.js`, `frontend/providers/*.js`, `backend/server.py`, `index.html`, `redesign_product.md`, `BUGS.md`, `AGENTS.md`). If you land a feature and don't see it here, add it in the same session — see the update rule at the top of this file.*
 
 - **Chat, P5b–d** (`flags.chat`): select text for Highlight, Branch (⌘B) or Ask; branch panels stack in a right drawer (hidden below 1100px, as legacy), drag-resize from the left/bottom edges, collapse, reader mode, promote to main (with a trail back), delete, per-branch model and mode; Recent branches in the sidebar; Highlights panel, thread map, branch canvas and breadcrumbs. Claude and DeepSeek run web search and page-fetch tools with status lines. Per-message Copy/Download/Retry/Continue, a usage line, attachments and a Context panel, project linked-folder context with a Sources bar and per-chat ranking override. Threads, projects and the title use Mind Garden icons (click to change; stored in `emoji` as `icon:<id>[:hex]`, shared with legacy). Data: `branchSnapshots`, `branchRecents`, `highlights[]` and additive `highlightsV2`.
+
+## 11. Skills (P7, `/web/` only)
+
+`flags.skills`. Settings → Skills → dialog: enable/disable, pin, edit description/when-to-use/keywords/instructions/priority/always/auto, add, import/export SKILL.md, reset a built-in, "Test a message" preview. Built-ins bundled from `notlinear-skills/`; edits in IndexedDB `notlinear-skills`. Each send BM25-selects up to 3 skills (token budget ~1500) and appends them to the system prompt via `extraContext`; works for any provider. Type `/` (or `/skills`, `/pre…`) in the main or branch composer for a picker: ↑↓ Enter/Tab picks a skill as a chip for that message only (bypasses score/limit/budget, works even if disabled); Backspace or × removes it. Chips show on the live reply only. `tools:` is shown, not wired.

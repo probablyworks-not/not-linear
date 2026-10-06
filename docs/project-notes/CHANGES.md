@@ -957,3 +957,9 @@ Each entry: **date · summary · files touched · why changed · risks · tests 
 - **Risks:** Saves still race a stale classic tab. Auto-prune is not ported, so orphan branch records can remain. The index is a list, not the bento grid. Branch panels sit in a fixed rail beside the anchor (single panel at a time, as legacy). BlockNote's own select-all, drag-select and markdown shortcuts replace the custom ones. Not smoke-tested in the real `Notlinear.app`.
 - **Tests run:** vitest, typecheck, lint, build, Playwright (see RUNS.md).
 - **Next steps:** Maintainer smoke test with a real backup and a real key; an unmasked fixture through `pnpm fixtures`; then the cutover (separate commit, a week later): delete `frontend/` and `server_legacy.py`, move `tokens.css`, flip `/`.
+
+## 2026-10-05 — P7 skills seam
+
+- Added `web/src/skills/` (parser, BM25F selector, overrides-only merge, Dexie store `notlinear-skills`, Skills dialog), `web/src/db/skills.ts`, skill chips on the live reply, `flags.skills`, CI gate `web/scripts/check-p7-providers-untouched.mjs`, ADR-043.
+- Library: `when_to_use`/`keywords` added to all 57 SKILL.md; modes layer + mode-router set `auto: false`.
+- Providers untouched. Chat schema and prefs keys untouched.

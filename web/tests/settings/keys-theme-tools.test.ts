@@ -93,7 +93,7 @@ describe('tool availability', () => {
   });
 
   it('turns on as soon as the key or URL exists', () => {
-    const t = byName({ apiKeys: { serper: FAKE_B, firecrawl: FAKE_A }, searxngUrl: 'http://localhost:8888' });
+    const t = byName({ apiKeys: { serper: FAKE_B, firecrawl: FAKE_A, github: FAKE_A }, searxngUrl: 'http://localhost:8888' });
     expect(Object.values(t).every(s => s.on)).toBe(true);
   });
 
