@@ -3,7 +3,7 @@ import { parseSkill } from './parse-skill';
 import type { Skill } from './types';
 
 // The shipped library, bundled at build time from notlinear-skills/. Adding a skill there is all
-// it takes to ship it; the app needs no manifest. (vite.config server.fs.allow already includes "..")
+// it takes to ship it; the app needs no manifest. (vite.config server.fs.allow includes ".." so the dev server can read it)
 const files = import.meta.glob('../../../notlinear-skills/skills/*/*/SKILL.md', { query: '?raw', import: 'default', eager: true }) as Record<string, string>;
 
 export function loadBuiltinSkills(sources: Record<string, string> = files): Skill[] {
