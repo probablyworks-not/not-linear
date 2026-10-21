@@ -12,8 +12,8 @@ import { TOOL_SPECS } from '../../src/providers/tool-specs';
 // oracle left to compare against, and keeping it would assert against a corpse.
 const APP_JS = readFileSync(resolve(__dirname, '../../../frontend/app.js'), 'utf8');
 
-// P7 connectors exist only in /web/, so they have no legacy wording to match.
-const LEGACY_SPECS = TOOL_SPECS.filter((s) => !s.name.startsWith('github_'));
+// P7 connectors and chat-to-notes exist only in /web/, so they have no legacy wording to match.
+const LEGACY_SPECS = TOOL_SPECS.filter((s) => !s.name.startsWith('github_') && s.name !== 'create_note');
 
 describe('tool descriptions are carried over verbatim from app.js', () => {
   it.each(LEGACY_SPECS.map((s) => [s.name, s.description] as const))(

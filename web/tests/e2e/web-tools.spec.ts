@@ -86,7 +86,8 @@ test.describe('search-backed replies', () => {
     expect(t.stream).not.toContain('Thinking…');
 
     // the model was offered the search tools and shown the result it asked for
-    expect(mock.requests[0]!.tools!.map(x => x.name)).toEqual(['wikipedia_search', 'fetch_url']);
+    // create_note is offered on every main thread (chat -> Notes); web-chat-notes.spec.ts covers it.
+    expect(mock.requests[0]!.tools!.map(x => x.name)).toEqual(['wikipedia_search', 'fetch_url', 'create_note']);
     const second = mock.requests[1]!.messages;
     expect(second.map(m => m.role)).toEqual(['user', 'assistant', 'user']);
     expect(JSON.stringify(second[2]!.content)).toContain('Tides are the rise and fall of sea levels caused by the Moon.');
@@ -168,7 +169,7 @@ test.describe('search-backed replies', () => {
     await newChat(page);
     await ask(page, 'hello');
     await expect(page.locator('[data-chat-stream] .msg.ai .ai-content')).toContainText('ok');
-    expect(mock.requests[0]!.tools!.map(t => t.name)).toEqual(['wikipedia_search', 'serper_search', 'fetch_url', 'firecrawl_scrape']);
+    expect(mock.requests[0]!.tools!.map(t => t.name)).toEqual(['wikipedia_search', 'serper_search', 'fetch_url', 'firecrawl_scrape', 'create_note']);
     expect(mock.requests[0]!.system).toContain('use serper_search for current information');
     expect(mock.requests[0]!.system).toContain('use firecrawl_scrape only when the user explicitly asks');
   });

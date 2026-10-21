@@ -78,7 +78,7 @@ describe('planModel', () => {
     expect(planModel('sonnet', true)).toMatchObject({ modelId: 'claude-sonnet-5', thinking: true });
     expect(planModel(undefined, false)).toMatchObject({ modelId: 'claude-sonnet-5' });
     expect(planModel('deepseek-r1', false)).toMatchObject({ provider: 'deepseek', thinking: true });
-    expect(planModel('gpt-4o', false)).toMatchObject({ supported: false });
-    expect(planModel('gemini-pro', false)).toMatchObject({ supported: false });
+    expect(planModel('gpt-4o', false)).toMatchObject({ provider: 'openai', modelId: 'gpt-5.6-terra' });
+    expect(planModel('gemini-pro', false)).toMatchObject({ provider: 'gemini', modelId: 'gemini-2.5-pro-preview-05-06' });
   });
 });

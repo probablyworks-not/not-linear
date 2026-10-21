@@ -14,6 +14,8 @@ async function reset(): Promise<void> {
   await d.kv.clear();
   d.close();
   localStorage.clear();
+  // These tests are about the send pipeline; clarify.test.ts covers the questions step.
+  localStorage.setItem('nl_clarify_first', '0');
   useChatStore.setState({ live: {}, failed: {} });
   await useAppStore.getState().hydrate();
 }
@@ -179,11 +181,11 @@ describe('sendMessage', () => {
   });
 
   it('an unsupported model is explained, not silently swapped', async () => {
-    await useAppStore.getState().setPref('model', 'gpt-4o');
+    await useAppStore.getState().setPref('model', 'gpt-unknown');
     const id = (await useAppStore.getState().createThread())!;
     await sendMessage(id, 'q');
     expect(await saved(id)).toMatchObject({ mainMessages: [] });
-    expect((await saved(id)).stream).toContain('classic app');
+    expect((await saved(id)).stream).toContain('not available');
     expect(useChatStore.getState().failed[id]).toMatchObject({ config: true });
     expect(seen).toHaveLength(0);
   });

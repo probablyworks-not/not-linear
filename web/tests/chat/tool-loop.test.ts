@@ -222,13 +222,18 @@ describe('DeepSeek tool loop', () => {
     expect(events.at(-1)).toMatchObject({ t: 'done', text: 'final answer' });
   });
 
-  it('thinking mode offers no tools at all, and does NOT get the synthesis instruction on a plain question', async () => {
-    responses = [sse([dsContent('thought through'), ...dsFinish('stop')])];
-    await collect(deepseekProvider.stream(base({ toolRunner: echoRunner(), thinking: true })));
-    expect(bodies[0]).not.toHaveProperty('tools');
-    const msgs = bodies[0]!.messages as Array<{ role: string; content: string }>;
-    expect(msgs.at(-1)).toEqual({ role: 'user', content: 'tell me about tides' });
+  it('thinking mode offers tools, and sends each tool round\'s reasoning back with it', async () => {
+    const reason = (t: string): string => j({ choices: [{ delta: { reasoning_content: t }, finish_reason: null }] });
+    responses = [
+      sse([reason('need a lookup'), ...dsToolCall(0, 'a', 'wikipedia_search', { query: 'tides' }), ...dsFinish('tool_calls')]),
+      sse([dsContent('final answer'), ...dsFinish('stop')]),
+    ];
+    const events = await collect(deepseekProvider.stream(base({ toolRunner: echoRunner(), thinking: true })));
+    expect(bodies[0]).toHaveProperty('tools');
     expect(bodies[0]!.thinking).toEqual({ type: 'enabled' });
+    const second = bodies[1]!.messages as Array<{ role: string; reasoning_content?: string }>;
+    expect(second.find(m => m.role === 'assistant')?.reasoning_content).toBe('need a lookup');
+    expect(events.at(-1)).toMatchObject({ t: 'done', text: 'final answer' });
   });
 
   it('a fatal tool failure ends the turn with its message', async () => {
@@ -287,6 +292,27 @@ describe('DeepSeek tool loop', () => {
       expect(events.at(-1)).toMatchObject({ t: 'done', usage: { stopReason: 'pseudo_tool_call_filtered' } });
     });
 
+    it('thinking mode: a tool attempt written as markup triggers one no-tools retry that yields a real answer', async () => {
+      responses = [
+        sse([dsContent('Let me start with parallel reconnaissance.\n\n<｜｜DSML｜｜calls></｜｜DSML｜｜calls>'), ...dsFinish('stop')]),
+        sse([dsContent('I cannot open those links, but from what I know: agents are loops of model + tools.'), ...dsFinish('stop')]),
+      ];
+      const events = await collect(deepseekProvider.stream(base({ toolRunner: echoRunner(), thinking: true })));
+      const shown = events.filter(e => e.t === 'delta').map(e => (e as { text: string }).text).join('');
+      expect(shown).not.toContain('DSML');
+      expect(shown).toContain('agents are loops');
+      expect(bodies).toHaveLength(2);
+      expect(bodies[1]).not.toHaveProperty('tools');
+      expect(events.at(-1)).toMatchObject({ t: 'done' });
+    });
+
+    it('thinking mode: markup again after the retry is an error, not a silent dead end', async () => {
+      const bad = (): Response => sse([dsContent('Looking.<｜｜DSML｜｜calls></｜｜DSML｜｜calls>'), ...dsFinish('stop')]);
+      responses = [bad, bad];
+      const events = await collect(deepseekProvider.stream(base({ toolRunner: echoRunner(), thinking: true })));
+      expect(events.at(-1)).toMatchObject({ t: 'error', kind: 'other' });
+    });
+
     it('markup in the middle of a real answer is cut out and the answer is kept', async () => {
       const answer = 'Tides are caused by the moon. '.repeat(30);
       responses = [sse([dsContent(answer + '<tool_calls><invoke name="x">y</invoke></tool_calls>' + ' And that is the end.'), ...dsFinish('stop')])];
@@ -332,6 +358,9 @@ describe('the markup filter', () => {
     expect(consumeDeepSeekVisibleContent('x <|DSML|tool_calls>y</|DSML|tool_calls> z', true).visible).toBe('x  z');
     expect(consumeDeepSeekVisibleContent('x <invoke name="a">y</invoke> z', true).visible).toBe('x  z');
     expect(consumeDeepSeekVisibleContent('x < tool_calls > y < / tool_calls > z', true).visible).toBe('x  z');
+    // No tool_ prefix, doubled pipes (seen in thinking mode)
+    expect(consumeDeepSeekVisibleContent('x <｜｜DSML｜｜calls></｜｜DSML｜｜calls> z', true)).toEqual({ visible: 'x  z', rest: '', suppressed: true });
+    expect(consumeDeepSeekVisibleContent('x <||DSML||function_calls>y</||DSML||function_calls> z', true).visible).toBe('x  z');
   });
 
   it('ordinary angle brackets are left alone', () => {

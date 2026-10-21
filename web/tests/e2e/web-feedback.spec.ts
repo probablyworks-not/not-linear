@@ -64,18 +64,18 @@ async function showSidebar(p: Page): Promise<void> {
 const panel = (p: Page) => p.getByRole('dialog', { name: 'Feedback' });
 const text = (p: Page) => panel(p).getByLabel('Feedback text');
 async function openPanel(p: Page): Promise<void> {
-  await p.keyboard.press('Control+Shift+b');
+  await p.keyboard.press('Control+Shift+f');
   await expect(panel(p)).toBeVisible();
 }
 
 test.describe('open and close', () => {
-  test('Ctrl+Shift+B toggles it, focuses the box, and shows where it was filed from', async ({ page }) => {
+  test('Ctrl+Shift+F toggles it, focuses the box, and shows where it was filed from', async ({ page }) => {
     await mockFeedback(page);
     await openWeb(page);
     await openPanel(page);
     await expect(text(page)).toBeFocused();
     await expect(page.getByTestId('fb-ctx')).toHaveText('chat · doc-main');
-    await page.keyboard.press('Control+Shift+b');
+    await page.keyboard.press('Control+Shift+f');
     await expect(panel(page)).toHaveCount(0);
   });
 
@@ -451,7 +451,7 @@ test.describe('Settings: bugs & ideas log', () => {
     await openWeb(page);
     await openLog(page);
     await expect(page.getByTestId('fb-log-count')).toHaveText('Empty');
-    await expect(page.getByText('No feedback yet — press ⌘⇧B anywhere to log a bug or idea.')).toBeVisible();
+    await expect(page.getByText('No feedback yet — press ⌘⇧F anywhere to log a bug or idea.')).toBeVisible();
     m.reply.list = () => ({ ok: false, error: 'nope' });
     await page.getByRole('button', { name: 'Reload feedback' }).click();
     await expect(page.getByTestId('fb-log-count')).toHaveText('Unavailable');
@@ -521,7 +521,7 @@ test.describe('parity of what gets saved', () => {
     await expect.poll(() => calls(m, 'save').length).toBe(1);
 
     await openApp(page);
-    await page.keyboard.press('Control+Shift+b');
+    await page.keyboard.press('Control+Shift+b'); // the legacy app keeps ⌘⇧B for Feedback
     await page.locator('.fb-type-btn[data-type="idea"]').click();
     await page.locator('.fb-text').fill('  same words  ');
     await page.locator('#fb-save').click();

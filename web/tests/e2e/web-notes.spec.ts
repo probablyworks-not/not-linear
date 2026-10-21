@@ -193,3 +193,26 @@ test('the page-bottom placeholder is real text, not an escape sequence', async (
   await page.getByRole('button', { name: 'Back up notes' }).click();
   await expect(page.getByLabel('Ask AI about this note')).toHaveAttribute('placeholder', 'Ask AI about this note…');
 });
+
+test('⌘Z undoes, ⇧⌘Z and ⌘Y both redo, inside the editor', async ({ page }) => {
+  await seed(page);
+  await mockBackup(page);
+  await openNote1(page);
+  await page.getByRole('button', { name: 'Back up notes' }).click();
+  await expect(page.getByLabel('Note title')).toBeEnabled();
+
+  const second = editorOf(page).locator('.bn-block-content', { hasText: 'second block' });
+  await second.click();
+  await page.keyboard.press('End');
+  await page.keyboard.type(' plus more');
+  await expect(second).toHaveText('second block plus more');
+
+  await page.keyboard.press('ControlOrMeta+z');
+  await expect(second).toHaveText('second block');
+  await page.keyboard.press('ControlOrMeta+Shift+z');
+  await expect(second).toHaveText('second block plus more');
+  await page.keyboard.press('ControlOrMeta+z');
+  await expect(second).toHaveText('second block');
+  await page.keyboard.press('ControlOrMeta+y');
+  await expect(second).toHaveText('second block plus more');
+});

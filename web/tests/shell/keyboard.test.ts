@@ -1,4 +1,4 @@
-import { ESC_PRIORITY, handleEscape, registerEscLayer } from '../../src/lib/keyboard';
+import { ESC_PRIORITY, handleEscape, installGlobalKeys, registerEscLayer } from '../../src/lib/keyboard';
 
 describe('Esc chain', () => {
   it('closes only the highest-priority open layer, then the next', () => {
@@ -26,5 +26,47 @@ describe('Esc chain', () => {
     expect(p.sidebar).toBeGreaterThan(p.ctxRankingPopover);
     expect(p.ctxPanel).toBeGreaterThan(p.prefs);
     expect(p.prefs).toBeGreaterThan(p.selectionPopover);
+  });
+});
+
+describe('global shortcuts', () => {
+  const press = (key: string, mods: Partial<KeyboardEventInit> = {}): KeyboardEvent => {
+    const e = new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true, ...mods });
+    document.dispatchEvent(e);
+    return e;
+  };
+
+  it('routes each binding to one handler and claims the event', () => {
+    const calls: string[] = [];
+    const off = installGlobalKeys({
+      newChat: () => calls.push('new'), toggleSearch: () => calls.push('search'), toggleFeedback: () => calls.push('feedback'),
+      branchSelection: () => calls.push('branch'), copyLastReply: () => calls.push('copy'),
+      retryLastReply: () => calls.push('retry'), toggleShortcuts: () => calls.push('sheet'),
+    });
+    const claimed = [
+      press('n', { metaKey: true }), press('k', { metaKey: true }), press('/', { metaKey: true }),
+      press('B', { metaKey: true, shiftKey: true }), press('f', { ctrlKey: true, shiftKey: true }),
+      press('C', { metaKey: true, shiftKey: true }), press('R', { metaKey: true, shiftKey: true }),
+      press('q', { metaKey: true }),
+    ];
+    expect(calls).toEqual(['new', 'search', 'sheet', 'branch', 'feedback', 'copy', 'retry', 'feedback']);
+    expect(claimed.every(e => e.defaultPrevented)).toBe(true);
+    off();
+  });
+
+  it('leaves undo, redo and unbound combos alone', () => {
+    const calls: string[] = [];
+    const noop = (): void => { calls.push('x'); };
+    const off = installGlobalKeys({
+      newChat: noop, toggleSearch: noop, toggleFeedback: noop, branchSelection: noop,
+      copyLastReply: noop, retryLastReply: noop, toggleShortcuts: noop,
+    });
+    const untouched = [
+      press('z', { metaKey: true }), press('z', { metaKey: true, shiftKey: true }), press('y', { metaKey: true }),
+      press('b', {}), press('B', { shiftKey: true }), press('c', { metaKey: true }), press('n', { metaKey: true, altKey: true }),
+    ];
+    expect(calls).toEqual([]);
+    expect(untouched.some(e => e.defaultPrevented)).toBe(false);
+    off();
   });
 });

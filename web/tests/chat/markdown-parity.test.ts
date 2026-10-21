@@ -20,6 +20,9 @@ const CORPUS = [
   '<script>alert(1)</script> & "quotes" \'single\'',
   '---\n\ntext\n\n***',
   '* a\n+ b\n-',
+  'Intro\n\n## 1. Cherry Studio\n\nbody\n\n## 2. ChatWise\n\n### 3. Deep',
+  '- **Model:** Agent = x\n- **Difference:** stops',
+  'Part:\n\n3. third\n4. fourth\n\ntext\n\n7. seventh',
 ];
 
 describe('lib/markdown matches core/markdown.js', () => {
