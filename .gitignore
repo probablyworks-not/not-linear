@@ -47,3 +47,10 @@ web/.playwright/
 # ignored (committing them is what makes the round-trip test run in CI);
 # the raw backups they come from must never be in the repo.
 notlinear-backup-*.json
+
+# Parked, not needed to run the app or its tests. Moved here instead of deleted; restore by moving back.
+_archive/
+.claude/.deploy-marker
+
+# Personal agent config and hooks (deploy hook is machine-specific)
+.claude/
