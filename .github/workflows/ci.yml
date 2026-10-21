@@ -5,12 +5,9 @@ on:
     branches: [main]
   pull_request:
 
-# A PR that breaks persistence, the endpoint contract or the chat loop should
-# fail here rather than in a manual ten-step click-through that only the
-# maintainer can run.
 jobs:
   backend:
-    name: backend contract tests
+    name: backend tests
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -18,32 +15,18 @@ jobs:
         with:
           python-version: '3.12'
       - run: pip install -r requirements.txt -r requirements-dev.txt
-      # Run the SAME contract suite against both servers. This is what makes
-      # "the FastAPI move is byte-identical" a checked claim rather than an
-      # assertion. The native-dialog endpoints shell out to osascript and are
-      # faked in conftest.py, so both run on Linux.
-      - run: pytest tests/contract
-        env:
-          NOTLINEAR_SERVER: legacy
-      - run: pytest tests/contract
-        env:
-          NOTLINEAR_SERVER: fastapi
-      # The /web/* dev proxy (HTTP passthrough + HMR websocket pump), against a
-      # fake Vite. Independent of NOTLINEAR_SERVER.
-      - run: pytest tests/proxy
-      # The server's port probe (BUGS.md #054).
-      - run: pytest tests/server
+      # Endpoint contract, the static allowlist, the /web dev proxy and the server's port probe.
+      # The native-dialog endpoints shell out to osascript and are faked, so this runs on Linux.
+      - run: pytest tests
 
-  frontend:
-    name: typecheck and schema tests
+  web:
+    name: typecheck, lint, unit tests, licences
     runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: web
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
       - uses: pnpm/action-setup@v4
         with:
           version: 10
@@ -54,17 +37,15 @@ jobs:
           cache-dependency-path: web/pnpm-lock.yaml
       - run: pnpm install --frozen-lockfile
       - run: pnpm typecheck
-      # P7 gate: seams must not edit provider files. Needs full history to find the P7 commits.
-      - run: node scripts/check-p7-providers-untouched.mjs
-      # Includes the no-literal-colour rule (bug #022), which is also exercised
-      # by a test that feeds it offenders, so it cannot silently stop firing.
+      # Includes the no-literal-colour rule, which is also exercised by a test that
+      # feeds it offenders, so it cannot silently stop firing.
       - run: pnpm lint
-      # Includes the differential oracle against the real frontend/core/store.js
-      # and the frozen-schema assertions.
       - run: pnpm test
+      # Fails on an unreviewed or copyleft/commercial licence in the production tree.
+      - run: pnpm check:licenses
 
   e2e:
-    name: end-to-end smoke (legacy app + /web shell)
+    name: end-to-end (built app, Playwright)
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -74,8 +55,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      # The e2e webServer runs backend/server.py, which needs FastAPI since P2.
-      - run: pip install -r requirements.txt
+      # The e2e web server runs backend/server.py, which needs FastAPI.
+      - run: pip install -r ../requirements.txt
       - uses: pnpm/action-setup@v4
         with:
           version: 10

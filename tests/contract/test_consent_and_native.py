@@ -139,6 +139,7 @@ class TestNoScriptInterpolation:
 
         monkeypatch.setattr(macos.subprocess, "run", fake_run)
         monkeypatch.setattr(macos, "fake_native", lambda: False)
+        monkeypatch.setattr(macos.sys, "platform", "darwin")  # the guard skips osascript elsewhere
 
         # No slash, so it passes SAFE_FILENAME and actually reaches osascript —
         # which is the point. A payload containing a path separator is rejected
@@ -152,3 +153,16 @@ class TestNoScriptInterpolation:
         assert nasty not in script, "the filename reached the AppleScript source"
         assert "item 1 of argv" in script
         assert nasty in cmd, "the filename should be passed as a real argv element"
+
+
+class TestOffMacOS:
+    def test_pickers_report_cancelled_instead_of_failing(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """No osascript off macOS: the UI must fall through to the browser's file input."""
+        def boom(*a, **kw):  # type: ignore[no-untyped-def]
+            raise AssertionError("osascript must not be run off macOS")
+
+        monkeypatch.setattr(macos.subprocess, "run", boom)
+        monkeypatch.setattr(macos, "fake_native", lambda: False)
+        monkeypatch.setattr(macos.sys, "platform", "linux")
+        assert macos.pick_folder() == {"ok": False, "cancelled": True}
+        assert macos.open_files()["ok"] is False

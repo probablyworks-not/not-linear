@@ -78,3 +78,4 @@ notes_new_feature.md
 feedback/
 # Local-only legacy parity tests (need frontend/)
 web/tests/legacy-oracle/
+web/vitest.oracle.config.ts

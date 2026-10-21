@@ -12,6 +12,7 @@ import mimetypes
 import re
 import os
 import subprocess
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -41,7 +42,9 @@ def _run_osascript(
     this app's own frontend" — which is exactly the assumption the CORS hole
     had already broken.
     """
-    if fake_native():
+    if fake_native() or sys.platform != "darwin":
+        # Off macOS there is no osascript: report "cancelled" so the UI falls
+        # through to the browser's own file input instead of showing an error.
         return subprocess.CompletedProcess(args=["osascript"], returncode=1, stdout="", stderr="")
     cmd = ["osascript", "-e", script]
     if args:
