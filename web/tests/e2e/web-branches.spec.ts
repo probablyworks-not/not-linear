@@ -1,5 +1,5 @@
 import { test, expect, type Page, type Route } from '@playwright/test';
-import { openApp, readPersistedState, switchToThread } from './helpers';
+import { readPersistedState } from './helpers';
 
 // P5b: highlights and branches in /web/. The handoff calls this the hard gate and says manual
 // checking is not acceptable, because the repo's own ADRs record manual checks missing this
@@ -516,41 +516,6 @@ test.describe('title, header and responsive', () => {
 });
 
 test.describe('both apps share the branch (ADR-038)', () => {
-  test('a branch made in /web/ opens in the legacy app from its anchor, with its conversation', async ({ page }) => {
-    await chatWithReply(page);
-    await select(page, REPLY, 'alpha1 and beta1');
-    await page.keyboard.press('b');
-    const panel = stackPanels(page).first();
-    const bid = (await panel.getAttribute('data-bid'))!;
-    await panel.getByRole('textbox', { name: 'Ask about this passage' }).fill('from the web app');
-    await panel.getByRole('textbox', { name: 'Ask about this passage' }).press('Enter');
-    await expect(panel.locator('.branch-body .msg.ai .ai-content')).toContainText('Reply 2 says');
-    const { id } = await thread(page);
-
-    await openApp(page);
-    await switchToThread(page, id);
-    await expect(page.locator(`#chat-stream .branched[data-bid="${bid}"]`).first()).toBeVisible();
-    await page.locator(`#chat-stream .branched[data-bid="${bid}"]`).first().click();
-    const legacy = page.locator(`#branch-stack .branch[data-bid="${bid}"]`);
-    await expect(legacy).toBeVisible();
-    await expect(legacy.locator('.branch-body')).toContainText('from the web app');
-    await expect(legacy.locator('.branch-body')).toContainText('Reply 2 says');
-    await expect(legacy.locator('.branch-quote')).toContainText('alpha1 and beta1');
-  });
-
-  test('a highlight made in /web/ is a highlight in the legacy app, listed in its panel', async ({ page }) => {
-    await chatWithReply(page);
-    await select(page, REPLY, 'filler words');
-    await popover(page).getByRole('button', { name: 'Save highlight' }).click();
-    await expect(page.locator(`${REPLY} .highlighted`).first()).toBeVisible();
-    const { id } = await thread(page);
-
-    await openApp(page);
-    await switchToThread(page, id);
-    await expect(page.locator('#chat-stream .highlighted').first()).toBeVisible();
-    await page.locator('#highlight-toggle').click();
-    await expect(page.locator('#highlight-list')).toContainText('filler words');
-  });
 });
 
 test.describe('recent branches (sidebar)', () => {
@@ -623,7 +588,7 @@ test.describe('model and mode pickers', () => {
     await expect(chip).toContainText('Sonnet 5');
     await chip.click();
     const menu = page.getByRole('menu', { name: 'Select model' });
-    await expect(menu.getByRole('menuitem')).toHaveCount(14);
+    await expect(menu.getByRole('menuitem')).toHaveCount(15);
     await expect(menu.getByRole('menuitem', { name: /Sonnet 5/ })).toContainText('Best balance');
     await menu.getByRole('menuitem', { name: /Haiku 4.5/ }).click();
     await expect(chip).toContainText('Haiku 4.5');

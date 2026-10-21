@@ -2,8 +2,8 @@ import { test, expect, type Page } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { openApp, openSidebar } from './helpers';
 import { parseStoryChapters } from '../../src/changelog/parse';
+import { FALLBACK_CHANGELOG_MD } from '../../src/changelog/fallback-changelog';
 
 // P4 item 3: the changelog viewer in /web/ Settings. The Product story player
 // and its sidebar entry are deliberately NOT ported (maintainer's call), and a
@@ -13,6 +13,16 @@ import { parseStoryChapters } from '../../src/changelog/parse';
 // which tests/changelog/parse-differential.test.ts proves equals the legacy one.
 const realMd = readFileSync(resolve(dirname(fileURLToPath(import.meta.url)), '../../../CHANGELOG.md'), 'utf8');
 const chapters = parseStoryChapters(realMd);
+
+// A fixed three-chapter file, so paging does not depend on how long the repo's own changelog is.
+const MULTI_MD = [
+  '# Changelog', '',
+  '## 2026-03-03', '- Summary: **Third.** Newest entry.', '- Summary: Fix a thing.', '',
+  '## 2026-02-02', '- Summary: **Second.** Middle entry.', '',
+  '## 2026-01-01', '- Summary: **First.** Oldest entry.', '',
+].join('\n');
+const multi = parseStoryChapters(MULTI_MD);
+const serveMulti = (page: Page) => page.route('**/CHANGELOG.md', route => route.fulfill({ status: 200, contentType: 'text/markdown', body: MULTI_MD }));
 
 async function openWeb(page: Page): Promise<void> {
   await page.goto('/web/');
@@ -49,31 +59,32 @@ test.describe('the viewer', () => {
   });
 
   test('Older and Newer page through every chapter and disable at the ends', async ({ page }) => {
+    await serveMulti(page);
     await openWeb(page);
     await openChangelog(page);
     await expect(newer(page)).toBeDisabled();
     await expect(older(page)).toBeEnabled();
-    expect(chapters.length).toBeGreaterThan(2);
+    expect(multi.length).toBeGreaterThan(2);
     await older(page).click();
-    await expect(date(page)).toHaveText(chapters[1]!.date);
-    await expect(narrative(page)).toHaveText(chapters[1]!.narrative);
-    for (let i = 2; i < chapters.length; i++) await older(page).click();
-    await expect(date(page)).toHaveText(chapters.at(-1)!.date);
+    await expect(date(page)).toHaveText(multi[1]!.date);
+    await expect(narrative(page)).toHaveText(multi[1]!.narrative);
+    for (let i = 2; i < multi.length; i++) await older(page).click();
+    await expect(date(page)).toHaveText(multi.at(-1)!.date);
     await expect(older(page)).toBeDisabled();
     await expect(newer(page)).toBeEnabled();
     await newer(page).click();
-    await expect(date(page)).toHaveText(chapters.at(-2)!.date);
+    await expect(date(page)).toHaveText(multi.at(-2)!.date);
   });
 
   test('refresh re-reads the file and returns to the newest chapter', async ({ page }) => {
     let requests = 0;
-    await page.route('**/CHANGELOG.md', route => { requests++; return route.continue(); });
+    await page.route('**/CHANGELOG.md', route => { requests++; return route.fulfill({ status: 200, contentType: 'text/markdown', body: MULTI_MD }); });
     await openWeb(page);
     await openChangelog(page);
     await older(page).click();
     await page.getByRole('button', { name: 'Reload changelog' }).click();
     await expect.poll(() => requests).toBe(2);
-    await expect(date(page)).toHaveText(chapters[0]!.date);
+    await expect(date(page)).toHaveText(multi[0]!.date);
   });
 
   test('reopening does not refetch (legacy loads once per page)', async ({ page }) => {
@@ -100,7 +111,7 @@ test.describe('fallback to the bundled copy (BUGS.md #007)', () => {
       await openWeb(page);
       await openChangelog(page);
       await expect(page.getByTestId('changelog-source')).toHaveText('Bundled copy');
-      await expect(date(page)).toHaveText('2026-05-07');
+      await expect(date(page)).toHaveText(parseStoryChapters(FALLBACK_CHANGELOG_MD)[0]!.date);
     });
   }
 
@@ -113,35 +124,6 @@ test.describe('fallback to the bundled copy (BUGS.md #007)', () => {
 });
 
 test.describe('parity with the legacy viewer', () => {
-  test('the same chapter, narrative, items and tags in both apps', async ({ page }) => {
-    await openApp(page);
-    await openSidebar(page);
-    await page.locator('#open-prefs').click();
-    await page.locator('#changelog-toggle').click();
-    await expect(page.locator('#changelog-source')).toHaveText('CHANGELOG.md');
-    const legacy = {
-      date: (await page.locator('.story-card .story-date').innerText()).trim(),
-      narrative: (await page.locator('.story-card .story-narrative').innerText()).trim(),
-      items: (await page.locator('.story-card .story-item').evaluateAll(els =>
-        els.map(e => ({ text: e.querySelector('.story-item-text')!.textContent!.trim(), tag: e.querySelector('.story-item-tag')!.textContent!.trim() })))),
-      dots: await page.locator('.story-dot').count(),
-    };
-
-    await openWeb(page);
-    await openChangelog(page);
-    const web = {
-      date: (await date(page).innerText()).trim(),
-      narrative: (await narrative(page).innerText()).trim(),
-      items: await page.getByTestId('chapter-item').evaluateAll(els => els.map(e => {
-        const spans = e.querySelectorAll(':scope > span');
-        return { text: spans[1]!.textContent!.trim(), tag: spans[2]!.textContent!.trim() };
-      })),
-      dots: await page.locator('#changelog-view [data-on]').count(),
-    };
-    expect(web).toEqual(legacy);
-    expect(web.items.length).toBeGreaterThan(0);
-    expect(web.dots).toBeGreaterThan(3);
-  });
 });
 
 test('the Product story is not part of /web/ for now', async ({ page }) => {

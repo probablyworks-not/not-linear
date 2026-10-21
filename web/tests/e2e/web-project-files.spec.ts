@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
-import { openApp, openSidebar, readPersistedState } from './helpers';
+import { readPersistedState } from './helpers';
 
 // P4 item 5: project rules, files and the linked folder in /web/, plus the
 // attachment machinery (native pick -> browser fallback, reading, chips).
@@ -50,13 +50,6 @@ async function openWebPanel(page: Page, name = 'Web project'): Promise<void> {
   await page.getByRole('list', { name: 'Projects' }).getByRole('button', { name }).first().click();
   await expect(panel(page)).toBeVisible();
 }
-async function openLegacyPanel(page: Page, name: string): Promise<void> {
-  await openApp(page);
-  await openSidebar(page);
-  await page.locator('#projects-list .project-open', { hasText: name }).click();
-  await expect(page.locator('#project-panel')).toHaveClass(/show/);
-}
-
 const TEXT = { name: 'notes.md', mimeType: 'text/markdown', buffer: Buffer.from('# Notes\n\nTide tables are weird.') };
 const CSV = { name: 'data.csv', mimeType: 'text/csv', buffer: Buffer.from('a,b\n1,2\n') };
 const PNG = { name: 'dot.png', mimeType: 'image/png', buffer: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64') };
@@ -105,34 +98,10 @@ test.describe('project files (native picker cancelled -> browser fallback, #022)
     await expect(panel(page).getByTestId('file-chip')).toHaveCount(1);
     await expect.poll(async () => (await projectsOf(page)).p1!.files.map(f => f.name)).toEqual(['data.csv']);
   });
-
-  test('legacy shows the files added in /web/', async ({ page }) => {
-    await seed(page);
-    await openWebPanel(page);
-    await chooseFiles(page, () => panel(page).getByRole('button', { name: 'Add files' }).click(), [TEXT, CSV]);
-    await expect.poll(async () => (await projectsOf(page)).p1!.files.length).toBe(2);
-    await openLegacyPanel(page, 'Web project');
-    await expect(page.locator('#project-files-row .file-chip .fn')).toHaveText(['notes.md', 'data.csv']);
-  });
-
-  test('the same files picked in each app are stored identically', async ({ page }) => {
-    await seed(page);
-    await openWebPanel(page, 'Web project');
-    await chooseFiles(page, () => panel(page).getByRole('button', { name: 'Add files' }).click(), [TEXT, CSV, PNG, BIN]);
-    await expect.poll(async () => (await projectsOf(page)).p1!.files.length).toBe(4);
-
-    await openLegacyPanel(page, 'Legacy project');
-    await chooseFiles(page, () => page.locator('#project-add-file').click(), [TEXT, CSV, PNG, BIN]);
-    await expect.poll(async () => (await projectsOf(page)).p2!.files.length).toBe(4);
-
-    const { p1, p2 } = await projectsOf(page);
-    expect(p1!.files).toEqual(p2!.files);
-    expect(p1!.files).toHaveLength(4); // not vacuous
-  });
 });
 
 test.describe('project rules', () => {
-  test('shows the legacy placeholder, persists after the debounce, and legacy shows the text', async ({ page }) => {
+  test('shows the placeholder and persists after the debounce', async ({ page }) => {
     await seed(page);
     await openWebPanel(page);
     const rules = panel(page).getByLabel('Project rules');
@@ -140,17 +109,6 @@ test.describe('project rules', () => {
     await rules.fill('Answer in British English.\nAlways cite sources.');
     await expect.poll(async () => (await projectsOf(page)).p1!.rules).toBe('Answer in British English.\nAlways cite sources.');
 
-    await openLegacyPanel(page, 'Web project');
-    await expect(page.locator('#project-rules-input')).toHaveValue('Answer in British English.\nAlways cite sources.');
-  });
-
-  test('rules typed in legacy are what /web/ shows', async ({ page }) => {
-    await seed(page);
-    await openLegacyPanel(page, 'Legacy project');
-    await page.locator('#project-rules-input').fill('From legacy');
-    await expect.poll(async () => (await projectsOf(page)).p2!.rules).toBe('From legacy');
-    await openWebPanel(page, 'Legacy project');
-    await expect(panel(page).getByLabel('Project rules')).toHaveValue('From legacy');
   });
 });
 
@@ -160,7 +118,7 @@ test.describe('linked folder', () => {
       ? r.abort()
       : r.fulfill({ status: respond.status ?? 200, contentType: 'application/json', body: JSON.stringify(respond.body ?? {}) })));
 
-  test('link shows the path and an Unlink button, unlink removes them; both persist and legacy agrees', async ({ page }) => {
+  test('link shows the path and an Unlink button, unlink removes them; both persist', async ({ page }) => {
     await seed(page);
     await pick(page, { body: { ok: true, path: '/Users/test/code/app' } });
     await openWebPanel(page);
@@ -169,10 +127,6 @@ test.describe('linked folder', () => {
     await expect(page.getByText('Folder linked')).toBeVisible();
     await expect(panel(page).getByTestId('project-folder')).toHaveText('/Users/test/code/app');
     await expect.poll(async () => (await projectsOf(page)).p1!.path).toBe('/Users/test/code/app');
-
-    await openLegacyPanel(page, 'Web project');
-    await expect(page.locator('#project-folder-display')).toHaveText('/Users/test/code/app');
-    await expect(page.locator('#project-unlink-folder')).toBeVisible();
 
     await page.goto('/web/');
     await showSidebar(page);

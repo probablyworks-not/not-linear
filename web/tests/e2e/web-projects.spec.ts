@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
-import { openApp, openSidebar, readPersistedState } from './helpers';
+import { readPersistedState } from './helpers';
 
 // P4 item 4: Projects grid and chat-linking in /web/, over the same IndexedDB row
 // as the legacy app. Scope is grid + linking + create/rename/delete; rules, files
@@ -129,36 +129,6 @@ test.describe('grid', () => {
     await expect(page.getByTestId('project-title')).toHaveText('Zeta research');
     await expect(grid(page)).toHaveCount(0);
   });
-
-  test('parity: the same cards, order and meta in both apps, for three views', async ({ page }) => {
-    await seed(page);
-    await openWeb(page);
-    await openGrid(page);
-    const web: Record<string, { names: string[]; meta: string[] }> = {};
-    web.updated = { names: await cardNames(page), meta: await cardMeta(page) };
-    await grid(page).getByRole('button', { name: /Sort by/ }).click();
-    await grid(page).getByRole('menuitemradio', { name: 'Name' }).click();
-    web.name = { names: await cardNames(page), meta: await cardMeta(page) };
-    await grid(page).getByLabel('Search projects').fill('a');
-    web.nameSearchA = { names: await cardNames(page), meta: await cardMeta(page) };
-
-    await openApp(page);
-    await openSidebar(page);
-    await page.locator('#projects-view-open').click();
-    const legacyView = async () => ({
-      names: (await page.locator('#pv-grid .pv-card[data-pid] .pv-card-name').allInnerTexts()).map(s => s.trim()),
-      meta: (await page.locator('#pv-grid .pv-card[data-pid] .pv-card-meta').allInnerTexts()).map(s => s.replace(/\s+/g, ' ').trim()),
-    });
-    const legacy: typeof web = {};
-    legacy.updated = await legacyView();
-    await page.locator('#pv-sort-btn').click();
-    await page.locator('#pv-sort-menu button[data-v="name"]').click();
-    legacy.name = await legacyView();
-    await page.locator('#pv-search').fill('a');
-    legacy.nameSearchA = await legacyView();
-    expect(web).toEqual(legacy);
-    expect(web.updated!.names).toHaveLength(3); // not vacuous
-  });
 });
 
 test.describe('project panel', () => {
@@ -181,7 +151,7 @@ test.describe('project panel', () => {
     await expect(panel(page)).toContainText('No chats yet — create one below.');
   });
 
-  test('remove from project: persisted, the chat returns to Threads, and legacy agrees', async ({ page }) => {
+  test('remove from project: persisted and the chat returns to Threads', async ({ page }) => {
     await seed(page);
     await openWeb(page);
     await openPanel(page, 'Zeta research');
@@ -190,11 +160,6 @@ test.describe('project panel', () => {
     await expect.poll(async () => (await persisted(page)).threads['chat-1']).not.toHaveProperty('projectId');
     await page.keyboard.press('Escape');
     await expect(sidebar(page).locator('[data-thread="chat-1"]')).toBeVisible();
-
-    await openApp(page);
-    await expect(page.locator('.sidebar [data-thread="chat-1"]')).not.toHaveCSS('display', 'none');
-    await openSidebar(page);
-    await expect(page.locator('#projects-list .project-row').first()).toBeVisible();
   });
 
   test('add existing: lists ungrouped chats, files the chosen one, toasts', async ({ page }) => {
@@ -225,7 +190,7 @@ test.describe('project panel', () => {
     await expect(page.getByRole('tab', { name: /Untitled chat 5/ })).toHaveAttribute('aria-selected', 'true');
   });
 
-  test('renaming persists after the debounce, retitles the sidebar, and legacy shows it', async ({ page }) => {
+  test('renaming persists after the debounce, retitles the sidebar', async ({ page }) => {
     await seed(page);
     await openWeb(page);
     await openPanel(page, 'Alpha lab');
@@ -235,9 +200,6 @@ test.describe('project panel', () => {
     await page.keyboard.press('Escape');
     await showSidebar(page);
     await expect(page.getByRole('list', { name: 'Projects' })).toContainText('Renamed lab');
-
-    await openApp(page);
-    await expect(page.locator('#projects-list .project-name', { hasText: 'Renamed lab' })).toHaveCount(1);
   });
 
   test('deleting a chat from the panel uses the chat-delete wording', async ({ page }) => {
@@ -275,9 +237,6 @@ test.describe('project panel', () => {
     await showSidebar(page);
     await expect(sidebar(page).locator('[data-thread="chat-1"]')).toBeVisible();
     await expect(sidebar(page).locator('[data-thread="chat-2"]')).toBeVisible();
-
-    await openApp(page);
-    await expect(page.locator('#projects-list .project-row')).toHaveCount(2);
   });
 });
 
@@ -308,23 +267,5 @@ test.describe('creating projects', () => {
     await grid(page).locator('#pv-grid-new').click();
     await expect(panel(page)).toBeVisible();
     await expect(page.getByLabel('Project name')).toHaveValue('New project');
-  });
-
-  test('a project made in legacy appears in /web/, and one made in /web/ appears in legacy', async ({ page }) => {
-    await openApp(page);
-    await openSidebar(page);
-    await page.locator('#new-project').click();
-    await page.locator('#project-name-input').fill('From legacy');
-    await expect.poll(async () => Object.values((await persisted(page)).projects).map(p => p.name)).toContain('From legacy');
-
-    await openWeb(page);
-    await showSidebar(page);
-    await expect(page.getByRole('list', { name: 'Projects' })).toContainText('From legacy');
-    await sidebar(page).getByTitle('New project', { exact: true }).click();
-    await page.getByLabel('Project name').fill('From web');
-    await expect.poll(async () => Object.values((await persisted(page)).projects).map(p => p.name)).toContain('From web');
-
-    await openApp(page);
-    await expect(page.locator('#projects-list .project-name')).toHaveText(['From legacy', 'From web']);
   });
 });

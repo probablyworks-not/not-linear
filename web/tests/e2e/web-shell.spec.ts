@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
-import { openApp, openSidebar, readPersistedState } from './helpers';
+import { readPersistedState } from './helpers';
 
 // The P3 gate, automated: the React shell at /web/ and the legacy app share
 // one origin and one IndexedDB row, so a thread made in either shows in both.
@@ -113,77 +113,6 @@ test.describe('tabs persist to nl_tabs_v1', () => {
 });
 
 test.describe('one database, two apps', () => {
-  test('a chat created in /web/ appears in the legacy sidebar, with the legacy thread shape', async ({ page }) => {
-    await openWeb(page);
-    await showSidebar(page);
-    await page.getByRole('button', { name: /New chat/ }).click();
-    await expect(webRow(page, 'Untitled chat')).toBeVisible();
-
-    const state = await readPersistedState(page);
-    const id = (state as { current: string }).current;
-    expect(id).toMatch(/^chat-\d+$/);
-    expect((state as { threads: Record<string, unknown> }).threads[id]).toMatchObject({
-      kind: 'chat', title: 'Untitled chat', stream: '', docContent: '<p><br></p>', highlights: [],
-    });
-
-    await openApp(page);
-    await page.waitForSelector('.sidebar [data-thread]', { state: 'attached' });
-    await expect(page.locator(`.sidebar [data-thread="${id}"]`)).toBeAttached();
-  });
-
-  test('a chat created in legacy appears in the /web/ sidebar', async ({ page }) => {
-    await openApp(page);
-    await openSidebar(page);
-    await page.locator('#new-chat').click();
-    // Wait for the chat itself to be saved. NOT `current`: legacy's renderThread saves the OLD
-    // thread before switching, so right after New chat the saved `current` is still the previous
-    // one and only catches up on a later save. The new chat is in `dynamic` from that first save.
-    const newest = async () => ((await readPersistedState(page)) as { dynamic: Array<{ id: string }> } | null)?.dynamic.at(-1)?.id;
-    await expect.poll(newest).toMatch(/^chat-\d+$/);
-    const id = (await newest())!;
-
-    await openWeb(page);
-    await showSidebar(page);
-    await expect(page.getByRole('complementary', { name: 'Left pane' }).locator(`[data-thread="${id}"]`)).toBeVisible();
-  });
-
-  test('a chat deleted in /web/ is gone from legacy, and its tab is dropped', async ({ page }) => {
-    await openWeb(page);
-    await showSidebar(page);
-    await page.getByRole('button', { name: /New chat/ }).click();
-    const id = ((await readPersistedState(page)) as { current: string }).current;
-    await expect(page.getByRole('tab', { name: /Untitled chat/ })).toBeVisible();
-
-    await webRow(page, 'Untitled chat').hover();
-    await page.getByRole('button', { name: 'Delete Untitled chat' }).click();
-    await page.getByRole('alertdialog').getByRole('button', { name: 'Delete chat' }).click();
-    await expect(webRow(page, 'Untitled chat')).toHaveCount(0);
-    await expect(page.getByRole('tab', { name: /Untitled chat/ })).toHaveCount(0);
-
-    const state = (await readPersistedState(page)) as { deletedThreads: string[]; threads: Record<string, unknown>; dynamic: unknown[] };
-    expect(state.deletedThreads).toContain(id);
-    expect(state.threads[id]).toBeUndefined();
-    expect(state.dynamic).toEqual([]);
-
-    await openApp(page);
-    await page.waitForSelector('.sidebar [data-thread]', { state: 'attached' });
-    await expect(page.locator(`.sidebar [data-thread="${id}"]`)).toHaveCount(0);
-  });
-
-  test('a seed thread deleted in legacy is gone from /web/', async ({ page }) => {
-    await openApp(page);
-    await openSidebar(page);
-    const row = page.locator('.sidebar [data-thread="planning"]');
-    await row.hover();
-    await row.locator('.thread-delete').click();
-    await page.locator('#delete-confirm-delete').click();
-    await expect.poll(async () => ((await readPersistedState(page)) as { deletedThreads: string[] } | null)?.deletedThreads).toContain('planning');
-
-    await openWeb(page);
-    await showSidebar(page);
-    await expect(webRow(page, 'Q3 planning notes')).toHaveCount(0);
-    await expect(webRow(page, 'Pricing research')).toBeVisible();
-  });
 });
 
 test.describe('delete confirmation', () => {

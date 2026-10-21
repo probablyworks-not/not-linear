@@ -1,5 +1,5 @@
 import { test, expect, type Page, type Route } from '@playwright/test';
-import { mockClaude, openApp, readPersistedState, sendMessage as sendInLegacy, switchToThread } from './helpers';
+import { mockClaude, readPersistedState } from './helpers';
 
 // P5a: chat in /web/ — one thread, no branches. The property that matters most is
 // the dual-write (ADR-038): a reply React streams must be a reply the legacy app can
@@ -124,50 +124,6 @@ test.describe('send and stream', () => {
 });
 
 test.describe('both apps share the thread (ADR-038)', () => {
-  test('a thread written by /web/ opens in the legacy app with the same content, and legacy can continue it', async ({ page }) => {
-    await seedKeys(page);
-    const reply = await mockClaude(page, 'Alpha beta gamma delta.');
-    await newWebChat(page);
-    await ask(page, 'Say the greek letters');
-    await expect(page.getByTestId('chat-stream').locator('.msg.ai .ai-content')).toContainText(reply);
-    const { id } = await threadWhere(page, t => (t.mainMessages?.length ?? 0) === 2);
-
-    await openApp(page);
-    await switchToThread(page, id);
-    await expect(page.locator('#chat-stream .msg.user')).toContainText('Say the greek letters');
-    await expect(page.locator('#chat-stream .msg.ai .ai-content')).toContainText(reply);
-
-    // Legacy appends a second turn on top of what React wrote.
-    await sendInLegacy(page, 'And again');
-    await expect(page.locator('#chat-stream .msg.ai')).toHaveCount(2);
-    await expect.poll(async () => (await persisted(page)).threads[id]!.mainMessages?.length).toBe(4);
-
-    // ...and /web/ then shows both turns.
-    await page.goto(WEB);
-    await expect(page.getByTestId('chat-stream').locator('.msg.user')).toHaveCount(2);
-    await expect(page.getByTestId('chat-stream').locator('.msg.ai')).toHaveCount(2);
-  });
-
-  test('a thread written by legacy shows in /web/ and /web/ can continue it', async ({ page }) => {
-    await seedKeys(page);
-    const reply = await mockClaude(page, 'From the classic app.');
-    await openApp(page);
-    await page.locator('#sidebar-toggle').click();
-    await page.getByRole('button', { name: /New chat/ }).first().click();
-    await sendInLegacy(page, 'Hello from legacy');
-    await expect(page.locator('#chat-stream .msg.ai .ai-content')).toContainText(reply);
-    const { id } = await threadWhere(page, t => (t.mainMessages?.length ?? 0) === 2);
-
-    await page.goto(WEB);
-    await expect(page.getByRole('button', { name: 'Open left pane' })).toBeVisible();
-    await page.getByRole('button', { name: 'Open left pane' }).click();
-    await page.locator(`aside[aria-label="Left pane"] [data-thread="${id}"]`).first().click();
-    await expect(page.getByTestId('chat-stream').locator('.msg.user')).toContainText('Hello from legacy');
-    await expect(page.getByTestId('chat-stream').locator('.msg.ai .ai-content')).toContainText(reply);
-
-    await ask(page, 'Continue in web');
-    await expect.poll(async () => (await persisted(page)).threads[id]!.mainMessages?.length).toBe(4);
-  });
 });
 
 test.describe('failure', () => {

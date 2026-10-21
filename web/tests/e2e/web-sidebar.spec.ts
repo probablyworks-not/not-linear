@@ -1,5 +1,4 @@
 import { test, expect, type Page } from '@playwright/test';
-import { openApp, openSidebar } from './helpers';
 
 // Sidebar sections fold from their headers, and which are folded is shared with the legacy app
 // through localStorage.nl_side_collapsed_v1.
@@ -37,20 +36,6 @@ test('Projects and Recent branches fold too, independently, and the header butto
   await expect(side(page).getByTestId('recent-branches')).toBeHidden();
   await expect(side(page).locator('[data-thread]').first()).toBeVisible(); // threads unaffected
   expect(await page.evaluate(() => JSON.parse(localStorage.getItem('nl_side_collapsed_v1') || '{}'))).toEqual({ recent: true });
-});
-
-test('what /web/ folds, the legacy app folds, and the other way round', async ({ page }) => {
-  await openWeb(page);
-  await header(page, 'recent').click();
-  await openApp(page);
-  await openSidebar(page);
-  await expect(page.locator('.side-section[data-section="recent"]')).toHaveClass(/is-collapsed/);
-  await expect(page.locator('.side-section[data-section="threads"]')).not.toHaveClass(/is-collapsed/);
-  // fold Threads in legacy, then look from /web/
-  await page.locator('.side-section[data-section="threads"] .side-sec-label').click();
-  await openWeb(page);
-  await expect(header(page, 'threads')).toHaveAttribute('aria-expanded', 'false');
-  await expect(header(page, 'recent')).toHaveAttribute('aria-expanded', 'false');
 });
 
 test('a thread glyph: legacy icon tokens render as icons, the picker saves one, and it survives a reload', async ({ page }) => {

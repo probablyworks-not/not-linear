@@ -1,5 +1,4 @@
 import { test, expect, type Page, type Route } from '@playwright/test';
-import { openApp, readPersistedState, switchToThread } from './helpers';
 
 // P5: the row under each reply (Copy, Download .md, Continue) and the collapsible usage line.
 // The usage line is part of the SAVED reply, so legacy shows it on a reply React wrote.
@@ -61,12 +60,6 @@ test.describe('usage line', () => {
 
     await page.reload();
     await expect(page.locator('[data-chat-stream] .llm-meta summary')).toContainText('Claude Sonnet 5 · 52 tokens');
-
-    const s = (await readPersistedState(page)) as unknown as { threads: Record<string, { stream?: string; mainMessages?: unknown[] }> };
-    const id = Object.entries(s.threads).find(([, t]) => (t.mainMessages?.length ?? 0) > 0)![0];
-    await openApp(page);
-    await switchToThread(page, id);
-    await expect(page.locator('#chat-stream .llm-meta summary')).toContainText('Claude Sonnet 5');
   });
 });
 

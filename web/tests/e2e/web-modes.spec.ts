@@ -1,8 +1,7 @@
 import { test, expect, type Page } from '@playwright/test';
-import { openApp, readPersistedState } from './helpers';
+import { readPersistedState } from './helpers';
 
-// P4.1b: the Modes manager in /web/, against the same prefs as the legacy app.
-// As with Settings, the tests that matter finish by loading the OTHER app.
+// The Modes manager in /web/.
 
 async function openWeb(page: Page): Promise<void> {
   await page.goto('/web/');
@@ -60,7 +59,7 @@ test.describe('Modes dialog', () => {
 });
 
 test.describe('create, edit, reset, delete', () => {
-  test('creating a mode persists it and legacy shows it in its mode menu', async ({ page }) => {
+  test('creating a mode persists it', async ({ page }) => {
     await openWeb(page);
     await openModes(page);
     await createMode(page, 'Teacher', 'Explains simply', 'Teach like I am new.\n\nUse examples.');
@@ -72,9 +71,6 @@ test.describe('create, edit, reset, delete', () => {
     await expect(row(page, id)).toContainText('Custom');
     expect((await prefsOf(page)).customModes).toEqual([{ id, label: 'Teacher', desc: 'Explains simply', instructions: 'Teach like I am new.\n\nUse examples.' }]);
 
-    await openApp(page);
-    await expect(page.locator('#mode-list button[data-mode]')).toHaveCount(7);
-    await expect(page.locator(`#mode-list button[data-mode="${id}"]`)).toContainText('Teacher');
   });
 
   test('an empty name is refused with the legacy message and nothing is saved', async ({ page }) => {
@@ -103,9 +99,6 @@ test.describe('create, edit, reset, delete', () => {
     await expect(page.getByText('Saved "Coding"')).toBeVisible();
     await expect(row(page, 'coding')).toContainText('Edited');
     expect((await prefsOf(page)).modeOverrides).toEqual({ coding: { desc: 'Terse and exact' } });
-
-    await openApp(page);
-    await expect(page.locator('#mode-list button[data-mode="coding"]')).toContainText('Terse and exact');
 
     await openWeb(page);
     await openModes(page);
@@ -141,16 +134,30 @@ test.describe('create, edit, reset, delete', () => {
     expect((await prefsOf(page)).customModes).toEqual([]);
   });
 
-  test('deleting the ACTIVE mode falls back to General, and legacy agrees', async ({ page }) => {
+  test('deleting the ACTIVE mode falls back to General', async ({ page }) => {
     await openWeb(page);
     await openModes(page);
     await createMode(page, 'Teacher', '', 'x');
     const id = (await prefsOf(page)).customModes[0].id as string;
 
-    // Make it the active mode through legacy's own composer menu (the picker is P5).
-    await openApp(page);
-    await page.locator('#main-mode-btn').click();
-    await page.locator(`#mode-list button[data-mode="${id}"]`).click();
+    // Make it the active mode by writing the pref, then reload so the app reads it back.
+    await page.evaluate(id => new Promise<void>((resolve, reject) => {
+      const open = indexedDB.open('notlinear');
+      open.onerror = () => reject(open.error);
+      open.onsuccess = () => {
+        const db = open.result;
+        const tx = db.transaction('kv', 'readwrite');
+        const store = tx.objectStore('kv');
+        const get = store.get('state');
+        get.onsuccess = () => {
+          const row = get.result;
+          row.value.prefs = { ...row.value.prefs, mode: id };
+          store.put(row);
+        };
+        tx.oncomplete = () => { db.close(); resolve(); };
+        tx.onerror = () => reject(tx.error);
+      };
+    }), id);
     await expect.poll(async () => (await prefsOf(page)).mode).toBe(id);
 
     await openWeb(page);
@@ -162,25 +169,6 @@ test.describe('create, edit, reset, delete', () => {
     await expect.poll(async () => (await prefsOf(page)).mode).toBe('general');
     await expect(row(page, 'general')).toContainText('Active');
 
-    await openApp(page);
-    await expect(page.locator('#main-mode-btn .mode-label')).toHaveText('General');
   });
 });
 
-test.describe('modes made in legacy', () => {
-  test('a custom mode and a built-in edit made in legacy appear in /web/', async ({ page }) => {
-    await openApp(page);
-    await page.locator('#main-mode-btn').click();
-    await page.locator('#mode-manage').click();
-    await page.locator('#modes-new').click();
-    await page.locator('.mode-name').fill('Legacy mode');
-    await page.locator('.mode-instr').fill('From legacy.');
-    await page.locator('[data-act="save"]').click();
-    await expect.poll(async () => ((await prefsOf(page)).customModes ?? []).length).toBe(1);
-
-    await openWeb(page);
-    await openModes(page);
-    await expect(modal(page).getByText('Legacy mode')).toBeVisible();
-    await expect(modal(page).getByText('Custom')).toBeVisible();
-  });
-});

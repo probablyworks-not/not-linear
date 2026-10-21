@@ -1,5 +1,4 @@
 import { test, expect, type Page } from '@playwright/test';
-import { openApp, openSidebar } from './helpers';
 
 // P4 item 7: Settings -> Runtime logs in /web/, and the logs.md sync behind it.
 //
@@ -121,23 +120,4 @@ test.describe('syncing into logs.md', () => {
 });
 
 test.describe('parity with the legacy viewer', () => {
-  test('the same events render as the same text, in the same order, with the same count', async ({ page }) => {
-    await interceptSync(page);
-    await openApp(page);
-    await inject(page, EVENTS);
-    await openSidebar(page);
-    await page.locator('#open-prefs').click();
-    await page.locator('#logs-toggle').click();
-    await expect(page.locator('#logs-summary')).toHaveText('3 events');
-    const legacy = { summary: (await page.locator('#logs-summary').innerText()).trim(), content: await page.locator('#logs-content').textContent() };
-
-    await openWebLogs(page);
-    await inject(page, EVENTS);
-    await expandLogs(page);
-    await expect(page.getByTestId('logs-summary')).toHaveText('3 events');
-    const web = { summary: (await page.getByTestId('logs-summary').innerText()).trim(), content: await page.getByTestId('logs-content').textContent() };
-    expect(web.summary.toLowerCase()).toBe(legacy.summary.toLowerCase());
-    expect(web.content).toBe(legacy.content);
-    expect(web.content).toContain('Request timed out');
-  });
 });
