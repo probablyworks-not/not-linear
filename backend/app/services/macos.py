@@ -148,6 +148,8 @@ def save_file(filename: str, content: str) -> dict[str, Any]:
     if result.returncode != 0:
         return {"ok": False, "cancelled": True}
     save_path = result.stdout.strip()
+    if not save_path:
+        return {"ok": False, "cancelled": True}  # never write to an empty (cwd-relative) path
     if not save_path.endswith(".md"):
         save_path += ".md"
     Path(save_path).write_text(content, encoding="utf-8")

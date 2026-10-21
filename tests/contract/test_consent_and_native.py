@@ -166,3 +166,19 @@ class TestOffMacOS:
         monkeypatch.setattr(macos.sys, "platform", "linux")
         assert macos.pick_folder() == {"ok": False, "cancelled": True}
         assert macos.open_files()["ok"] is False
+
+
+class TestSaveFileEmptyPath:
+    def test_an_empty_dialog_result_writes_nothing(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+        """A successful dialog with no path used to write a file named ".md" into the working directory."""
+        class Done:
+            returncode = 0
+            stdout = "\n"
+            stderr = ""
+
+        monkeypatch.setattr(macos.subprocess, "run", lambda *a, **kw: Done())
+        monkeypatch.setattr(macos, "fake_native", lambda: False)
+        monkeypatch.setattr(macos.sys, "platform", "darwin")
+        monkeypatch.chdir(tmp_path)
+        assert macos.save_file("note.md", "content") == {"ok": False, "cancelled": True}
+        assert list(tmp_path.iterdir()) == []
