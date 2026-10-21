@@ -1,8 +1,7 @@
 // ---------- notlinear backup library ----------
 // Shared read/write helpers for tools/export-data.html and tools/import-data.html.
 //
-// Deliberately uses the raw IndexedDB API rather than the Dexie CDN build that
-// frontend/index.html loads. Two reasons, both about not touching live data:
+// Deliberately uses the raw IndexedDB API rather than Dexie. Two reasons, both about not touching live data:
 //   1. No network dependency — a backup tool must work offline, every time.
 //   2. Opening a database with Dexie means declaring a version. Declaring a
 //      version that differs from what is on disk triggers an upgrade, which is

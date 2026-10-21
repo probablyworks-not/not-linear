@@ -58,3 +58,23 @@ _archive/
 # Personal planning docs (open-source prep)
 plan_final.md
 licenses_plan.md
+
+# ---- Personal / private (open-source prep): stays on disk, never published ----
+# Legacy vanilla-JS app and its launchers: superseded by web/
+frontend/
+notlinear.html
+notlinear_server.py
+launchers/
+# Agent and project working memory, plans, notes
+docs/
+AGENTS.md
+CLAUDE.md
+BUGS.md
+FEATURES.md
+MIGRATION.md
+plan.md
+redesign_product.md
+notes_new_feature.md
+feedback/
+# Local-only legacy parity tests (need frontend/)
+web/tests/legacy-oracle/

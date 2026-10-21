@@ -4,11 +4,11 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>notlinear — export data</title>
-<link rel="stylesheet" href="/frontend/styles/tokens.css">
+<link rel="stylesheet" href="/tools/tokens.css">
 <style>
   /* Standalone tool: tokens.css is reused so this matches the app's palette,
      but no app CSS is loaded — these pages must keep working even if the
-     frontend is mid-refactor or deleted. */
+     app is broken or mid-upgrade. */
   body {
     margin: 0; padding: 32px 24px;
     background: var(--bg, #141414); color: var(--text, #e8e8e8);
@@ -46,7 +46,7 @@
 <main>
   <h1>Export notlinear data</h1>
   <p class="sub">Reads both IndexedDB databases and all of localStorage, and saves them as one JSON file.
-     &nbsp;·&nbsp; <a href="/frontend/index.html" style="color:var(--accent,#d9622b)">Open the app</a></p>
+     &nbsp;·&nbsp; <a href="/web/" style="color:var(--accent,#d9622b)">Open the app</a></p>
 
   <div class="card" id="origin-card"></div>
 
