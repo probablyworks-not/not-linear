@@ -72,8 +72,10 @@
 .llm-context{margin:0;max-height:320px;overflow:auto;white-space:pre-wrap;word-break:break-word;font-family:var(--mono);font-size:11px;line-height:1.55;color:var(--text-2);background:var(--bg-2);border:1px solid var(--rule);border-radius:6px;padding:9px}
 
 /* Markdown rendering inside chat messages */
-.msg.ai h1,.msg.ai h2{font-size:14.5px;font-weight:600;margin:12px 0 4px;color:var(--text);letter-spacing:-0.01em}
-.msg.ai h3,.msg.ai h4{font-size:13.5px;font-weight:600;margin:10px 0 3px;color:var(--text)}
+.msg.ai h1{font-size:21px;font-weight:650;line-height:1.3;margin:26px 0 10px;color:var(--text);letter-spacing:-0.02em}
+.msg.ai h2{font-size:18px;font-weight:650;line-height:1.35;margin:24px 0 8px;color:var(--text);letter-spacing:-0.015em}
+.msg.ai h3{font-size:15.5px;font-weight:650;line-height:1.4;margin:18px 0 6px;color:var(--text)}
+.msg.ai h4{font-size:15px;font-weight:600;margin:14px 0 4px;color:var(--text-2)}
 .msg.ai h1:first-child,.msg.ai h2:first-child,.msg.ai h3:first-child{margin-top:0}
 .msg.ai ul,.msg.ai ol{padding-left:18px;margin:4px 0 8px}
 .msg.ai li{margin:2px 0;line-height:1.65;font-size:inherit}
@@ -87,12 +89,14 @@
 .msg.ai th.md-align-center,.msg.ai td.md-align-center{text-align:center}
 .msg.ai th.md-align-right,.msg.ai td.md-align-right{text-align:right}
 .msg.ai code{font-family:var(--mono);font-size:12px;background:var(--bg-3);padding:1px 5px;border-radius:3px;color:var(--text-2)}
-.msg.ai .md-number-line{margin-top:12px}
+.msg.ai .md-number-line{margin-top:18px;font-size:15.5px}
 .msg.ai .md-number-line:first-child{margin-top:0}
 .msg.ai .md-number-line strong,
 .msg.ai .md-label-line strong{color:var(--text)}
-.branch-body .msg.ai h1,.branch-body .msg.ai h2{font-size:13.5px}
-.branch-body .msg.ai h3,.branch-body .msg.ai h4{font-size:13px}
+.branch-body .msg.ai h1{font-size:18px}
+.branch-body .msg.ai h2{font-size:16px}
+.branch-body .msg.ai h3{font-size:14.5px}
+.branch-body .msg.ai h4{font-size:14px}
 
 /* Fenced code blocks */
 .msg.ai .code-block{margin:6px 0 10px;border:1px solid var(--rule);border-radius:8px;overflow:hidden;background:var(--bg-3)}

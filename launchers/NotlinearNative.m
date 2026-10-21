@@ -411,7 +411,7 @@ createWebViewWithConfiguration:(WKWebViewConfiguration *)configuration
 }
 
 - (void)loadNotlinear {
-    NSURL *url = [NSURL URLWithString:@"http://127.0.0.1:8765/notlinear.html"];
+    NSURL *url = [NSURL URLWithString:@"http://127.0.0.1:8765/web/"];
     NSURLRequest *request = [NSURLRequest requestWithURL:url
                                              cachePolicy:NSURLRequestReloadIgnoringLocalCacheData
                                          timeoutInterval:30.0];

@@ -37,11 +37,11 @@ import { executeTool, toolResultFallbackMarkdown, modelLabelFromId } from './too
 // ---------- DeepSeek pseudo-tool parsing (internal) ----------
 const DEEPSEEK_TOOL_MARKUP_HOLD_CHARS = 180;
 const DEEPSEEK_TOOL_START_PATTERNS = [
-  { kind:'tool_calls', re:/<\s*(?:[｜|]\s*){0,3}(?:DSML\s*(?:[｜|]\s*){0,3})?tool[_▁ ]?calls\s*(?:[｜|]\s*){0,3}>/i },
+  { kind:'tool_calls', re:/<\s*(?:[｜|]\s*){0,3}(?:DSML\s*(?:[｜|]\s*){0,3})?(?:(?:tool|function)[_▁ ]?)?calls\s*(?:[｜|]\s*){0,3}>/i },
   { kind:'invoke', re:/<\s*(?:[｜|]\s*){0,3}(?:DSML\s*(?:[｜|]\s*){0,3})?invoke\b[^>]*>/i },
 ];
 const DEEPSEEK_TOOL_END_PATTERNS = {
-  tool_calls:/<\s*\/\s*(?:[｜|]\s*){0,3}(?:DSML\s*(?:[｜|]\s*){0,3})?tool[_▁ ]?calls\s*(?:[｜|]\s*){0,3}>/i,
+  tool_calls:/<\s*\/\s*(?:[｜|]\s*){0,3}(?:DSML\s*(?:[｜|]\s*){0,3})?(?:(?:tool|function)[_▁ ]?)?calls\s*(?:[｜|]\s*){0,3}>/i,
   invoke:/<\s*\/\s*(?:[｜|]\s*){0,3}(?:DSML\s*(?:[｜|]\s*){0,3})?invoke\s*(?:[｜|]\s*){0,3}>/i,
 };
 
@@ -157,7 +157,7 @@ export async function callDeepSeek({ messages, systemPrompt, tools, onDelta, onT
     if (onAbort) onAbort();
   };
 
-  let currentMessages = [{ role:'system', content: systemPrompt }, ...messages];
+  let currentMessages = [{ role:'system', content: thinking ? `${systemPrompt}\n\nNo tools or web access are available in this mode. Never output tool-call markup (XML, DSML). If the user links pages you cannot open, say so briefly and answer from what you know.` : systemPrompt }, ...messages];
   let totalIn = 0, totalCacheHit = 0, totalOut = 0, fullText = '';
   let requestCount = 0;
   let toolRoundCount = 0;
