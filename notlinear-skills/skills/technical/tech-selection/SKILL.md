@@ -4,7 +4,7 @@ description: Bake-off between libraries, tools, or services on real criteria: ma
 layer: technical
 tools: [github_search_repos, web_search]
 when_to_use: Bake-off between libraries, tools, or services on real criteria: maturity, fit, lock-in, cost.
-keywords: [tech, selection, bake, between, libraries, tools, services, real]
+keywords: [library, framework, tools, stack, which to use, compare, bake-off, lock-in, engineer, engineering, implement]
 ---
 
 # Tech Selection

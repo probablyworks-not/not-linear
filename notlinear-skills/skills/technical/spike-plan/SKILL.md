@@ -3,7 +3,7 @@ name: spike-plan
 description: Design the smallest experiment that de-risks a technical unknown.
 layer: technical
 when_to_use: Design the smallest experiment that de-risks a technical unknown.
-keywords: [spike, plan, design, smallest, experiment, risks, technical, unknown]
+keywords: [spike, prototype, de-risk, experiment, feasibility, technical unknown, engineer, engineering, implement]
 ---
 
 # Spike Plan

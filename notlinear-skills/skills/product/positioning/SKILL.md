@@ -4,7 +4,7 @@ description: Differentiation: who it's for, against what, why it wins.
 layer: product
 tools: [web_search]
 when_to_use: Differentiation: who it's for, against what, why it wins.
-keywords: [positioning, differentiation, against, what, wins]
+keywords: [positioning, differentiation, competitors, alternatives, why it wins, target user, product manager, PM]
 ---
 
 # Positioning

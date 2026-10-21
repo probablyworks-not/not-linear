@@ -33,6 +33,9 @@ This is the canonical list of **what the product does**, organized by area, at t
 - File handling: PDFs (native text extraction, 6s timeout, >20MB flagged too big, also sent as a base64 document block to Claude), images (native image block, 5MB cap), text-like files (md/txt/csv/json/js/ts/css/html/xml/yml/log, 2MB cap) — oversized/unsupported files degrade to a clear "not included" message rather than failing silently.
 - No native HTML5 drag-and-drop zone on the composer/doc — attachment is exclusively via the menu, paste, or native pickers.
 
+### Clarify intent first (`/web/` only)
+Before answering a new message of four or more words, the model may ask 1-4 multiple-choice questions. They appear as a card between your message and the reply: click or press 1-4 to pick (several allowed when the question says so), type your own under "Something else…", Enter for next, ⌘Enter to finish, Esc or Skip to drop them all. A message the model finds clear gets no card. Your answers are added to the request's system prompt as binding context, kept as chips above the reply, and saved with the turn (`thread.clarifications`). A retry reuses them. Works on every model; branch panels get the same card. Switch: Settings → "Clarify intent first" (default on, stored in `localStorage` `nl_clarify_first`). Not in the classic app.
+
 ### Selection popover ("Pop")
 
 Appears on any text selection in the doc or a branch body:
@@ -80,7 +83,7 @@ Appears on any text selection in the doc or a branch body:
 
 - Search (⌘K hint), New chat (⌘N hint).
 - **Projects section** — collapsible; "View all projects" grid icon, "New project" +; rows show emoji/icon (click → picker), name, "…" settings (opens the project panel).
-- **Threads section** — collapsible; each row has an icon button (click/Enter/Space → picker), title, delete (except pinned `doc-main`); threads that belong to a project are hidden from this flat list.
+- **Threads section** — collapsible; each row has an icon button (click/Enter/Space → picker), title, delete (except pinned `doc-main`); threads that belong to a project are hidden from this flat list. Each row has a "Move to project" folder button (`/web/` only); notes filed in a project are likewise hidden from the Notes tree.
 - **Notes section** — collapsible, "Delete all notes" and "New note" icon buttons.
 - **Product story entry** ("✨ Product story") — opens the fullscreen changelog player.
 - **Recent branches section** — collapsible, dynamic (see Branching above).
@@ -101,7 +104,7 @@ Appears on any text selection in the doc or a branch body:
 ### Projects
 
 - **Grid view** — search box, sort (Last updated / Name), card grid (icon, name, thread count, relative "Updated Xh ago"), New project.
-- **Project panel** (per project, overlay) — editable name; New chat / Add existing chat (toggles an ungrouped-chats picker); chat list per chat: open, "Remove from project" (keeps the chat, moves it back to Threads), Delete chat (confirm); **Project rules** textarea (custom instructions applied to every chat/branch in the project's system prompt); **Project files** — Add files, Link folder…/Unlink (native picker, shows the linked path, unlinking clears the scan cache); Delete project (confirm dialog, explicitly states chats are kept and moved back to Threads).
+- **Project panel** (per project, overlay) — editable name; New chat / Add existing chat (toggles an ungrouped-chats picker); chat list per chat: open, "Move to project" (to another project), "Remove from project" (keeps the chat, moves it back to Threads), Delete chat (confirm); **Notes in this project** (`/web/` only: New note, Add existing note, open, Move to project, Remove) and **Project rules** textarea (custom instructions applied to every chat/branch in the project's system prompt); **Project files** — Add files, Link folder…/Unlink (native picker, shows the linked path, unlinking clears the scan cache); Delete project (confirm dialog, explicitly states chats are kept and moved back to Threads).
 - **Linked-folder context injection** — sending a message triggers keyword extraction + optional DeepSeek semantic rerank, selecting up to 10 relevant files from the folder scan, injected as `<project_file>` context with a "Sources (DeepSeek):" or "Sources (keywords):" bar on the response.
 
 ### Search palette (⌘K)
@@ -154,12 +157,20 @@ Appears on any text selection in the doc or a branch body:
 | `B` | selection popover visible | Branch |
 | `⌘K` / `Ctrl+K` | global | toggle search palette |
 | `⌘N` / `Ctrl+N` | global | new chat |
-| `⌘⇧B` / `Ctrl+Shift+B` | global | toggle Feedback panel |
+| `⌘⇧B` / `Ctrl+Shift+B` | global, **legacy `frontend/` only** | toggle Feedback panel. In `/web/` this chord is **Branch** and Feedback is `⌘⇧F` (ADR-052) |
 | `⌘Q` / `Ctrl+Q` | native shell only | toggle Feedback panel (browsers reserve ⌘Q) |
+| `⌘⇧B` | `/web/` chat | Branch from the current text selection (toast if nothing is selected) |
+| `⌘⇧F` | `/web/` global | toggle Feedback panel |
+| `⌘⇧C` | `/web/` chat | copy the newest assistant reply (same text as the Copy button) |
+| `⌘⇧R` | `/web/` chat | retry a **failed** reply only; on a finished reply it toasts "Nothing to retry". It does not regenerate a good reply |
+| `⌘/` | `/web/` global | keyboard-shortcuts sheet |
+| `⌘+` / `⌘−` / `⌘0` | `/web/` branch canvas | zoom in / out (0.25-2x, around the viewport centre) / fit all branches |
+| `⌘Z` / `⇧⌘Z` / `⌘Y` | `/web/` Notes editor | undo / redo / redo: BlockNote's own history, covered by an e2e test, nothing app-level |
 | `Escape` | global | prioritized close-stack: branch canvas → story player → search palette → delete-confirm → modes modal → project panel → projects grid → sidebar (mobile) → context-ranking popover → model menu → mode menu → branch "…" menu → context panel → prefs → else hide selection popover |
 | `Enter` | delete-confirm, Delete focused | confirm |
 | `↑`/`↓` + `Enter` | search palette | navigate / select |
 | `⌘B`/`⌘I`/`⌘U` | Notes floating toolbar | Bold/Italic/Underline (see §2) |
+| `⌘⇧H` | `/web/` Notes editor | Apply the last highlight picked from the "A" menu (yellow until one is picked); on text that already has it, removes it. Last pick resets on reload |
 
 ---
 
@@ -501,10 +512,13 @@ Worth tracking separately since these look clickable but currently do nothing (o
 
 ---
 
-*Last compiled 2026-10-05 (6b and section 7 extended for P6b Notes and the backup endpoint; earlier: 2026-10-04, section 6b added for the P3 React shell and extended for P4.1a Settings; section 7 updated for the P2 FastAPI move; the rest 2026-08-02) by direct codebase inspection (`frontend/app.js`, `frontend/views/notes.js`, `frontend/core/*.js`, `frontend/providers/*.js`, `backend/server.py`, `index.html`, `redesign_product.md`, `BUGS.md`, `AGENTS.md`). If you land a feature and don't see it here, add it in the same session — see the update rule at the top of this file.*
+*Last compiled 2026-10-16 (Notes from chat added; earlier: 2026-10-05 (6b and section 7 extended for P6b Notes and the backup endpoint; earlier: 2026-10-04, section 6b added for the P3 React shell and extended for P4.1a Settings; section 7 updated for the P2 FastAPI move; the rest 2026-08-02) by direct codebase inspection (`frontend/app.js`, `frontend/views/notes.js`, `frontend/core/*.js`, `frontend/providers/*.js`, `backend/server.py`, `index.html`, `redesign_product.md`, `BUGS.md`, `AGENTS.md`). If you land a feature and don't see it here, add it in the same session — see the update rule at the top of this file.*
 
 - **Chat, P5b–d** (`flags.chat`): select text for Highlight, Branch (⌘B) or Ask; branch panels stack in a right drawer (hidden below 1100px, as legacy), drag-resize from the left/bottom edges, collapse, reader mode, promote to main (with a trail back), delete, per-branch model and mode; Recent branches in the sidebar; Highlights panel, thread map, branch canvas and breadcrumbs. Claude and DeepSeek run web search and page-fetch tools with status lines. Per-message Copy/Download/Retry/Continue, a usage line, attachments and a Context panel, project linked-folder context with a Sources bar and per-chat ranking override. Threads, projects and the title use Mind Garden icons (click to change; stored in `emoji` as `icon:<id>[:hex]`, shared with legacy). Data: `branchSnapshots`, `branchRecents`, `highlights[]` and additive `highlightsV2`.
 
-## 11. Skills (P7, `/web/` only)
+### Notes from chat (`/web/` only)
+`flags.chatNotes`. On a main thread (not in branch panels) the model has a `create_note` tool for long, standalone documents (a report, plan, spec, comparison, study guide) and answers in a sentence or two instead of pasting them. The document is converted from markdown to Notes blocks (headings, lists with nesting, to-dos, quotes, code, tables, rules, equations; inline bold/italic/code/links), saved as a top-level note in the chat's project, and a card (note icon, title, Open) appears under the reply. The card is saved inside the reply, so it is still there after a reload. Clicking it (or Enter) opens the note in a pane on the right: editable like a normal note, but with no Ask-AI bar or branch drawer. Drag its left edge to resize (min 340px, the chat keeps at least 360px; double-click resets to 560; arrow keys nudge; remembered in `nl_note_pane_w`). The chat column and any open branch panels reflow to the space left. Below 900px the pane covers the chat. Header buttons: open as full page, close. Leaving the chat closes the pane. While Notes are still locked behind the backup nothing is saved and the document stays in the chat. Settings lists the tool as "Save long answers as notes". Not in the classic app.
+
+## 11. Skills (P7, `/web/` only)## 11. Skills (P7, `/web/` only)
 
 `flags.skills`. Settings → Skills → dialog: enable/disable, pin, edit description/when-to-use/keywords/instructions/priority/always/auto, add, import/export SKILL.md, reset a built-in, "Test a message" preview. Built-ins bundled from `notlinear-skills/`; edits in IndexedDB `notlinear-skills`. Each send BM25-selects up to 3 skills (token budget ~1500) and appends them to the system prompt via `extraContext`; works for any provider. Type `/` (or `/skills`, `/pre…`) in the main or branch composer for a picker: ↑↓ Enter/Tab picks a skill as a chip for that message only (bypasses score/limit/budget, works even if disabled); Backspace or × removes it. Chips show on the live reply only. `tools:` is shown, not wired.

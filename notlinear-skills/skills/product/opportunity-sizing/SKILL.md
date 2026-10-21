@@ -4,7 +4,7 @@ description: Rough reach/impact sizing and the cost of not doing the other thing
 layer: product
 tools: [web_search]
 when_to_use: Rough reach/impact sizing and the cost of not doing the other things.
-keywords: [opportunity, sizing, rough, reach, impact, cost, doing, other]
+keywords: [opportunity, market size, sizing, reach, impact, TAM, is it worth building, product manager, PM]
 ---
 
 # Opportunity Sizing

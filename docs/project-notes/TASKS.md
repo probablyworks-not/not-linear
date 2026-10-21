@@ -12,6 +12,8 @@ Each entry: **ID · Status · Goal · Context · Files likely involved · Accept
 - **P6c (done):** page create/subpage/duplicate/delete/delete-all/drag-reparent, nested tree with remembered expansion, cover/icon/tags/meta, slash menu and blocks (toggle, callout, divider, page link, media, file, bookmark, embed, columns, equation, TOC), `@` mentions, toolbar colour/highlight/inline equation, Ask-AI branches (ADR-054).
 - **P6d (done):** Markdown export through the save cascade (tested against legacy), cross-app Playwright spec, FEATURES.md.
 - **Separate commit, a week later:** delete `frontend/`, flip `/`, delete `server_legacy.py`.
+
+- **Added 2026-10-13:** ⌘⇧H applies the last-picked highlight (toggles off). Typecheck only; needs a browser click-through and, ideally, a Playwright spec in `web/tests/e2e/web-notes-blocks.spec.ts`.
 - **Open:** a real unmasked notes fixture (`pnpm fixtures <backup.json>`); the committed one covers 8 block types.
 
 ## TASK-P5b-d — Highlights, branches, views, tool loop and parity in `/web/`
@@ -599,3 +601,7 @@ Each entry: **ID · Status · Goal · Context · Files likely involved · Accept
 - **Verification:** `node --check` clean; assets HTTP 200 on :8765. Human GUI smoke for breadcrumb→overview→open/create/delete pending (no headless browser available).
 
 - **P7.1 Skills loader** — status: built, automated-green, awaiting maintainer smoke test and commit. Remaining P7: MCP registry, GitHub/Reddit connectors, `web/src/agent/` (not started).
+
+- **Clarify intent first (`/web/`)** — status: built, automated-green, awaiting maintainer smoke test. Remaining: try with real keys on all four providers; decide whether a cheaper model should write the questions.
+
+- **Chat files long documents as notes (`/web/`)** — status: built, automated-green, awaiting maintainer smoke test with a live model. Open: does the model call `create_note` at sensible times; should renaming a note update old cards; `update_note` so follow-ups edit the open note (not built).

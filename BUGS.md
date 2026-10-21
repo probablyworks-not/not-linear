@@ -875,3 +875,17 @@ Areas that have broken two or more times. If your task touches any of these, you
 - Symptoms: branches snap to depth 3 at most; DeepSeek replies under ~180 characters arrive in one chunk (hold-back for the markup filter); the first request in DeepSeek thinking mode appends a synthesis instruction; saved-HTML history grows context for long chats.
 - Fix: none; changing one app breaks the other's saved data or the oracle tests. Revisit with both apps together.
 - Related: ADR-051.
+
+
+### #058 — DeepSeek Thinking mode leaks `<｜｜DSML｜｜calls>` and returns an empty answer
+- Status: fixed (filter + error); tools in thinking mode not enabled
+- Date discovered: 2026-10-06
+- Agent: Claude Sonnet 5.5
+- Symptoms: In DeepSeek Flash (Thinking), a question needing a lookup showed an empty `<｜｜DSML｜｜calls>` / `</｜｜DSML｜｜calls>` pair as the whole answer; "continue" repeated it.
+- Cause: thinking mode sends no tool schema (`!req.thinking`), so the model wrote tool-call markup as text. The filter regex required `tool` before `calls` and missed the bare form; the "markup left too little" fallback needs prior tool results, which thinking mode never has.
+- Fix: filter accepts an optional `tool`/`function` prefix (`web/src/providers/deepseek-markup.ts`, `frontend/providers/deepseek.js`); `deepseek.ts` now fails with a clear message when markup was cut and nothing visible remains.
+- Files touched: `web/src/providers/deepseek-markup.ts`, `web/src/providers/deepseek.ts`, `frontend/providers/deepseek.js`, `web/tests/chat/tool-loop.test.ts`.
+- Test case: markup-filter test with doubled pipes and no `tool_` prefix.
+- Prevention: not verified in the live app. Real fix (tools in thinking mode) needs `reasoning_content` round-tripped in the tool loop; untested against the API.
+- Update 2026-10-13: the bare-`calls` filter alone left a dead end when the model wrote a preamble first (visible text non-empty, so no error). Added a Thinking-mode system note (no tools; don't emit markup), plus one no-tools retry (`noToolsMessages`) in `web/src/providers/deepseek.ts`; markup after the retry is an error. Legacy `frontend/providers/deepseek.js` got the system note only. Tests added in `tool-loop.test.ts`. Superseded same day: Thinking mode now gets tools in `/web/` (each tool round's `reasoning_content` is sent back with the assistant tool-call message); the no-tools note was removed, the no-tools retry kept as a safety net. Legacy `frontend/providers/deepseek.js` unchanged (still no tools in thinking). Not yet verified against the live DeepSeek API.
+- Related: #018.

@@ -3,7 +3,7 @@ name: devils-advocate
 description: Argue the opposite of a stated conclusion as hard as possible. Use when branching on a conclusion that needs pressure-testing.
 layer: move
 when_to_use: Use when branching on a conclusion that needs pressure-testing.
-keywords: [devils, advocate, argue, opposite, stated, conclusion, hard, possible]
+keywords: [devil's advocate, argue against, opposite, pressure-test, counterargument, push back, challenge this]
 ---
 
 # Devil's Advocate

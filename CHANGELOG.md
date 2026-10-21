@@ -2,7 +2,47 @@
 
 All notable repository changes made by AI agents should be recorded here.
 
+## 2026-10-16
+
+- Agent: Claude Sonnet 5.5
+- Summary: **Chat files long documents as notes, and opens them beside the chat (`/web/`).** On a main thread the model can call a new `create_note` tool for a report, plan, spec or other document meant to be re-read; it is saved to Notes (top level, in the chat's project) and the reply shows a card with the note's icon and title. Clicking the card opens the note in a pane on the right: readable, editable, drag the left edge to resize (double-click resets, arrow keys nudge); the chat column reflows to the width that is left, and below 900px the pane covers the chat. "Open as full page" moves it to its own tab. Branch panels sit to the pane's left.
+- Files changed: `web/src/notes/{markdown-to-blocks,pane-width}.ts` (new), `web/src/notes/NotePane.tsx` (new), `web/src/notes/{NotePage.tsx,notes-repo.ts}`, `web/src/chat/note-tool.ts` (new), `web/src/chat/{run-and-persist,send,stream-html,chat-store,ChatView,LiveAiTurn}.ts(x)`, `web/src/providers/{tool-specs,types}.ts`, `web/src/settings/tool-status.ts`, `web/src/state/ui-store.ts`, `web/src/lib/markdown.ts` (`inlineMd` exported), `web/src/styles/app.css`, `web/src/flags.ts`; tests `web/tests/notes/{markdown-to-blocks,pane-width}.test.ts`, `web/tests/chat/{note-tool,note-card}.test.ts`, `web/tests/e2e/web-chat-notes.spec.ts` (all new), `web/tests/e2e/web-tools.spec.ts`, `web/tests/providers/descriptions-match-app.test.ts`.
+- Behavior changes: every main-thread request now offers one more tool (`create_note`), which also shows under Settings → tools; branch panels do not get it. Saving needs Notes to be backed up first (the existing lock, ADR-007); while locked the tool reports that, nothing is saved, and the model gives the document in the reply. The card is plain markup in the saved reply (`.note-ref`, `data-note-id`), so no chat schema change; the classic app shows it as an ordinary block. The card keeps the title as it was when saved; renaming the note does not update old cards. Switch: `flags.chatNotes`. The pane width is remembered in `localStorage` `nl_note_pane_w`. Notes schema, chat schema and the 12 endpoints are untouched.
+- Observed: `web-branches` model chip (15 vs 14 models) and the vitest `options-match-legacy` pair fail on the model list edited before this change. The `web-notes` editor specs flake from run to run on the IndexedDB seed (Notes sidebar renders empty); not investigated. Not tried with a live model.
+
+## 2026-10-14
+
+- Agent: Claude Sonnet 5.5
+- Summary: **Clarify intent first in `/web/`.** Before answering a fresh prompt of four or more words, the model may ask 1-4 multiple-choice questions; they show as a card (number keys pick, Enter advances, Esc or Skip drops them), and the answers are added to the system prompt of the real request. Works on Claude, DeepSeek, OpenAI and Gemini because it only uses the shared `runTurn`. Main chat and branch panels both get it. Setting: Settings → "Clarify intent first" (on by default).
+- Files changed: `web/src/chat/{clarify,clarify-pref,ClarifyCard,ClarifySummary}.ts(x)` (new), `web/src/chat/{run-and-persist,chat-store,ChatView,MessageList}.ts(x)`, `web/src/branch/BranchPanel.tsx`, `web/src/db/turn-ops.ts`, `web/src/settings/SettingsDialog.tsx`, `web/src/lib/keyboard.ts`, `web/src/ui/ShortcutsDialog.tsx`, `web/src/flags.ts`, tests `web/tests/chat/clarify.test.ts` (new), `web/tests/e2e/web-clarify.spec.ts` (new), `web/tests/chat/send.test.ts`.
+- Behavior changes: one extra short model call per qualifying message (cost and a moment of latency); a failed or malformed questions call just means no questions. Answers are saved on the thread as an additive `clarifications` map keyed by turn id (no Dexie bump; legacy keeps unknown thread fields). The switch lives in `localStorage` key `nl_clarify_first`, not in the pinned persisted prefs. Branch panels show the summary live only; it is not saved there. Legacy `frontend/` unchanged.
+
 ## 2026-10-05
+## 2026-10-13
+
+- Agent: Claude Sonnet 5.5
+- Summary: **OpenAI and Gemini in `/web/` chat.** `gpt-4o`, `gpt-4o-mini`, `gpt-5`, `gemini-flash` and `gemini-pro` now run in `/web/` instead of being refused, through one OpenAI-compatible provider on the `ChatProvider` seam (tool loop, abort, 401/429 mapping, usage and cost, model labels). Keys come from the existing `nl_api_keys` (`openai`, `gemini`).
+- Files changed: `web/src/providers/openai-compat.ts` (new), `web/src/providers/openai.ts` (new), `web/src/chat/{models,usage,response-meta,run-turn,run-and-persist}.ts`, tests `web/tests/chat/openai-provider.test.ts` (new), `run-turn.test.ts`, `send.test.ts`.
+- Behavior changes: an unknown `gpt-*`/`gemini-*` id is still refused, with new wording ("not available here yet"). OpenAI requests ask for a usage chunk (`stream_options.include_usage`) so cost is not 0; legacy did not. Tools are sent only when there is a tool runner (legacy always sent them). Text only: PDFs and images are not sent to these providers (same as legacy). Legacy `frontend/` unchanged.
+- Observed: not tried against the real OpenAI or Gemini APIs (no key used); tested with mocked streams only.
+
+- Agent: Claude Sonnet 5.5
+- Summary: **Move chats and notes between projects in `/web/`.** A folder button ("Move to project") on chat rows (Threads sidebar and project panel) and note rows (Notes sidebar and project panel) lists the projects plus "No project". The project panel gains a "Notes in this project" section (New note, Add existing note, open, move, remove). A chat or note belongs to one project; moving replaces the old one.
+- Files changed: `web/src/projects/MoveToProjectButton.tsx` (new), `web/src/projects/ProjectPanel.tsx`, `web/src/shell/Sidebar.tsx`, `web/src/db/project-ops.ts` (`setChatProjectIn`), `web/src/state/app-store.ts` (`moveChatToProject`), `web/src/state/actions.ts` (`moveChat`), `web/src/notes/{notes-ops,notes-repo,notes-actions,NotesSidebarSection}.ts(x)`, tests `web/tests/projects/move-to-project.test.ts`, `web/tests/e2e/web-project-move.spec.ts`.
+- Behavior changes: notes gain an optional `projectId` on the note row in `notlinear-notes` (no Dexie version bump, chat schema untouched, ADR-007 kept). A note filed in a project is hidden from the Notes tree; its subpages travel with it, and filing a subpage lifts it to top level. Deleting a project leaves its notes' `projectId` dangling; they show as ungrouped because the sidebar checks that the project still exists.
+- Observed: `web-notes.spec.ts:73` is flaky (fails about 1 run in 4 even with this change reverted).
+
+- Agent: Claude Sonnet 5.5
+- Summary: **Keyboard shortcuts in `/web/`:** `⌘⇧B` Branch from the selection, `⌘⇧C` copy last reply, `⌘⇧R` retry a failed reply, `⌘/` shortcuts sheet, `⌘+`/`⌘−`/`⌘0` zoom and fit on the branch canvas. Undo/redo (`⌘Z`, `⇧⌘Z`, `⌘Y`) already worked in the Notes editor through BlockNote; now covered by a test.
+- Files changed: `web/src/lib/keyboard.ts`, `web/src/main.tsx`, `web/src/chat/shortcuts.ts` (new), `web/src/ui/ShortcutsDialog.tsx` (new), `web/src/shell/AppShell.tsx`, `web/src/state/ui-store.ts`, `web/src/branch/BranchCanvas.tsx`, `web/src/feedback/FeedbackLog.tsx`, `web/tests/{shell/keyboard.test.ts,e2e/web-shortcuts.spec.ts,e2e/web-feedback.spec.ts,e2e/web-notes.spec.ts}`, `FEATURES.md`.
+- Behavior changes: **In `/web/`, Feedback moves from `⌘⇧B` to `⌘⇧F`** (`⌘Q` alias unchanged), because `⌘⇧B` is now Branch. Legacy `frontend/` keeps `⌘⇧B` for Feedback. The canvas keys stop the browser's page zoom while the canvas is open. No data or schema change.
+- Observed: `⌘⇧R` cannot regenerate a finished reply; that needs the saved stream HTML rewritten, so it was left out. Two vitest tests (`options-match-legacy`) and one e2e (`web-branches` model chip) fail on 15 vs 14 models, from the uncommitted DeepSeek Pro addition in `web/src/chat/models.ts`; not from this change.
+
+- Agent: Claude Sonnet 5.5
+- Summary: **⌘⇧H re-applies the last highlight in the `/web/` Notes editor.** Applies the highlight last picked from the "A" colour menu (yellow until one is picked); on text that already has it, removes it. ⌘H was rejected because macOS reserves it for "Hide".
+- Files changed: `web/src/notes/{NotePage.tsx,note-menus.tsx}`, `FEATURES.md`, `docs/project-notes/{CHANGES,RUNS,TASKS}.md`.
+- Behavior changes: new shortcut only; no data or schema change. The last-picked highlight lives in module memory and resets on reload. Verified: typecheck. NOT yet verified: lint, build, browser click-through.
+
 
 - Agent: Claude Sonnet 5.5
 - Summary: **Auto-hiding top bar and composer in `/web/`.** The tab strip + breadcrumb bar and the composer float over the page and slide in when the pointer nears the top/bottom edge (or on focus, or while a draft/attachments exist; the composer stays up in an empty chat). Tighter bar padding, smaller chat title (36→26px), more reading room. `localStorage nl_autohide_bars = '0'` restores the old always-showing sticky bar; the e2e config sets it, `web-bars.spec.ts` covers hiding.
@@ -919,3 +959,11 @@ All notable repository changes made by AI agents should be recorded here.
 - Agent: Kimi (k2.6)
 - Summary: Removed the topbar settings, share, and edge-toggle buttons, leaving only Context & files and Highlights.
 - Files changed: `notlinear.html`, `CHANGELOG.md`
+
+## 2026-10-06 — DeepSeek thinking-mode markup leak (#058)
+
+- Loosened the DSML pseudo-tool-call filter (optional `tool`/`function` prefix) in `/web/` and legacy; DeepSeek now shows an error instead of an empty reply when only cut markup remains.
+
+- 2026-10-13: DeepSeek Thinking no longer dead-ends on tool-call markup: system note + one no-tools retry in /web/, system note in legacy (#058).
+
+- 2026-10-13: /web/ DeepSeek Thinking mode now offers tools; reasoning_content is returned with each tool round (#058). Legacy unchanged.

@@ -624,3 +624,45 @@ Each entry: **Decision ID · status · context · decision · alternatives rejec
 - **Alternatives rejected:** an LLM router (latency, cost, provider-dependent); disk-backed skills via new endpoints (backend coupling); a new prefs key (frozen schema); always-on foundation skills (about 1.7k tokens on every prompt, overlaps the base prompt).
 - **Consequences/tradeoffs:** Skill chips are shown on the live turn only (not persisted: chat schema is frozen). `tools:` is parsed and displayed but not wired. The 5th store is a small flat feature store. Appending via `extraContext` places skills last in the prompt, after tone.
 - **Related files:** `web/src/skills/*`, `web/src/db/skills.ts`, `web/src/chat/run-and-persist.ts`, `web/scripts/check-p7-providers-untouched.mjs`
+
+## ADR-052 — `/web/` chord map: ⌘⇧B is Branch, Feedback moves to ⌘⇧F
+
+- **Status:** accepted 2026-10-13.
+- **Context:** The user wanted ⌘⇧B for Branch. It was already Feedback in both apps; bare `B` on the selection popover is Branch.
+- **Decision:** In `/web/` only, ⌘⇧B = Branch, ⌘⇧F = Feedback (⌘Q alias kept). Legacy `frontend/` is unchanged. Undo/redo are not app-level: the Notes editor's own history handles ⌘Z, ⇧⌘Z and ⌘Y. Chat chords act only when a chat tab is in front.
+- **Alternatives rejected:** keep Feedback on ⌘⇧B and give Branch another chord; an app-level undo stack for deletes (larger, touches persistence and branch code).
+- **Consequences/tradeoffs:** The two apps differ until cutover. Browsers may claim some ⌘⇧ chords before the page does.
+- **Related files:** `web/src/lib/keyboard.ts`, `web/src/main.tsx`, `web/src/chat/shortcuts.ts`.
+
+---
+
+## ADR-053 — Project membership for notes lives on the note row; one project per chat or note
+
+- **Status:** accepted
+- **Context:** chats already store `threads[id].projectId`; notes live in their own db (ADR-007) and had no project link.
+- **Decision:** add an optional `projectId` to each note in `nl_notes_v1`. Only top-level notes are listed in a project; filing a page sets it on the whole subtree, and filing a subpage lifts it to top level. One project at a time.
+- **Alternatives rejected:** storing note ids on the project in the chat db (couples the two dbs); a many-to-many link (user chose one project).
+- **Consequences:** no schema bump. Dangling ids after a project delete are harmless because readers check the project exists.
+- **Related files:** `web/src/notes/notes-ops.ts`, `web/src/db/project-ops.ts`
+
+---
+
+## ADR-054 — Clarifying questions are asked through a plain-JSON prompt on the shared runTurn
+
+- **Status:** accepted
+- **Context:** the user wants every provider to ask clarifying questions before answering. No provider path in `web/` supports a forced tool or a response schema, and `ChatRequest` has no field for one.
+- **Decision:** `runClarify` sends one tool-less request through `runTurn` with a system prompt demanding a single JSON object, parsed tolerantly; any failure means no questions. The answers go into the real request's system prompt (`extraContext`), never into `mainMessages`. The on/off switch is `localStorage` (`nl_clarify_first`), because the persisted prefs list is pinned to the classic app's keys. Answers are saved as an additive `thread.clarifications` map.
+- **Alternatives rejected:** a pseudo-tool the model calls (only works with native tool calling and needs the tool loop to block on UI); adding `forceTool`/`responseSchema` to every provider (large, untestable without live keys); a new persisted pref (breaks the pinned-keys test and round-trips through legacy).
+- **Consequences/tradeoffs:** an extra call per qualifying message; relies on models following a JSON instruction.
+- **Related files:** `web/src/chat/clarify.ts`, `web/src/chat/run-and-persist.ts`, `web/src/db/turn-ops.ts`
+
+---
+
+## ADR-055 — Chat files documents as notes through a tool; the card lives in the reply HTML
+
+- **Status:** accepted
+- **Context:** the user wants long, re-readable documents from a chat to become Notes in the same project, openable beside the chat, with the model deciding when. Notes has its own db behind a backup lock (ADR-007); the chat schema is frozen; `TOOL_SPECS` lets a tool be added without editing a provider.
+- **Decision:** a `create_note` spec (offered only when the host sets `noteThreadId`, i.e. main threads) whose runner converts markdown to Notes blocks and writes through `notes-repo.createNoteFrom`, never directly. The card is `.note-ref` markup appended to the saved assistant turn, so it persists through `stream` with no schema change. The note opens in a fixed right pane (`NotePane`) hosting `NotePage` in a compact mode; its width is a UI preference in `localStorage`, and the pane publishes `--note-pane-room` so the chat column and the branch drawer move over.
+- **Alternatives rejected:** a manual "Save as note" button as the trigger (the user asked for the model to decide); a `noteRefs` field on the thread (a chat schema change); reusing the full-page Notes tab only (does not read beside the chat); a heuristic on reply length instead of a tool (brittle and un-explainable).
+- **Consequences/tradeoffs:** one more tool in every main-thread request; saving silently depends on the backup lock, so the tool reports it to the model, which falls back to the chat; cards keep the title as saved; no Ask-AI or branches inside the pane (the full page has them).
+- **Related files:** `web/src/chat/note-tool.ts`, `web/src/chat/run-and-persist.ts`, `web/src/notes/{markdown-to-blocks,NotePane,pane-width,notes-repo}.ts(x)`, `web/src/providers/tool-specs.ts`

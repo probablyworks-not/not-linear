@@ -3,8 +3,7 @@ name: mode-product
 description: Product mode: user value and business reality drive every answer. Separate 'cool' from 'moves the metric', challenge scope creep.
 layer: mode
 when_to_use: Product mode: user value and business reality drive every answer. Separate 'cool' from 'moves the metric', challenge scope creep.
-keywords: [mode, product, user, value, business, reality, drive, answer]
-auto: false
+keywords: [product manager, PM, product mode, use cases, user value, product thinking, think as a product manager, scope creep, user need, business]
 ---
 
 # Product Mode

@@ -4,7 +4,7 @@ description: Estimate with real arithmetic (latency, cost, capacity) instead of 
 layer: technical
 tools: [code_exec]
 when_to_use: Estimate with real arithmetic (latency, cost, capacity) instead of asserting a number.
-keywords: [napkin, math, estimate, real, arithmetic, latency, cost, capacity]
+keywords: [estimate, latency, cost, capacity, storage, scale, napkin, back of envelope, engineer, engineering]
 ---
 
 # Napkin Math

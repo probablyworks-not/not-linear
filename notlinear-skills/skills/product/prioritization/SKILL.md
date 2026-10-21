@@ -3,7 +3,7 @@ name: prioritization
 description: Impact x effort / RICE-style prioritization with an explicit cut line.
 layer: product
 when_to_use: Impact x effort / RICE-style prioritization with an explicit cut line.
-keywords: [prioritization, impact, effort, rice, style, explicit, line]
+keywords: [prioritize, prioritization, RICE, roadmap, impact, effort, what to build first, MVP, scope, product manager, PM]
 ---
 
 # Prioritization

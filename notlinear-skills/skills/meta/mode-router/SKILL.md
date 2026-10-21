@@ -1,10 +1,9 @@
 ---
 name: mode-router
-description: Match the user's query to the best mode/skill via embedding retrieval and apply it automatically. The auto-loading mechanism for the whole library.
+description: Documents how the skills library is auto-selected: keyword (BM25) matching of the user's message against each skill's name, keywords, description and when_to_use. No model or embeddings involved.
 layer: meta
-tools: [embedding_search]
-when_to_use: Match the user's query to the best mode/skill via embedding retrieval and apply it automatically. The auto-loading mechanism for the whole library.
-keywords: [mode, router, match, user, query, best, skill, embedding]
+when_to_use: Documents how the skills library is auto-selected: keyword (BM25) matching of the user's message against each skill's name, keywords, description and when_to_use. No model or embeddings involved.
+keywords: [mode router, auto-load, skill selection, routing]
 auto: false
 ---
 
@@ -12,12 +11,12 @@ auto: false
 
 Automatically match an incoming message to the right skill(s) so the library scales without the user manually picking every time.
 
-## How it works (two stages)
+## How it works
 
-1. **Explicit override first** — if the user picked a mode or branch type explicitly, use that. Never second-guess an explicit choice.
-2. **Retrieve** — embed the message, compare against the embedded `description` of every skill in the index, take the top-k by cosine similarity. This is constant-cost regardless of how many skills exist — never stuff all skill descriptions into a prompt and ask a model to pick, which gets slower and worse as the library grows.
-3. **Decide** — if the top match clears a confidence threshold with a clear margin over the next-best, use it directly. If ambiguous, use a small fast model to pick among the top-k candidates. If nothing clears the threshold, fall back to `mode-general`.
-4. **Compose** — inject the Foundation base + the selected skill's body, and expose only that skill's declared tools.
+1. **Explicit override first** — if the user picked a skill with `/`, use it. Never second-guess an explicit choice.
+2. **Always-on and pinned** skills are added next.
+3. **Match** — BM25 over each auto-enabled skill's name, `keywords`, `description`, `when_to_use` and body (weighted in that order). Take up to 3 above a minimum score and at least half the best score, within a token budget. No model, no embeddings, no network.
+4. **Compose** — inject the selected skills' bodies.
 
 ## Mode vs. move
 
@@ -25,4 +24,4 @@ A message can match both a mode (thread-level persona) and a move (a one-off rea
 
 ## Where quality actually comes from
 
-Routing quality lives in how well each skill's `description` is written, not in this router's logic. A mis-route is almost always a vague description — fix the description, not the router.
+Routing quality lives in each skill's `keywords` and `description`. Matching is by words, so put the phrases users actually type ("product manager", "architecture") in `keywords`. A mis-route is almost always weak keywords — fix those, not the router.

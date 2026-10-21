@@ -1,8 +1,23 @@
+
+## 2026-10-13 — `/web/` keyboard shortcuts
+`pnpm typecheck`, `pnpm lint` clean. vitest 882 passed, 2 failed (`options-match-legacy`: 15 models vs 14, from the uncommitted `models.ts` DeepSeek Pro change, not this work). Playwright: web-shortcuts 6 passed (new), web-feedback + web-branches + web-notes 66 passed with 1 failed (model chip count 15 vs 14, same cause), notes undo/redo 1 passed (needs `ControlOrMeta`: on macOS ProseMirror's Mod is ⌘). Manual smoke in the real app NOT run.
 # RUNS.md — run log
 
 Each entry: **date/time · task or bug ID · command category · result · important output · follow-up**
 
 ---
+
+## 2026-10-13 — OpenAI and Gemini providers in `/web/`
+`pnpm typecheck`, `pnpm lint`, `pnpm build` clean. vitest 894: 892 passed, 2 failed (`options-match-legacy`, pre-existing, `models.ts` DeepSeek Pro change). Providers tested with mocked SSE only; no live API call.
+
+## 2026-10-13 — move chats and notes between projects
+`pnpm typecheck`, `pnpm lint`, `pnpm build` clean. vitest 888 total: 886 passed, 2 failed (`options-match-legacy`, pre-existing, from the uncommitted `models.ts` change). Playwright: web-project-move 1 passed (new), web-projects, web-sidebar, web-notes-pages passed. `web-notes.spec.ts:73` is flaky: 3 of 4 passed with the change, 3 of 4 with `NotesSidebarSection.tsx` reverted. Human click-through NOT run.
+
+## 2026-10-13 — Notes ⌘⇧H last-highlight shortcut — typecheck only
+- **Command category:** typecheck (`pnpm typecheck` in `web/`)
+- **Result:** pass.
+- **Not run:** lint, build, unit, e2e, browser click-through.
+- **Follow-up:** select text, pick a highlight from the "A" menu, select other text, press ⌘⇧H; press again to clear; confirm with nothing picked it applies yellow.
 
 ## 2026-10-05 — TASK-P5b-d — full gate — pass (automated only)
 - **Command category:** test / lint / build
@@ -650,3 +665,9 @@ vitest 855, lint clean, build clean. Playwright notes specs 52 passed after the 
 ## 2026-10-05 — P7.1 skills
 
 - `pnpm typecheck`, `pnpm lint`, `pnpm test` (871 pass), `pnpm build`: pass. Playwright `web-skills` (3) + web-modes/settings/chat/branches (62 total): pass. Manual browser click-through with a live model reply: NOT done.
+
+## 2026-10-14 — clarify intent first
+`pnpm typecheck`, `pnpm lint`, `pnpm build`: pass. vitest 905 pass, 2 fail (`options-match-legacy` model lists, in files this change did not touch; same failure existed before it). New: `clarify.test.ts` (parser, gate, anchor block, bridge, full flow through `sendMessage`), Playwright `web-clarify` (3) pass. Full Playwright run: 280 passed, 12 failed, all in `web-branches` (model chip, 15 vs 14 models, already known) and the Notes specs (`web-notes*`, differing from run to run). With `flags.clarify` set to false the same specs still failed (13), so the failures are not from this change. `playwright.config.ts` now defaults `nl_clarify_first` to 0 so request-counting specs are unaffected; `web-clarify` turns it on. Manual click-through against a live model: NOT done.
+
+## 2026-10-16 — chat files notes (flags.chatNotes)
+`pnpm typecheck`, `pnpm lint`, `pnpm build`: pass. vitest: all new tests pass (markdown-to-blocks 10, pane-width 4, note-tool 4, note-card 4); full run 927 pass, 2 fail (`options-match-legacy` model lists, in files this change did not touch; same failure existed before it). Playwright `web-chat-notes` (4): pass. `web-chat`, `web-branches`, `web-tools`, `web-settings`, `web-clarify`, `web-notes-pages`: pass except `web-branches` model chip (15 vs 14 models, already known). `web-tools` expectations updated for the extra `create_note` tool; then pass. `web-notes` editor specs fail intermittently (the same spec passes on one run and fails on the next; the Notes sidebar renders empty, so the IndexedDB seed lost a race); I did not check this against a build without this change. Screenshots of the card and pane looked right. Manual click-through against a live model: NOT done.

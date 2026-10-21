@@ -3,7 +3,7 @@ name: architecture-eval
 description: ADR-style evaluation of an architecture or technology choice: options, tradeoffs, consequences, a recommendation.
 layer: technical
 when_to_use: ADR-style evaluation of an architecture or technology choice: options, tradeoffs, consequences, a recommendation.
-keywords: [architecture, eval, style, evaluation, technology, choice, options, tradeoffs]
+keywords: [architecture, design, system design, how to build, tradeoffs, ADR, stack, extension, engineer, engineering, execute, implement]
 ---
 
 # Architecture Evaluation

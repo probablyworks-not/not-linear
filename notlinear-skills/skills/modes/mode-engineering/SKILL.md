@@ -3,8 +3,7 @@ name: mode-engineering
 description: Engineering mode: precision over breadth. State assumptions about the stack, prefer the simplest solution that holds, name failure modes.
 layer: mode
 when_to_use: Engineering mode: precision over breadth. State assumptions about the stack, prefer the simplest solution that holds, name failure modes.
-keywords: [mode, engineering, precision, over, breadth, state, assumptions, about]
-auto: false
+keywords: [engineer, engineering, engineering mode, how to execute, implement, build, architecture, stack, think as an engineer, execution, failure modes]
 ---
 
 # Engineering Mode

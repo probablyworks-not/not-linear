@@ -3,7 +3,7 @@ name: spec-writing
 description: Turn an idea into a spec: goals, non-goals, success metric, acceptance criteria.
 layer: product
 when_to_use: Turn an idea into a spec: goals, non-goals, success metric, acceptance criteria.
-keywords: [spec, writing, turn, idea, goals, success, metric, acceptance]
+keywords: [spec, PRD, requirements, goals, non-goals, acceptance criteria, scope, MVP, feature, product manager, PM]
 ---
 
 # Spec Writing

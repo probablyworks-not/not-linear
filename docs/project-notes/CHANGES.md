@@ -1,5 +1,39 @@
 # CHANGES.md — internal work memory
 
+## 2026-10-14 — `/web/`: clarify intent first
+- **Summary:** `runAndPersist` calls `runClarify` (a tool-less `runTurn` asking for strict JSON questions) before the real stream; if there are questions it publishes them on the live turn, awaits `awaitAnswers(key, signal)` and appends `renderClarifyBlock(answers)` to `extra`, beside the skills block. `ClarifyCard` renders in `ChatView` and `BranchPanel`. `Turn.clarified` makes a retry replay the answers instead of asking again. Answers persist via `TurnSnapshot.clarified` → `thread.clarifications[turnId]`.
+- **Why:** user wants the assistant to learn their intent first, on every provider, with the questions shown in a good UI. JSON-in-prompt was chosen over forced tool use because no provider path supports forcing a tool.
+- **Risks:** one extra model call per qualifying message; a model that wraps its JSON oddly yields no questions (silently skipped, by design). The questions call uses the same model as the reply, so an expensive model pays twice. Heuristic gate is only "four or more words". Branch panels do not persist the summary.
+- **Not done:** per-model cheaper "questions" model, persisting branch summaries, legacy `frontend/`, a per-message toggle.
+- **Tests run:** see RUNS.md 2026-10-14.
+
+## 2026-10-13 — `/web/`: OpenAI and Gemini providers
+- **Summary:** `makeCompatProvider` (port of `callOpenAICompatible`) with two configs; `planModel` maps the five persisted pref ids to wire ids as `modelIdForModelPref` does; pricing ported from app.js:1712.
+- **Why:** user asked to include OpenAI and Gemini after seeing that `planModel` refused them.
+- **Risks:** never run against the live APIs. Gemini id `gemini-2.5-pro-preview-05-06` and `gpt-5.6-*` ids are copied from legacy and may be retired upstream. `stream_options` is only sent to OpenAI because Gemini's compatibility layer may reject it (unverified). No rate-limit fallback for these providers (the fallback is Claude-only, as before).
+- **Tests run:** vitest 894 (2 pre-existing model-list failures), typecheck, lint, build. No e2e, no live-key click-through.
+
+## 2026-10-13 — `/web/`: move chats and notes between projects
+- **Summary:** one pure op per kind (`setChatProjectIn`, `withNoteProject`), a shared `MoveToProjectButton` menu, and a Notes section in the project panel.
+- **Why:** user wanted notes (and chats) addable to a project after creation, and movable. "Documents" was dropped from scope by the user; one project per item.
+- **Risks:** notes now carry `projectId`, which legacy `frontend/views/notes.js` ignores; legacy will show those notes in its flat tree and might drop the field if it rewrites a note from scratch (not checked). Deleting a project does not clear notes' `projectId`.
+- **Not done:** legacy-app parity for note projects, a Notes-index filter by project, drag-and-drop into a project.
+- **Tests run:** vitest 888 (2 pre-existing model-list failures), typecheck, lint, build; Playwright web-project-move (new), web-projects, web-sidebar, web-notes-pages pass. Human click-through NOT run.
+
+## 2026-10-13 — `/web/` keyboard shortcuts
+- **Summary:** `installGlobalKeys` now takes a `GlobalKeyHandlers` object and routes ⌘⇧B/F/C/R, ⌘Q, ⌘K, ⌘N and ⌘/ from one table of branches. `main.tsx` supplies the handlers; the chat ones go through `activeChatThread()` so they do nothing on a Notes page. Chat actions live in `chat/shortcuts.ts` and reuse `readSelection`/`branchFromSelection`, `historyFor` and `retryTurn`. `ShortcutsDialog` is a read-only list mounted in `AppShell`, closed by the Esc chain (priority 115). `BranchCanvas` replaced `pan` with one `{x,y,z}` `view` state so zoom and the re-centring pan update together, and registers ⌘+/−/0 only while open.
+- **Why:** user asked for undo/redo, a Branch chord, and "what else". ⌘⇧B was already Feedback, so Feedback moved to ⌘⇧F (user chose this).
+- **Risks:** the muscle-memory change for Feedback in `/web/`; the legacy app still uses ⌘⇧B, so the two differ until cutover. Chrome reserves ⌘⇧C (inspect) and ⌘⇧F (full screen on some builds); `preventDefault` works in-page but a browser may still win, the native shell has no such conflict. Fit uses `layout.width/height`; not eyeballed on a large tree.
+- **Not done:** regenerate of a finished reply (rewrites persisted stream HTML; needs a design call). App-level undo for deleting chats/branches (user chose Notes only).
+- **Tests run:** vitest 884 (2 pre-existing model-list failures, see CHANGELOG), typecheck, lint; Playwright web-shortcuts 6, web-feedback, web-branches, web-notes incl. undo/redo. Human click-through NOT run.
+- **Next:** maintainer smoke test of the new chords in `Notlinear.app`; decide on regenerate.
+
+## 2026-10-13 — Notes `/web/`: ⌘⇧H re-applies the last highlight
+- **Summary:** `note-menus.tsx` keeps a module-level `lastHighlight` (default `yellow`), set whenever a highlight is picked in `ColourMenu`; `applyLastHighlight(editor)` adds it, or removes it if the selection's active `highlight` already equals it. `NotePage.tsx` handles the key in an `onKeyDown` on the editor wrapper (`metaKey` + `shiftKey`, no ctrl/alt, `key` `h`) and only when the note is editable.
+- **Why ⌘⇧H:** I first wrote ⌘H, but macOS binds it to "Hide app" in browsers, so the page may never see it. The native launcher has no Hide item (checked `launchers/NotlinearNative.m`), so ⌘H would have worked there only. ⌘⇧H is free everywhere.
+- **Choices:** toggle-off when already applied (not asked for; easy to drop). Last pick is not persisted, so a reload resets to yellow; persisting would need a prefs key or localStorage, which I did not add.
+- **Tests run:** typecheck only. No unit or e2e test added; the e2e for it is a good next step. Human click-through NOT run.
+
 ## 2026-10-05 — P5b–d: branches, highlights, views, tool loop and parity
 - **Summary:** `branch/*` holds panel state (`branch-store`), layout (`layout.ts`, 1100px rule), controllers, send, `BranchStack/Panel/Composer`, Recent branches, thread map and canvas. `chat/anchor.ts`, `marks-v2.ts`, `selection.ts`, `marking.ts` implement highlights/anchors as pure functions compared with legacy. `tools/*` plus provider loops (Claude ≤10 requests, parallel tools; DeepSeek ≤2 tool rounds, none while thinking) port the tool runners, status labels and fallbacks. Dual-write extended to `branchSnapshots`, `branchRecents`, `highlights[]` and additive `highlightsV2` via `db/branch-ops.ts`.
 - **Verified against real legacy code**, not just re-implemented: `tests/helpers/legacy-source.ts` cuts functions out of `frontend/app.js` so buildBranchContext, executeTool, the system prompt, user-content builders, project-context and status copy are differential tests.
@@ -963,3 +997,19 @@ Each entry: **date · summary · files touched · why changed · risks · tests 
 - Added `web/src/skills/` (parser, BM25F selector, overrides-only merge, Dexie store `notlinear-skills`, Skills dialog), `web/src/db/skills.ts`, skill chips on the live reply, `flags.skills`, CI gate `web/scripts/check-p7-providers-untouched.mjs`, ADR-043.
 - Library: `when_to_use`/`keywords` added to all 57 SKILL.md; modes layer + mode-router set `auto: false`.
 - Providers untouched. Chat schema and prefs keys untouched.
+
+## 2026-10-06 — #058 DeepSeek thinking-mode markup leak
+- `web/src/providers/deepseek-markup.ts`, `deepseek.ts`, `frontend/providers/deepseek.js`, `web/tests/chat/tool-loop.test.ts`. Typecheck + tool-loop/providers tests pass; live smoke not run.
+
+- 2026-10-13: deepseek.ts/deepseek-markup.ts/deepseek.js — Thinking-mode no-tools note and retry (#058); 2 tests added.
+
+- 2026-10-13: deepseek.ts — canUseTools no longer excludes thinking; reasoning_content round-trip; removed no-tools system note (#058).
+
+## 2026-10-16 — chat files long documents as notes, opened in a side pane
+
+- **Summary:** `create_note` tool on main threads → markdown converted to Notes blocks → saved via `notes-repo` (`createNoteFrom`) in the chat's project → card in the saved reply → `NotePane` beside the chat (resizable, reflowing, overlay under 900px). `flags.chatNotes`.
+- **Files touched:** `web/src/notes/{markdown-to-blocks,pane-width,NotePane,NotePage,notes-repo}`, `web/src/chat/{note-tool,run-and-persist,send,stream-html,chat-store,ChatView,LiveAiTurn}`, `web/src/providers/{tool-specs,types}`, `web/src/settings/tool-status`, `web/src/state/ui-store`, `web/src/lib/markdown` (export only), `web/src/styles/app.css`, `web/src/flags`, plus tests (see CHANGELOG).
+- **Why:** long answers and reports are meant to be re-read; they belong in the project's Notes, not buried in scrollback, and reading them should not mean leaving the chat.
+- **Risks:** the card lives in `stream` HTML (additive, but the classic app shows it unstyled); Notes writes still depend on the backup flag; cards keep the title as saved; the tool adds a main-thread tool to every request, so tests that list tools changed; the pane relies on the top bar's position for its top edge.
+- **Tests run:** typecheck, lint, vitest (new: markdown-to-blocks, pane-width, note-tool, note-card), Playwright `web-chat-notes` (4), plus `web-chat`, `web-branches`, `web-tools`, `web-notes*`, `web-settings`, `web-clarify`. See RUNS.
+- **Next steps:** smoke test with a live model (does it call the tool at sensible times, and not for short answers?); decide whether renaming a note should update cards; an `update_note` tool so follow-ups can edit the open note (asked about, not built).

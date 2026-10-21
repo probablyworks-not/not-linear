@@ -3,7 +3,7 @@ name: problem-framing
 description: Jobs-to-be-done framing: who, what job, what evidence anyone wants it.
 layer: product
 when_to_use: Jobs-to-be-done framing: who, what job, what evidence anyone wants it.
-keywords: [problem, framing, jobs, done, what, evidence, anyone, wants]
+keywords: [problem, framing, jobs to be done, JTBD, use case, user need, pain point, who is it for, product manager, PM]
 ---
 
 # Problem Framing

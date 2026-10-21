@@ -3,7 +3,7 @@ name: explain
 description: Teach a concept at the right level and build real intuition, not just a definition. Use for 'explain' / 'ELI5' / 'I'm rusty on' requests.
 layer: move
 when_to_use: Use for 'explain' / 'ELI5' / 'I'm rusty on' requests.
-keywords: [explain, teach, concept, right, level, build, real, intuition]
+keywords: [explain, ELI5, teach me, rusty on, how does it work, intuition, walk me through]
 ---
 
 # Explain
