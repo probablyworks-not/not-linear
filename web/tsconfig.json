@@ -13,5 +13,6 @@
     "allowJs": true,
     "types": ["vitest/globals", "node"]
   },
-  "include": ["src", "tests", "scripts", "vite.config.ts", "vitest.config.ts", "playwright.config.ts"]
+  "include": ["src", "tests", "scripts", "vite.config.ts", "vitest.config.ts", "playwright.config.ts"],
+  "exclude": ["tests/legacy-oracle", "node_modules", "dist"]
 }

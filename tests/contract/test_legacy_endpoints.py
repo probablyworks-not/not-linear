@@ -7,9 +7,7 @@ JSONResponse adds ``; charset=utf-8`` to the content type, and an unhandled
 exception renders an HTML 500 page rather than ``{"ok": false, ...}``.
 
 So these tests assert on the things that actually break: status code, the
-headers the frontend depends on, and the JSON body's shape. They are written
-against the current stdlib server and are expected to pass unchanged against
-the FastAPI one.
+headers the frontend depends on, and the JSON body's shape. 
 """
 
 from __future__ import annotations
@@ -19,8 +17,6 @@ from typing import Any
 
 import pytest
 import requests
-
-from conftest import server_flavour
 
 TIMEOUT = 10
 
@@ -118,8 +114,6 @@ class TestCorsContract:
     def test_a_post_without_the_local_header_is_refused(self, server: str) -> None:
         """The whole point of the header: a drive-by request is rejected before
         any handler runs, even if it somehow reached us without a preflight."""
-        if server_flavour() != "fastapi":
-            pytest.skip("header requirement is part of the P2 hardening")
         response = requests.post(
             f"{server}/__notlinear_runtime_logs",
             data=json.dumps({"events": []}),
@@ -129,8 +123,6 @@ class TestCorsContract:
         assert response.status_code == 403
 
     def test_preflight_advertises_the_local_header(self, server: str, origin: str) -> None:
-        if server_flavour() != "fastapi":
-            pytest.skip("header requirement is part of the P2 hardening")
         response = requests.options(
             f"{server}/__notlinear_open_files",
             headers={
@@ -176,11 +168,9 @@ class TestScanProject:
 
     def test_nonexistent_path_reports_an_error_not_a_crash(self, server: str) -> None:
         response = post(server, "/__notlinear_scan_project", {"path": "/definitely/not/here"})
-        # FastAPI refuses before scanning: an unapproved path is 403 whether or
-        # not it exists, which also avoids leaking whether it exists. The old
-        # server had no consent ledger and simply failed the scan.
-        expected = (403,) if server_flavour() == "fastapi" else (200, 400)
-        assert response.status_code in expected
+        # An unapproved path is 403 whether or not it exists, which also avoids
+        # leaking whether it exists.
+        assert response.status_code == 403
         assert response.json()["ok"] is False
 
     def test_scanning_a_real_directory_returns_ok(self, server: str, tmp_path: Any) -> None:

@@ -1,6 +1,6 @@
 import type { Config } from 'tailwindcss';
 
-// Every colour below is a var(--…) from frontend/styles/tokens.css, enumerated
+// Every colour below is a var(--…) from src/styles/tokens.css, enumerated
 // from that file rather than invented. Components never branch on theme: the
 // token value changes under html[data-theme], the class stays the same. There
 // is deliberately no literal colour in this file or anywhere under web/src

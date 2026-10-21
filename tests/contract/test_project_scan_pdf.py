@@ -1,7 +1,6 @@
 """PDFs in a project's linked folder contribute their text to the folder context.
 
-The legacy server (the oracle) does not read PDFs; this is a deliberate addition to the
-FastAPI service only, so it is tested on its own and not by parity.
+
 """
 from __future__ import annotations
 

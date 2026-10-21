@@ -16,17 +16,12 @@ from pathlib import Path
 APP_DIR = Path(__file__).resolve().parents[1]
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
-FRONTEND_DIR = REPO_ROOT / "frontend"
 WEB_DIST_DIR = REPO_ROOT / "web" / "dist"
 TOOLS_DIR = REPO_ROOT / "tools"
 
 LOGS_PATH = REPO_ROOT / "logs.md"
 CHANGELOG_PATH = REPO_ROOT / "CHANGELOG.md"
 LOGO_PATH = REPO_ROOT / "logo.svg"
-# The compiled Notlinear.app binary loads http://127.0.0.1:8765/notlinear.html
-# (confirmed with `strings` on the bundle). It is a meta-refresh shim to
-# frontend/index.html, and the app shows a 404 without it.
-NOTLINEAR_HTML_PATH = REPO_ROOT / "notlinear.html"
 
 FEEDBACK_DIR = REPO_ROOT / "feedback"
 FEEDBACK_MEDIA_DIR = FEEDBACK_DIR / "media"

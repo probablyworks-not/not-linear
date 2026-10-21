@@ -9,8 +9,6 @@ export default defineConfig({
   base: '/web/',
   plugins: [react()],
   server: {
-    // tokens.css is imported from ../frontend/styles, outside this project root.
-    fs: { allow: ['..'] },
     // Explicit IPv4: the proxy in backend/app/dev_proxy.py dials 127.0.0.1, and
     // 'localhost' may resolve to ::1 only.
     host: '127.0.0.1',

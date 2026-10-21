@@ -1,7 +1,10 @@
-import type { Page, Route } from '@playwright/test';
+import { existsSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { test, type Page, type Route } from '@playwright/test';
 
-/** The app's own origin. See playwright.config.ts on why not localhost. */
-export const APP_PATH = '/frontend/index.html';
+/** The legacy app is a private, gitignored tree. Specs that cross-check against it skip without it. */
+export const LEGACY_PATH = '/frontend/index.html';
+export const HAS_LEGACY = existsSync(fileURLToPath(new URL('../../../frontend/index.html', import.meta.url)));
 
 /**
  * Installs a fake Anthropic API before the app loads.
@@ -104,9 +107,10 @@ export async function switchToThread(page: Page, threadId: string): Promise<void
   await page.waitForTimeout(500);
 }
 
-/** Opens the app and waits for app.js to have populated the sidebar. */
+/** Opens the LEGACY app and waits for app.js to have populated the sidebar. */
 export async function openApp(page: Page): Promise<void> {
-  await page.goto(APP_PATH);
+  test.skip(!HAS_LEGACY, 'cross-checks against the legacy app, which is not part of this repo');
+  await page.goto(LEGACY_PATH);
   await page.waitForSelector('.sidebar [data-thread]', { state: 'attached' });
 }
 

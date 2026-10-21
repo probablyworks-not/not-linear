@@ -126,7 +126,7 @@ test.describe('one database, two apps', () => {
       kind: 'chat', title: 'Untitled chat', stream: '', docContent: '<p><br></p>', highlights: [],
     });
 
-    await page.goto('/frontend/index.html');
+    await openApp(page);
     await page.waitForSelector('.sidebar [data-thread]', { state: 'attached' });
     await expect(page.locator(`.sidebar [data-thread="${id}"]`)).toBeAttached();
   });
@@ -165,7 +165,7 @@ test.describe('one database, two apps', () => {
     expect(state.threads[id]).toBeUndefined();
     expect(state.dynamic).toEqual([]);
 
-    await page.goto('/frontend/index.html');
+    await openApp(page);
     await page.waitForSelector('.sidebar [data-thread]', { state: 'attached' });
     await expect(page.locator(`.sidebar [data-thread="${id}"]`)).toHaveCount(0);
   });

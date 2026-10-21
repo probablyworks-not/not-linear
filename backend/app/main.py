@@ -1,25 +1,15 @@
 """The FastAPI application.
 
-Replaces ``ThreadingHTTPServer(..., directory=REPO_ROOT)``, which served the
-**entire repository** over HTTP — ``GET /BUGS.md`` returned 96 KB of private
-triage, ``/uploads/`` returned personal screenshots, and
-``/docs/project-notes/`` was fully browsable. Static serving here is an
-explicit allowlist instead: ``/frontend``, ``/tools``, ``/feedback/media``, and
-two single files the app actually fetches.
-
-Only two paths outside ``/frontend`` were ever needed:
-  * ``/CHANGELOG.md`` — the in-app changelog viewer (app.js:4443), which has a
-    hardcoded fallback, so a miss here is cosmetic rather than fatal.
-  * ``/feedback/media/*`` — feedback.js:317,322 set ``img.src``/``video.src``
-    to these, and they must be same-origin or the annotate canvas is tainted
-    and ``toDataURL`` throws.
-``logs.md`` is write-only (POST ``/__notlinear_runtime_logs``) and needs no
-static route at all.
+Static serving is an explicit allowlist, never the repository root: the built
+web app under ``/web``, the backup/restore pages under ``/tools``, and two
+single files the app fetches (``/CHANGELOG.md`` and ``/logo.svg``). Everything
+else is a 404. ``logs.md`` is write-only (POST ``/__notlinear_runtime_logs``) and
+needs no static route at all.
 """
 
 from __future__ import annotations
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -43,17 +33,10 @@ def create_app(port: int = config.DEFAULT_PORT) -> FastAPI:
 
     @app.get("/CHANGELOG.md")
     async def changelog() -> FileResponse:
+        # The in-app changelog viewer has a bundled fallback, so a miss is cosmetic.
+        if not config.CHANGELOG_PATH.is_file():
+            raise HTTPException(status_code=404)
         return FileResponse(config.CHANGELOG_PATH, media_type="text/markdown")
-
-    @app.get("/notlinear.html")
-    async def notlinear_html() -> FileResponse:
-        """The entry point the compiled Notlinear.app binary loads.
-
-        A 13-line meta-refresh to frontend/index.html. Dropping it from the
-        allowlist made the desktop app render a 404 — caught only because the
-        shim was exercised against the URL the bundle actually requests.
-        """
-        return FileResponse(config.NOTLINEAR_HTML_PATH, media_type="text/html")
 
     @app.get("/logo.svg")
     async def logo() -> FileResponse:
@@ -61,12 +44,9 @@ def create_app(port: int = config.DEFAULT_PORT) -> FastAPI:
 
     @app.get("/")
     async def root() -> RedirectResponse:
-        # Flipped to /web/ at the P6 gate. This single line is the rollback
-        # switch between the legacy app and the React one.
-        return RedirectResponse("/frontend/index.html")
+        return RedirectResponse("/web/")
 
     # Mounted last so the explicit routes above win on any overlap.
-    app.mount("/frontend", StaticFiles(directory=config.FRONTEND_DIR), name="frontend")
     if config.TOOLS_DIR.exists():
         # The backup/restore pages. Kept reachable because they must work even
         # when the app itself is mid-migration or broken.

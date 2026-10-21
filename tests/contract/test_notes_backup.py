@@ -14,12 +14,6 @@ from typing import Any
 import pytest
 import requests
 
-from conftest import server_flavour
-
-pytestmark = pytest.mark.skipif(
-    server_flavour() == "legacy", reason="added after the freeze; FastAPI server only"
-)
-
 PATH = "/__notlinear_backup_notes"
 HEADERS = {"Content-Type": "application/json", "X-Notlinear-Local": "1"}
 

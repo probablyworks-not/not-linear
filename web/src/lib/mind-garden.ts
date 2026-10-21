@@ -2,13 +2,13 @@ import { create } from 'zustand';
 
 // Mind Garden: the hand-drawn SVG icon set that is both the default glyph on every thread and
 // project row and what the icon picker offers (core/mind-garden.js). The sheet
-// `frontend/mind-garden-icons.html` is the single source, so it is fetched and parsed once and
-// shared; it is NOT copied into web/. An icon a user chose is stored as a token on the thread or
-// project: `icon:<id>` or `icon:<id>:<hex>`, a format both apps read and write.
+// `public/mind-garden-icons.html` is the single source, so it is fetched and parsed once and
+// shared. An icon a user chose is stored as a token on the thread or
+// project: `icon:<id>` or `icon:<id>:<hex>`.
 
 export interface IconEntry { id: string; name: string; section: string; body: string; keywords: string }
 
-const SHEET_URL = '/frontend/mind-garden-icons.html';
+const SHEET_URL = `${import.meta.env.BASE_URL}mind-garden-icons.html`;
 
 /** `{ id, color }` for an `icon:` token, or null for anything else (an emoji, or nothing). */
 export function parseIconToken(token: unknown): { id: string; color: string } | null {

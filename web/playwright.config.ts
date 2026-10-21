@@ -1,9 +1,8 @@
 import { defineConfig, devices } from '@playwright/test';
 
-// End-to-end tests run against the LEGACY app (frontend/index.html), not the
-// new web/ one. That is the point: they capture current behaviour now, while
-// the legacy app is the only implementation, so every later phase has a
-// regression oracle instead of a human clicking through ten steps.
+// End-to-end tests run against the built web/ app, served by backend/server.py.
+// Specs that cross-check against the old vanilla-JS app skip themselves when that
+// (private) tree is absent.
 //
 // Port 8766, not the usual 8765, so a running copy of the app is not disturbed
 // and a developer's session is not competing with the suite for the port.
@@ -51,7 +50,7 @@ export default defineConfig({
     // hang waiting for it. With it, the native pickers report "cancelled", which is exactly the
     // path that must fall through to the browser's own file input (BUGS.md #022).
     env: { NOTLINEAR_FAKE_NATIVE: '1' },
-    url: `http://${HOST}:${PORT}/frontend/index.html`,
+    url: `http://${HOST}:${PORT}/web/`,
     reuseExistingServer: !process.env.CI,
     timeout: 30_000,
   },

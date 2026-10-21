@@ -1,23 +1,9 @@
 #!/usr/bin/env python3
-"""Entry point for the notlinear server.
+"""Entry point for the notlinear server: ``python3 backend/server.py --port 8765``.
 
-Kept at this exact path and with these exact arguments on purpose. Four
-launchers and the compiled ``Notlinear.app`` binary invoke
-``python3 backend/server.py --port 8765 --host 127.0.0.1`` (some via
-``notlinear_server.py``), and the app bundle has that path compiled in. So this
-file stays the entry point even though the implementation moved to
-``backend/app/`` in P2 — rewriting it as a shim is what keeps every launcher
-working untouched, and reverting this one file is the rollback lever for the
-whole phase.
-
-The previous stdlib implementation is still here as ``server_legacy.py``. It is
-the oracle the contract and parity tests compare against
-(``NOTLINEAR_SERVER=legacy``), and it is deleted at the P3 gate once the
-FastAPI behaviour has lived through real use.
-
-Unlike the old server, this one has dependencies. If uvicorn is missing we say
-so plainly rather than dying in a traceback, because "it used to just run" is
-exactly what a returning user will expect.
+The server needs its dependencies (``pip install -r requirements.txt``). If
+uvicorn is missing we say so plainly rather than dying in a traceback. A ``.venv``
+in the repo root is found automatically.
 """
 
 from __future__ import annotations
@@ -34,12 +20,9 @@ if str(BACKEND_DIR) not in sys.path:
 def _reexec_into_venv_if_needed() -> None:
     """Re-runs this script under the project venv when the current Python lacks uvicorn.
 
-    This matters more than it looks. Every launcher — Notlinear.command,
-    Notlinear.applescript, and the compiled app via notlinear_server.py — calls
-    the SYSTEM python3, which has no FastAPI. Before P2 that was fine, because
-    the server was stdlib-only. Without this, "double-click the app" stops
-    working the moment P2 lands, and the failure looks like the app is broken
-    rather than like a missing dependency.
+    Launchers call the SYSTEM python3, which has no FastAPI. Without this, a
+    double-click launch fails in a way that looks like the app is broken rather
+    than like a missing dependency.
 
     macOS system Python is also usually externally managed (PEP 668), so
     "just pip install it" is not reliably available either.
@@ -102,18 +85,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Serve notlinear and accept local runtime log syncs.")
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", default=8765, type=int)
-    parser.add_argument(
-        "--legacy",
-        action="store_true",
-        help="run the pre-P2 stdlib server instead (no dependencies; serves the whole repo)",
-    )
     args = parser.parse_args()
-
-    if args.legacy:
-        import runpy
-        sys.argv = [str(BACKEND_DIR / "server_legacy.py"), "--host", args.host, "--port", str(args.port)]
-        runpy.run_path(str(BACKEND_DIR / "server_legacy.py"), run_name="__main__")
-        return
 
     _reexec_into_venv_if_needed()
 
@@ -123,18 +95,12 @@ def main() -> None:
         sys.stderr.write(
             "notlinear: uvicorn is not installed.\n"
             "\n"
-            "Since P2 the server runs on FastAPI, so it has dependencies where it\n"
-            "previously had none. Install them with:\n"
+            "The server runs on FastAPI. Install its dependencies with:\n"
             "\n"
             "    python3 -m venv .venv\n"
             "    .venv/bin/pip install -r requirements.txt\n"
             "\n"
-            "(A .venv in the repo root is found automatically, so the launchers and\n"
-            "Notlinear.app keep working without installing anything system-wide.)\n"
-            "\n"
-            "Or run the old dependency-free server with:\n"
-            "\n"
-            f"    python3 {Path(__file__).name} --legacy\n"
+            "(A .venv in the repo root is found automatically.)\n"
         )
         raise SystemExit(1)
 
@@ -154,9 +120,8 @@ def main() -> None:
         )
         raise SystemExit(1)
 
-    # Same line the stdlib server printed — the launchers and their logs key
-    # off seeing the server come up, and a human looks for this URL.
-    print(f"Serving Notlinear on http://{args.host}:{args.port}/frontend/index.html")
+    # The URL a human looks for when the server comes up.
+    print(f"Serving Notlinear on http://{args.host}:{args.port}/web/")
 
     uvicorn.run(
         create_app(args.port),

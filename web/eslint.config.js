@@ -4,7 +4,7 @@ import tseslint from 'typescript-eslint';
 import reactHooks from 'eslint-plugin-react-hooks';
 
 // A colour literal anywhere under src/ is a bug waiting for a theme switch
-// (bug #022). Tokens come from frontend/styles/tokens.css via tailwind.config.ts;
+// (bug #022). Tokens come from src/styles/tokens.css via tailwind.config.ts;
 // the only legal colour spelling in components is a Tailwind class or var(--…).
 const NO_LITERAL_COLOUR = [
   {

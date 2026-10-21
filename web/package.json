@@ -9,6 +9,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:oracle": "vitest run --config vitest.oracle.config.ts",
     "e2e": "vite build && playwright test",
     "fixtures": "node scripts/backup-to-fixture.mjs",
     "lint": "eslint src"
