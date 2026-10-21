@@ -39,17 +39,16 @@ describe('global shortcuts', () => {
   it('routes each binding to one handler and claims the event', () => {
     const calls: string[] = [];
     const off = installGlobalKeys({
-      newChat: () => calls.push('new'), toggleSearch: () => calls.push('search'), toggleFeedback: () => calls.push('feedback'),
+      newChat: () => calls.push('new'), toggleSearch: () => calls.push('search'),
       branchSelection: () => calls.push('branch'), copyLastReply: () => calls.push('copy'),
       retryLastReply: () => calls.push('retry'), toggleShortcuts: () => calls.push('sheet'),
     });
     const claimed = [
       press('n', { metaKey: true }), press('k', { metaKey: true }), press('/', { metaKey: true }),
-      press('B', { metaKey: true, shiftKey: true }), press('f', { ctrlKey: true, shiftKey: true }),
+      press('B', { metaKey: true, shiftKey: true }),
       press('C', { metaKey: true, shiftKey: true }), press('R', { metaKey: true, shiftKey: true }),
-      press('q', { metaKey: true }),
     ];
-    expect(calls).toEqual(['new', 'search', 'sheet', 'branch', 'feedback', 'copy', 'retry', 'feedback']);
+    expect(calls).toEqual(['new', 'search', 'sheet', 'branch', 'copy', 'retry']);
     expect(claimed.every(e => e.defaultPrevented)).toBe(true);
     off();
   });
@@ -58,7 +57,7 @@ describe('global shortcuts', () => {
     const calls: string[] = [];
     const noop = (): void => { calls.push('x'); };
     const off = installGlobalKeys({
-      newChat: noop, toggleSearch: noop, toggleFeedback: noop, branchSelection: noop,
+      newChat: noop, toggleSearch: noop, branchSelection: noop,
       copyLastReply: noop, retryLastReply: noop, toggleShortcuts: noop,
     });
     const untouched = [

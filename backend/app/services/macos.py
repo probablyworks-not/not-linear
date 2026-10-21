@@ -1,11 +1,4 @@
-"""Native macOS dialogs and screen capture.
-
-Extracted from the ``do_POST`` chain in ``backend/server.py``, where these
-``osascript``/``screencapture`` calls were inline. Behaviour is unchanged — in
-particular the ``save_file`` AppleScript still interpolates the filename
-directly, exactly as before. That is a known injection surface and fixing it
-here would make the P2 move diff unreadable, so it lands as its own commit
-(planned ADR-035) with its own test.
+"""Native macOS file and folder dialogs (``osascript``).
 
 ``NOTLINEAR_FAKE_NATIVE=1`` replaces every dialog with a canned result, which
 is what lets the contract tests and CI exercise these endpoints without a
@@ -18,25 +11,17 @@ import base64
 import mimetypes
 import re
 import os
-import signal
 import subprocess
-import threading
 from pathlib import Path
 from typing import Any
 
-from ..config import REPO_ROOT, fake_native
+from ..config import fake_native
 
 # 20 MB per file. Was a local inside the open_files handler; a module constant
 # here so the cap is visible and testable rather than buried mid-function.
 MAX_FILE_BYTES = 20 * 1024 * 1024
 
 OSASCRIPT_TIMEOUT_S = 120
-
-# Tracks the one in-flight `screencapture -v` process. start and stop arrive on
-# different request threads, hence the lock — carried over from server.py:78-80.
-_recording_lock = threading.Lock()
-_recording: dict[str, Any] = {"proc": None, "path": None}
-
 
 class NativeUnavailable(RuntimeError):
     """Raised when a native dialog is requested but cannot be shown."""
@@ -164,59 +149,3 @@ def save_file(filename: str, content: str) -> dict[str, Any]:
         save_path += ".md"
     Path(save_path).write_text(content, encoding="utf-8")
     return {"ok": True, "path": save_path}
-
-
-def screenshot(shot_path: Path, mode: str = "full") -> dict[str, Any]:
-    """One-shot screenshot via `screencapture`. Returns a repo-relative path."""
-    cmd = ["screencapture", "-x", "-t", "png", str(shot_path)]  # -x: no shutter sound
-    if mode == "area":
-        cmd.insert(1, "-i")  # interactive selection; Escape cancels
-    if fake_native():
-        shot_path.parent.mkdir(parents=True, exist_ok=True)
-        shot_path.write_bytes(b"\x89PNG\r\n\x1a\n")  # minimal PNG signature
-        result = subprocess.CompletedProcess(args=cmd, returncode=0, stdout="", stderr="")
-    else:
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=240 if mode == "area" else 30)
-    if not shot_path.exists():
-        if mode == "area":
-            return {"ok": False, "cancelled": True}
-        err = (result.stderr or "").strip() or \
-            "screencapture failed — check Screen Recording permission in System Settings"
-        return {"ok": False, "error": err, "_status": 500}
-    return {"ok": True, "path": str(shot_path.relative_to(REPO_ROOT))}
-
-
-def start_recording(rec_path: Path, mode: str = "full") -> dict[str, Any]:
-    with _recording_lock:
-        if _recording["proc"] and _recording["proc"].poll() is None:
-            return {"ok": False, "error": "already recording", "_status": 409}
-        cmd = ["screencapture", "-v", "-x", str(rec_path)]
-        if mode == "area":
-            cmd.insert(1, "-i")  # select area first, then recording starts
-        if fake_native():
-            rec_path.parent.mkdir(parents=True, exist_ok=True)
-            rec_path.write_bytes(b"")
-            _recording["proc"], _recording["path"] = None, rec_path
-            return {"ok": True, "recording": True}
-        proc = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        _recording["proc"], _recording["path"] = proc, rec_path
-        return {"ok": True, "recording": True}
-
-
-def stop_recording() -> dict[str, Any]:
-    with _recording_lock:
-        proc, rec_path = _recording["proc"], _recording["path"]
-        _recording["proc"], _recording["path"] = None, None
-        if not proc or proc.poll() is not None:
-            # area mode: Escape during selection ends the process with no file
-            if rec_path and not rec_path.exists():
-                return {"ok": False, "cancelled": True}
-            if fake_native() and rec_path and rec_path.exists():
-                return {"ok": True, "path": str(rec_path.relative_to(REPO_ROOT))}
-            return {"ok": False, "error": "not recording", "_status": 409}
-        proc.send_signal(signal.SIGINT)
-        proc.wait(timeout=15)
-        if not rec_path.exists():
-            return {"ok": False, "cancelled": True,
-                    "error": "no recording captured — selection cancelled or Screen Recording permission missing"}
-        return {"ok": True, "path": str(rec_path.relative_to(REPO_ROOT))}

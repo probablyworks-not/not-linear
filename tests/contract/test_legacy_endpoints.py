@@ -21,7 +21,7 @@ import requests
 TIMEOUT = 10
 
 # Every endpoint, with a body that is valid enough to reach the handler.
-# pick_folder / open_files / save_file / feedback_shot / feedback_record shell
+# pick_folder / open_files / save_file shell
 # out, so they only appear in tests that install the native fake.
 ALL_ENDPOINTS = [
     "/__notlinear_pick_folder",
@@ -29,12 +29,6 @@ ALL_ENDPOINTS = [
     "/__notlinear_link_preview",
     "/__notlinear_open_files",
     "/__notlinear_save_file",
-    "/__notlinear_feedback_shot",
-    "/__notlinear_feedback_record",
-    "/__notlinear_feedback_upload",
-    "/__notlinear_feedback_discard",
-    "/__notlinear_feedback_list",
-    "/__notlinear_feedback_save",
     "/__notlinear_runtime_logs",
 ]
 
@@ -257,46 +251,3 @@ class TestNativeEndpoints:
         fake_native(stdout="", returncode=1)
         response = post(server, "/__notlinear_open_files", {})
         assert "ok" in response.json()
-
-
-class TestFeedbackEndpoints:
-    def test_feedback_list_returns_a_list(self, server: str) -> None:
-        response = post(server, "/__notlinear_feedback_list", {})
-        assert response.status_code == 200
-        body = response.json()
-        assert body["ok"] is True
-        assert isinstance(body.get("entries", body.get("items", [])), list)
-
-    @pytest.mark.parametrize("rel", ["../../CHANGELOG.md", "../FEEDBACK.md", "/etc/passwd", "feedback/media/../../BUGS.md"])
-    def test_feedback_discard_rejects_paths_outside_the_media_dir(self, server: str, rel: str) -> None:
-        """Path traversal must not delete arbitrary files.
-
-        _media_file_from_rel resolve()s the path and requires the result to sit
-        inside feedback/media/, and that check is the only thing between a
-        client-supplied string and the server deleting that file.
-        """
-        response = post(server, "/__notlinear_feedback_discard", {"path": rel})
-        assert response.json()["ok"] is False
-
-    def test_feedback_discard_accepts_a_real_file_inside_the_media_dir(
-        self, server: str, server_module: Any
-    ) -> None:
-        """Positive control.
-
-        Without this, the traversal test above would still pass if the endpoint
-        rejected *everything* — proving nothing about the boundary.
-        """
-        media = server_module.FEEDBACK_MEDIA_DIR
-        media.mkdir(parents=True, exist_ok=True)
-        target = media / "shot.png"
-        target.write_bytes(b"not really a png")
-        rel = target.relative_to(server_module.REPO_ROOT) if str(target).startswith(str(server_module.REPO_ROOT)) else None
-
-        # The media dir is redirected to a tmp path outside REPO_ROOT, so the
-        # repo-relative form the endpoint expects cannot be constructed here.
-        # Assert the resolver itself instead — same code path, same boundary.
-        resolved = server_module._media_file_from_rel.__wrapped__ if hasattr(
-            server_module._media_file_from_rel, "__wrapped__") else server_module._media_file_from_rel
-        with pytest.raises(ValueError):
-            resolved("../../CHANGELOG.md")
-        assert rel is None or target.exists()

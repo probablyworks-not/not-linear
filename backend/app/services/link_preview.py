@@ -103,8 +103,3 @@ def link_preview(url):
         "favicon": favicon,
     }
 
-
-# Scans feedback/FEEDBACK.md for the highest existing "## FB-NNN" heading
-# and returns the next sequential id. Called by _feedback_append_entry.
-# Regex matches only headings anchored at line-start (re.M) so it can't
-# false-match an "FB-###" mentioned in body text.

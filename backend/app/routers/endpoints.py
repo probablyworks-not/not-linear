@@ -19,7 +19,7 @@ from fastapi.responses import PlainTextResponse
 
 from .. import config
 from ..legacy import LegacyJSONResponse, err, legacy_json, ok, read_json
-from ..services import consent, feedback_store, link_preview as link_preview_service
+from ..services import consent, link_preview as link_preview_service
 from ..services import macos, project_scan, runtime_logs
 
 router = APIRouter()
@@ -106,74 +106,6 @@ async def save_file(request: Request) -> LegacyJSONResponse:
         filename = data.get("filename", "response.md")
         content = data.get("content", "")
         return _passthrough(macos.save_file(filename, content))
-    return await legacy_json(handler)
-
-
-@router.post("/__notlinear_feedback_shot")
-async def feedback_shot(request: Request) -> LegacyJSONResponse:
-    async def handler() -> LegacyJSONResponse:
-        if not config.native_allowed():
-            return err("native dialogs are disabled (NOTLINEAR_ALLOW_NATIVE=0)")
-        data = await read_json(request)
-        mode = (data.get("mode") or "full").strip()
-        shot_path = feedback_store._feedback_media_path("shot", "png")
-        return _passthrough(macos.screenshot(shot_path, mode))
-    return await legacy_json(handler)
-
-
-@router.post("/__notlinear_feedback_record")
-async def feedback_record(request: Request) -> LegacyJSONResponse:
-    async def handler() -> LegacyJSONResponse:
-        if not config.native_allowed():
-            return err("native dialogs are disabled (NOTLINEAR_ALLOW_NATIVE=0)")
-        data = await read_json(request)
-        action = (data.get("action") or "").strip()
-        if action == "start":
-            rec_path = feedback_store._feedback_media_path("rec", "mov")
-            return _passthrough(macos.start_recording(rec_path, (data.get("mode") or "full")))
-        if action == "stop":
-            return _passthrough(macos.stop_recording())
-        return err("action must be start or stop")
-    return await legacy_json(handler)
-
-
-@router.post("/__notlinear_feedback_upload")
-async def feedback_upload(request: Request) -> LegacyJSONResponse:
-    async def handler() -> LegacyJSONResponse:
-        import base64
-        data = await read_json(request)
-        # _media_file_from_rel raises if the path escapes feedback/media/ —
-        # the only guard between a client string and a server-side write.
-        target = feedback_store._media_file_from_rel(data.get("path"))
-        target.write_bytes(base64.b64decode(data.get("base64") or ""))
-        return ok({"path": str(target.relative_to(config.REPO_ROOT))})
-    return await legacy_json(handler)
-
-
-@router.post("/__notlinear_feedback_discard")
-async def feedback_discard(request: Request) -> LegacyJSONResponse:
-    async def handler() -> LegacyJSONResponse:
-        data = await read_json(request)
-        target = feedback_store._media_file_from_rel(data.get("path"))
-        if target.exists():
-            target.unlink()
-        return ok()
-    return await legacy_json(handler)
-
-
-@router.post("/__notlinear_feedback_list")
-async def feedback_list(request: Request) -> LegacyJSONResponse:
-    async def handler() -> LegacyJSONResponse:
-        return ok({"entries": feedback_store._feedback_parse_entries()})
-    return await legacy_json(handler)
-
-
-@router.post("/__notlinear_feedback_save")
-async def feedback_save(request: Request) -> LegacyJSONResponse:
-    async def handler() -> LegacyJSONResponse:
-        data = await read_json(request)
-        fb_id = feedback_store._feedback_append_entry(data)
-        return ok({"id": fb_id, "path": str(config.FEEDBACK_PATH.relative_to(config.REPO_ROOT))})
     return await legacy_json(handler)
 
 

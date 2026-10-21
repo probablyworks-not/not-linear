@@ -6,9 +6,8 @@ deliberate: every native dialog goes through ``subprocess.run``, and running
 in-process is what lets a test replace it. A subprocess server would pop real
 macOS dialogs and hang the suite.
 
-Safety: the app resolves its log and feedback paths at import time, relative to
-the repo. Left alone, the tests would append to the developer's real ``logs.md``
-and ``feedback/FEEDBACK.md`` (BUGS.md #053). ``isolated_paths`` is autouse so
+Safety: the app resolves its log path at import time, relative to the repo.
+Left alone, the tests would append to the developer's real ``logs.md``. ``isolated_paths`` is autouse so
 that cannot happen by omission.
 """
 
@@ -30,7 +29,7 @@ sys.path.insert(0, str(REPO_ROOT / "backend"))
 def server_module() -> Any:
     """A small shim exposing the constants the tests read, sourced from backend/app."""
     from app import config
-    from app.services import feedback_store, runtime_logs
+    from app.services import runtime_logs
 
     class FastApiFacade:
         """Presents backend/app under the names the tests already use."""
@@ -42,20 +41,12 @@ def server_module() -> Any:
             return runtime_logs.LOGS_PATH
 
         @property
-        def FEEDBACK_MEDIA_DIR(self) -> Path:
-            return feedback_store.FEEDBACK_MEDIA_DIR
-
-        @property
         def MAX_BODY_BYTES(self) -> int:
             return config.MAX_BODY_BYTES
 
         @property
         def MAX_EVENTS(self) -> int:
             return config.MAX_EVENTS
-
-        @staticmethod
-        def _media_file_from_rel(rel: str) -> Path:
-            return feedback_store._media_file_from_rel(rel)
 
     return FastApiFacade()
 
@@ -65,18 +56,15 @@ def isolated_paths(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """Redirects every path either implementation writes to into a temp dir.
 
     Autouse on purpose. See BUGS.md #053: a sweep that POSTs to all twelve
-    endpoints also POSTs to feedback_save, which writes a real entry.
+    endpoints also POSTs to runtime_logs, which writes a real entry.
     """
     logs = tmp_path / "logs.md"
-    feedback = tmp_path / "feedback"
-    media = feedback / "media"
-    media.mkdir(parents=True, exist_ok=True)
 
     # Each service holds its own imported copy of the path, and the
     # routers read them off the module at call time, so patching the service
     # module is what takes effect.
     from app import config as app_config
-    from app.services import consent, feedback_store, notes_backup, runtime_logs
+    from app.services import consent, notes_backup, runtime_logs
 
     # The consent ledger lives in ~/.notlinear by default. Without this a test
     # run writes into the developer's home directory — which it did, once,
@@ -89,16 +77,7 @@ def isolated_paths(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(notes_backup, "BACKUP_DIR", tmp_path / "backups", raising=False)
 
     monkeypatch.setattr(runtime_logs, "LOGS_PATH", logs, raising=False)
-    monkeypatch.setattr(feedback_store, "FEEDBACK_DIR", feedback, raising=False)
-    monkeypatch.setattr(feedback_store, "FEEDBACK_MEDIA_DIR", media, raising=False)
-    monkeypatch.setattr(feedback_store, "FEEDBACK_PATH", feedback / "FEEDBACK.md", raising=False)
     monkeypatch.setattr(app_config, "LOGS_PATH", logs, raising=False)
-    monkeypatch.setattr(app_config, "FEEDBACK_PATH", feedback / "FEEDBACK.md", raising=False)
-    monkeypatch.setattr(app_config, "FEEDBACK_DIR", feedback, raising=False)
-    # create_app() reads this at call time to mount /feedback/media, and the
-    # `server` fixture depends on this one, so the patch lands first and the
-    # mount points at the temp directory rather than the repo's.
-    monkeypatch.setattr(app_config, "FEEDBACK_MEDIA_DIR", media, raising=False)
 
 
 @pytest.fixture

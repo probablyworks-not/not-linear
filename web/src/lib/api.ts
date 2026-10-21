@@ -1,5 +1,5 @@
 // Backend reads for TanStack Query. P3 needs only this plumbing; the three
-// consumers (/CHANGELOG.md, scan_project, feedback_list) arrive in P4.
+// consumers (/CHANGELOG.md, scan_project) arrive in P4.
 //
 // The header is required by every /__notlinear_* endpoint (ADR-035) and is
 // harmless elsewhere. Same-origin only: the app is served from the Python

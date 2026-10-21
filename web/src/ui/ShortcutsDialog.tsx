@@ -26,7 +26,6 @@ const GROUPS: Array<{ title: string; rows: Array<[string, string]> }> = [
     ['Highlight', '⌘⇧H'],
   ] },
   { title: 'Anywhere', rows: [
-    ['Log feedback', '⌘⇧F'],
     ['Close the top panel', 'Esc'],
     ['This sheet', '⌘/'],
   ] },

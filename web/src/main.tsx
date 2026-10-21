@@ -11,7 +11,6 @@ import { newChat, syncFromDisk } from './state/actions';
 import { viewForTab } from './shell/TabStrip';
 import { flags } from './flags';
 import { installRuntimeLogSync } from './lib/runtime-log-sync';
-import { togglePanel } from './feedback/feedback-store';
 import { branchCurrentSelection, copyLastReply, retryFailedTurn } from './chat/shortcuts';
 import './styles/app.css';
 
@@ -35,7 +34,6 @@ async function boot(): Promise<void> {
   installGlobalKeys({
     newChat: () => { void newChat(); },
     toggleSearch: () => { if (flags.search) useUiStore.getState().setSearchOpen(!useUiStore.getState().searchOpen); },
-    toggleFeedback: () => { if (flags.feedback) togglePanel(); },
     toggleShortcuts: () => { const ui = useUiStore.getState(); ui.setShortcutsOpen(!ui.shortcutsOpen); },
     branchSelection: () => { const id = activeChatThread(); if (id) void branchCurrentSelection(id); },
     copyLastReply: () => { const id = activeChatThread(); if (id) void copyLastReply(id); },

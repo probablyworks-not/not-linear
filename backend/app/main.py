@@ -51,8 +51,6 @@ def create_app(port: int = config.DEFAULT_PORT) -> FastAPI:
         # The backup/restore pages. Kept reachable because they must work even
         # when the app itself is mid-migration or broken.
         app.mount("/tools", StaticFiles(directory=config.TOOLS_DIR), name="tools")
-    config.FEEDBACK_MEDIA_DIR.mkdir(parents=True, exist_ok=True)
-    app.mount("/feedback/media", StaticFiles(directory=config.FEEDBACK_MEDIA_DIR), name="feedback-media")
     if config.dev_proxy_enabled():
         # Imported lazily so the production path carries no websocket/httpx
         # proxy code. Registers /web routes; must come before nothing else

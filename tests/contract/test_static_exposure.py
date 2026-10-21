@@ -69,14 +69,6 @@ class TestStillServed:
         response = requests.get(f"{server}/CHANGELOG.md", timeout=TIMEOUT)
         assert response.status_code in (200, 404)
 
-    def test_feedback_media_is_same_origin(self, server: str, server_module: object) -> None:
-        """The annotate canvas needs same-origin media or toDataURL throws."""
-        media_dir = server_module.FEEDBACK_MEDIA_DIR  # type: ignore[attr-defined]
-        media_dir.mkdir(parents=True, exist_ok=True)
-        (media_dir / "probe.png").write_bytes(b"\x89PNG\r\n\x1a\n")
-        response = requests.get(f"{server}/feedback/media/probe.png", timeout=TIMEOUT)
-        assert response.status_code == 200
-
     def test_backup_tools_remain_reachable(self, server: str) -> None:
         """They have to work even when the app itself is broken."""
         response = requests.get(f"{server}/tools/export-data.html", timeout=TIMEOUT)

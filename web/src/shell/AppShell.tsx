@@ -18,8 +18,6 @@ import { SearchPalette } from '../search/SearchPalette';
 import { ShortcutsDialog } from '../ui/ShortcutsDialog';
 import { ProjectsGrid } from '../projects/ProjectsGrid';
 import { ProjectPanel } from '../projects/ProjectPanel';
-import { FeedbackPanel } from '../feedback/FeedbackPanel';
-import { CapturePreview } from '../feedback/CapturePreview';
 import { ChatView } from '../chat/ChatView';
 import { Breadcrumbs } from '../chat/Breadcrumbs';
 import { NoteBreadcrumbs } from '../notes/NoteBreadcrumbs';
@@ -111,8 +109,6 @@ export function AppShell() {
       {flags.search && <SearchPalette />}
       {flags.projects && <ProjectsGrid />}
       {flags.projects && <ProjectPanel />}
-      {flags.feedback && <FeedbackPanel />}
-      {flags.feedback && <CapturePreview />}
       <ShortcutsDialog />
       <ConfirmDialog />
       <ImagePreview />

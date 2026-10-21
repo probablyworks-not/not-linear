@@ -7,7 +7,6 @@ export const flags = {
   search: true,
   changelog: true,
   projects: true,
-  feedback: true,
   logs: true,
   chat: true,
   // P6b: the BlockNote Notes editor. Writes stay locked until a server-confirmed backup exists.

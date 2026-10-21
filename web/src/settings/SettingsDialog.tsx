@@ -9,7 +9,6 @@ import { INPUT, Section, Segmented } from './fields';
 import { ApiKeysSection } from './ApiKeysSection';
 import { flags } from '../flags';
 import { ChangelogSection } from '../changelog/ChangelogSection';
-import { FeedbackLog } from '../feedback/FeedbackLog';
 import { RuntimeLogs } from './RuntimeLogs';
 import { getClarifyFirst, setClarifyFirst } from '../chat/clarify-pref';
 
@@ -159,7 +158,6 @@ function SettingsForm() {
 
       {flags.changelog && <ChangelogSection />}
 
-      {flags.feedback && <FeedbackLog />}
 
       {flags.logs && <RuntimeLogs />}
     </>

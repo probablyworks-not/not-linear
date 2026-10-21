@@ -1,8 +1,8 @@
 /* ---- Design tokens: CSS custom properties + theme overrides ---- */
 /*
  * This file is the single source of truth for theming across the whole app
- * (chat shell, Notes, Feedback panel, etc). Every other
- * stylesheet in frontend/styles/ is expected to consume these custom
+ * (chat shell, Notes, etc). Every other
+ * stylesheet is expected to consume these custom
  * properties via var(--...) rather than hardcoding colors, spacing, or
  * fonts — hardcoding a color directly in a component stylesheet instead of
  * pulling from a token here was the root cause of bug #022, so that
@@ -75,8 +75,7 @@
   --tag-fix:oklch(55% 0.13 25);
   --tag-feature:oklch(48% 0.08 195);
   --tag-improvement:oklch(52% 0.10 55);
-  /* Feedback capture (core/feedback.js): the pen/annotation red and the "fixed" green,
-     previously literals in feedback.css. Constant across themes. Additive. */
+  /* Annotation red and success green. Constant across themes. */
   --annotate:#E5534B;
   --annotate-faint:rgba(229,83,75,0.10);
   --annotate-soft:rgba(229,83,75,0.12);

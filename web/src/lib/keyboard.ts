@@ -10,7 +10,6 @@ import { useEffect } from 'react';
 // (P4-P5) are listed so their slot is fixed now rather than negotiated later.
 export const ESC_PRIORITY = {
   // The capture preview wins over everything: legacy handles its Escape in the capture phase.
-  feedbackPreview: 170,
   // Legacy closes the image preview on its own Escape listener, ahead of the ladder; it sits just under the capture preview.
   imagePreview: 160,
   // The icon picker closes on its own Escape in legacy, before anything else on the page.
@@ -64,7 +63,6 @@ export function handleEscape(): boolean {
 export interface GlobalKeyHandlers {
   newChat(): void;
   toggleSearch(): void;
-  toggleFeedback(): void;
   branchSelection(): void;
   copyLastReply(): void;
   retryLastReply(): void;
@@ -80,12 +78,8 @@ export function installGlobalKeys(handlers: GlobalKeyHandlers): () => void {
     const run = (fn: () => void): void => { e.preventDefault(); fn(); };
     if (e.shiftKey) {
       if (key === 'b') run(handlers.branchSelection);
-      else if (key === 'f') run(handlers.toggleFeedback);
       else if (key === 'c') run(handlers.copyLastReply);
       else if (key === 'r') run(handlers.retryLastReply);
-    } else if (key === 'q') {
-      // ⌘Q works in the native shell as a Feedback alias (browsers reserve it for quit).
-      run(handlers.toggleFeedback);
     } else if (key === 'k') run(handlers.toggleSearch);
     else if (key === 'n') run(handlers.newChat);
     else if (key === '/') run(handlers.toggleShortcuts);

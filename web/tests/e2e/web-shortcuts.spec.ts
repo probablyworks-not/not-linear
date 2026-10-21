@@ -1,7 +1,7 @@
 import { test, expect, type Page, type Route } from '@playwright/test';
 
-// Global shortcuts in /web/: branch (⌘⇧B), copy last reply (⌘⇧C), the ⌘/ sheet, canvas zoom, and
-// Feedback's move to ⌘⇧F. Provider calls are mocked; nothing here reaches a real API. Playwright's
+// Global shortcuts in /web/: branch (⌘⇧B), copy last reply (⌘⇧C), and the ⌘/ sheet, canvas zoom.
+// Provider calls are mocked; nothing here reaches a real API. Playwright's
 // Control stands in for Meta: the handler accepts either.
 
 const WEB = '/web/';

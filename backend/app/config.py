@@ -23,10 +23,6 @@ LOGS_PATH = REPO_ROOT / "logs.md"
 CHANGELOG_PATH = REPO_ROOT / "CHANGELOG.md"
 LOGO_PATH = REPO_ROOT / "logo.svg"
 
-FEEDBACK_DIR = REPO_ROOT / "feedback"
-FEEDBACK_MEDIA_DIR = FEEDBACK_DIR / "media"
-FEEDBACK_PATH = FEEDBACK_DIR / "FEEDBACK.md"
-
 # Caps on the runtime-log POST body and stored event count.
 MAX_BODY_BYTES = 1_500_000
 MAX_EVENTS = 300
