@@ -14,4 +14,8 @@ export const flags = {
   notesV2: true,
   // P7: skills seam. SKILL.md library as BM25-selected system-prompt augmentations.
   skills: true,
+  // Questions before answers: the model may ask a few clarifying questions, and the answers anchor the reply.
+  clarify: true,
+  // Chat→Notes: the model may file a long document as a note; a card in the reply opens it in a side pane.
+  chatNotes: true,
 } as const;

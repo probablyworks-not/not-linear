@@ -10,18 +10,20 @@ import { Topbar } from './Topbar';
 import { TabStrip } from './TabStrip';
 import { ConfirmDialog } from '../ui/ConfirmDialog';
 import { Toaster } from '../ui/toast';
+import { DevUpdateNotice } from '../ui/DevUpdateNotice';
 import { SettingsDialog } from '../settings/SettingsDialog';
 import { SkillsDialog } from '../skills/SkillsDialog';
 import { ModesDialog } from '../settings/ModesDialog';
 import { SearchPalette } from '../search/SearchPalette';
+import { ShortcutsDialog } from '../ui/ShortcutsDialog';
 import { ProjectsGrid } from '../projects/ProjectsGrid';
 import { ProjectPanel } from '../projects/ProjectPanel';
 import { FeedbackPanel } from '../feedback/FeedbackPanel';
 import { CapturePreview } from '../feedback/CapturePreview';
 import { ChatView } from '../chat/ChatView';
 import { Breadcrumbs } from '../chat/Breadcrumbs';
+import { NoteBreadcrumbs } from '../notes/NoteBreadcrumbs';
 import { ImagePreview } from '../ui/ImagePreview';
-import { useNotesStore } from '../notes/notes-store';
 import { ExportButton } from '../notes/ExportButton';
 import { NOTE_TAB_PREFIX, isNoteTabId } from '../state/tabs';
 import { flags } from '../flags';
@@ -38,11 +40,6 @@ export function AppShell() {
   const dynamic = useAppStore(s => s.dynamicThreads);
   const deleted = useAppStore(s => s.deletedThreadIds);
   const error = useAppStore(s => s.error);
-  const noteTitle = useNotesStore(s => {
-    const id = activeTabId && isNoteTabId(activeTabId) ? activeTabId.slice(NOTE_TAB_PREFIX.length) : null;
-    const t = id ? s.notes.find(n => n.id === id)?.title : null;
-    return typeof t === 'string' && t ? t : null;
-  });
 
   const title = useMemo(() => {
     const rows = visibleThreads({
@@ -55,7 +52,8 @@ export function AppShell() {
   const barRef = useRef<HTMLDivElement>(null);
   const bar = useEdgeReveal(barRef, 'top');
 
-  const trail: ReactNode = view === 'notes' ? (flags.notesV2 && noteTitle ? `Notes / ${noteTitle}` : 'Notes')
+  const noteId = activeTabId && isNoteTabId(activeTabId) ? activeTabId.slice(NOTE_TAB_PREFIX.length) : null;
+  const trail: ReactNode = view === 'notes' ? (flags.notesV2 && noteId ? <NoteBreadcrumbs noteId={noteId} /> : 'Notes')
     : view === 'blank' ? 'New tab'
     : flags.chat && activeTabId ? <Breadcrumbs threadId={activeTabId} fallbackTitle={title} /> : title;
 
@@ -115,9 +113,11 @@ export function AppShell() {
       {flags.projects && <ProjectPanel />}
       {flags.feedback && <FeedbackPanel />}
       {flags.feedback && <CapturePreview />}
+      <ShortcutsDialog />
       <ConfirmDialog />
       <ImagePreview />
       <Toaster />
+      <DevUpdateNotice />
     </div>
   );
 }

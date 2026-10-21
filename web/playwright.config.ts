@@ -28,7 +28,15 @@ export default defineConfig({
     baseURL: `http://${HOST}:${PORT}`,
     // The auto-hiding bars (lib/edge-reveal.ts) would sit off-screen for tests that click tabs
     // or the composer, so the suite keeps them showing. web-bars.spec.ts turns hiding back on.
-    storageState: { cookies: [], origins: [{ origin: `http://${HOST}:${PORT}`, localStorage: [{ name: 'nl_autohide_bars', value: '0' }] }] },
+    // Clarify-first adds a model call before each reply, which would throw off every spec that counts
+    // or inspects requests, so it is off here. web-clarify.spec.ts turns it back on.
+    storageState: {
+      cookies: [],
+      origins: [{
+        origin: `http://${HOST}:${PORT}`,
+        localStorage: [{ name: 'nl_autohide_bars', value: '0' }, { name: 'nl_clarify_first', value: '0' }],
+      }],
+    },
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
   },

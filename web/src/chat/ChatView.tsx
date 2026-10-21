@@ -1,10 +1,13 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { useAppStore } from '../state/app-store';
 import { useUiStore } from '../state/ui-store';
 import { useChatStore } from './chat-store';
 import { askAbout, continueMain, isStreaming, retryTurn, sendMessage, stopStreaming } from './send';
 import { parseStream } from './stream-html';
 import { LiveAiTurn } from './LiveAiTurn';
+import { ClarifyCard } from './ClarifyCard';
+import { ClarifySummary } from './ClarifySummary';
+import { resolveClarify, type ClarifyAnswer } from './clarify';
 import { MessageList } from './MessageList';
 import { Composer } from './Composer';
 import { ThreadHeader } from './ThreadHeader';
@@ -21,6 +24,11 @@ import { consumePending } from '../branch/pending';
 import { highlightCodeIn, renderMermaidIn } from '../lib/markdown';
 import { MAIN_THREAD_ID, STATIC_THREADS } from '../db/thread-ops';
 import { threadAttachKey } from '../attachments/attachments-store';
+import { paneLayout } from '../notes/pane-width';
+import { flags } from '../flags';
+
+// The note pane carries the Notes editor, so chat only loads it when a note is opened.
+const NotePane = lazy(() => import('../notes/NotePane').then(m => ({ default: m.NotePane })));
 
 /** How far from the bottom still counts as "following along" while text streams. */
 const FOLLOW_SLACK_PX = 120;
@@ -43,6 +51,8 @@ export function ChatView({ threadId }: { threadId: string }) {
   const failed = useChatStore(s => s.failed[threadId]);
   const offer = useChatStore(s => s.cont[threadId]);
   const setSettingsOpen = useUiStore(s => s.setSettingsOpen);
+  const notePaneId = useUiStore(s => (flags.chatNotes ? s.notePaneId : null));
+  const notePaneWidth = useUiStore(s => s.notePaneWidth);
   const openHere = useBranchStore(s => Object.values(s.open).some(b => b.threadId === threadId));
   const width = useWindowWidth();
   const box = useRef<HTMLDivElement>(null);
@@ -63,11 +73,15 @@ export function ChatView({ threadId }: { threadId: string }) {
   const unavailable = !thread && threadId === MAIN_THREAD_ID;
   const empty = turns.length === 0 && !live;
   const makeRoom = openHere && width > DRAWER_MIN_WIDTH;
+  // The chat column gives up the width the note pane takes (and the branch drawer's, when both are open).
+  const pane = notePaneId ? paneLayout(notePaneWidth, width) : null;
+  const noteRoom = pane?.beside ? pane.width : 0;
+  const drawerRoom = makeRoom ? 'var(--drawer-w) + var(--drawer-gap) * 2' : '0px';
 
   // Leaving a thread snapshots and closes its panels; arriving may have a branch waiting to open.
   useEffect(() => {
     const t = requestAnimationFrame(() => consumePending(threadId));
-    return () => { cancelAnimationFrame(t); void dropAllBranches(); };
+    return () => { cancelAnimationFrame(t); void dropAllBranches(); useUiStore.getState().closeNotePane(); };
   }, [threadId]);
 
   // Syncing with the window's scroll position, an external system.
@@ -81,7 +95,7 @@ export function ChatView({ threadId }: { threadId: string }) {
 
   useEffect(() => {
     if (following.current) window.scrollTo({ top: document.documentElement.scrollHeight });
-  }, [live?.text, live?.thinking, liveTurnId]);
+  }, [live?.text, live?.thinking, liveTurnId, live?.clarify]);
 
   // Mermaid and highlight.js are DOM libraries: they run on the settled markup, not mid-stream.
   const settled = !live;
@@ -93,6 +107,8 @@ export function ChatView({ threadId }: { threadId: string }) {
 
   const onClick = (e: React.MouseEvent<HTMLDivElement>): void => {
     const target = e.target as HTMLElement;
+    const noteCard = target.closest<HTMLElement>('.note-ref');
+    if (noteCard?.dataset.noteId && flags.chatNotes) { useUiStore.getState().openNotePane(noteCard.dataset.noteId); return; }
     const anchor = target.closest<HTMLElement>('.branched');
     if (anchor) { openBranchFromAnchor(threadId, anchor, null); return; }
     const pic = target.closest<HTMLImageElement>('.msg-image');
@@ -110,14 +126,22 @@ export function ChatView({ threadId }: { threadId: string }) {
     if (toggle) toggle.closest('.ai-thinking')?.classList.toggle('open');
   };
 
+  const onKeyDown = (e: React.KeyboardEvent<HTMLDivElement>): void => {
+    if (e.key !== 'Enter' && e.key !== ' ') return;
+    const card = (e.target as HTMLElement).closest<HTMLElement>('.note-ref');
+    if (!card?.dataset.noteId || !flags.chatNotes) return;
+    e.preventDefault();
+    useUiStore.getState().openNotePane(card.dataset.noteId);
+  };
+
   return (
     <>
       <div
         // No `w-full`: a full-width box plus a right margin overflows instead of making room for the drawer.
         className="flex min-w-0 flex-1 flex-col transition-[margin] duration-[240ms] ease-out"
-        style={{ marginRight: makeRoom ? 'calc(var(--drawer-w) + var(--drawer-gap) * 2)' : 0 }}
+        style={{ marginRight: makeRoom || noteRoom ? `calc(${drawerRoom} + ${noteRoom}px)` : 0 }}
       >
-        <div ref={box} onClick={onClick} className="mx-auto w-full max-w-[780px] flex-1 px-8 pb-48 pt-6" data-chat-stream data-testid="chat-stream">
+        <div ref={box} onClick={onClick} onKeyDown={onKeyDown} className="mx-auto w-full max-w-[780px] flex-1 px-8 pb-48 pt-6" data-chat-stream data-testid="chat-stream">
           <ThreadHeader threadId={threadId} fallbackTitle={fallbackTitle} />
           {empty ? (
             <div className="mt-24 text-center" data-testid="chat-empty">
@@ -127,7 +151,7 @@ export function ChatView({ threadId }: { threadId: string }) {
           ) : (
             <div className="chat-stream">
               <MessageList
-                turns={turns} assistantMarkdown={assistantMarkdown} title={crumbTitleOf(thread, fallbackTitle)}
+                turns={turns} assistantMarkdown={assistantMarkdown} clarifications={thread?.clarifications as Record<string, ClarifyAnswer[]> | undefined} title={crumbTitleOf(thread, fallbackTitle)}
                 offer={offer} busy={!!live} actionGap={10} onContinue={count => { void continueMain(threadId, count); }}
               />
               {live && (
@@ -135,7 +159,14 @@ export function ChatView({ threadId }: { threadId: string }) {
                   <div className="msg user" data-turn-id={live.turnId} data-live>
                     <div className="bub">{live.bubbleHTML ? <div dangerouslySetInnerHTML={{ __html: live.bubbleHTML }} /> : <div>{live.userText}</div>}</div>
                   </div>
-                  <LiveAiTurn turn={live} />
+                  {live.clarify
+                    ? <ClarifyCard questions={live.clarify} onSubmit={answers => resolveClarify(threadId, answers)} onSkip={() => resolveClarify(threadId, null)} />
+                    : (
+                      <>
+                        {!!live.clarified?.length && <ClarifySummary answers={live.clarified} />}
+                        <LiveAiTurn turn={live} />
+                      </>
+                    )}
                 </>
               )}
             </div>
@@ -159,6 +190,9 @@ export function ChatView({ threadId }: { threadId: string }) {
           onStop={() => stopStreaming(threadId)}
         />
       </div>
+      {notePaneId && (
+        <Suspense fallback={null}><NotePane key={notePaneId} noteId={notePaneId} /></Suspense>
+      )}
       <BranchStack threadId={threadId} fallbackTitle={crumbTitleOf(thread, fallbackTitle)} />
       <SelectionPopover threadId={threadId} threadTitle={crumbTitleOf(thread, fallbackTitle)} onAsk={text => { void askAbout(threadId, text); }} />
       <HighlightsPanel threadId={threadId} />

@@ -4,7 +4,9 @@ import { ChevronRight, Copy, NotebookText, Plus, Trash2 } from 'lucide-react';
 import { useUiStore } from '../state/ui-store';
 import { SidebarSection } from '../shell/SidebarSection';
 import { NoteGlyph } from './NoteGlyph';
-import { deleteAllPages, deletePage, duplicatePage, movePage, newPage, toggleExpanded } from './notes-actions';
+import { MoveToProjectButton } from '../projects/MoveToProjectButton';
+import { useAppStore } from '../state/app-store';
+import { deleteAllPages, deletePage, duplicatePage, moveNoteToProject, movePage, newPage, toggleExpanded } from './notes-actions';
 import { canReparent, kidsOf } from './notes-ops';
 import { useNotesStore } from './notes-store';
 import { openNote, openNotesIndex } from './open-note';
@@ -62,6 +64,7 @@ function NoteRow({ id, depth }: { id: string; depth: number }) {
         </button>
         <span className="flex flex-none items-center opacity-0 focus-within:opacity-100 group-hover:opacity-100">
           <button type="button" title="Add subpage" aria-label={`Add subpage to ${title}`} onClick={() => { void newPage(id); }} className={ICON_BTN}><Plus size={12} /></button>
+          <MoveToProjectButton label={`Move ${title} to a project`} current={typeof n.projectId === 'string' ? n.projectId : undefined} onMove={pid => { void moveNoteToProject(id, pid); }} className={ICON_BTN} />
           <button type="button" title="Duplicate page" aria-label={`Duplicate ${title}`} onClick={() => { void duplicatePage(id); }} className={ICON_BTN}><Copy size={12} /></button>
           <button type="button" title="Delete note" aria-label={`Delete ${title}`} onClick={() => { void deletePage(id); }} className={ICON_BTN}><Trash2 size={12} /></button>
         </span>
@@ -77,7 +80,9 @@ export function NotesSidebarSection() {
 
   useEffect(() => { void load(); }, [load]);
 
-  const roots = kidsOf(notes, null);
+  const projects = useAppStore(s => s.projects);
+  // A note filed in a project is reached through the project, as chats are.
+  const roots = kidsOf(notes, null).filter(n => !(typeof n.projectId === 'string' && projects[n.projectId]));
   return (
     <SidebarSection
       section="notes" label="Notes"

@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import type { Turn } from './run-and-persist';
+import type { ClarifyAnswer, ClarifyQuestion } from './clarify';
 
 // Runtime-only chat state: the reply currently streaming in each thread, and
 // the last reply that failed (so "Try again" has something to retry). Nothing
@@ -17,6 +18,12 @@ export interface LiveTurn {
   status: string | null;
   /** Names of the skills injected into this turn's system prompt (P7). Live only; not persisted. */
   skills?: string[];
+  /** Questions waiting for the user's answers before the reply starts. Live only. */
+  clarify?: ClarifyQuestion[];
+  /** What was answered, shown as a summary above the reply. */
+  clarified?: ClarifyAnswer[];
+  /** Notes the model has filed during this reply; each shows as a card under the answer. */
+  notes?: Array<{ id: string; title: string }>;
 }
 
 export interface FailedTurn {

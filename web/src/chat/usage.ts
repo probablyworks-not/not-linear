@@ -1,7 +1,9 @@
 // Pricing and the per-thread usage bucket, from app.js:1695-1800 (claude and
-// deepseek only; openai and gemini arrive with their providers).
+// deepseek, openai and gemini).
 
 const DEEPSEEK = { inMiss: 0.14 / 1e6, inHit: 0.0028 / 1e6, out: 0.28 / 1e6 };
+// Peak-hour list price; DeepSeek halves it off-peak, which this estimate ignores.
+const DEEPSEEK_PRO = { inMiss: 1.32 / 1e6, inHit: 0.044 / 1e6, out: 3.96 / 1e6 };
 
 function claudePricing(model: string): { in: number; out: number } {
   if (model.includes('haiku')) return { in: 1 / 1e6, out: 5 / 1e6 };
@@ -9,11 +11,21 @@ function claudePricing(model: string): { in: number; out: number } {
   return { in: 3 / 1e6, out: 15 / 1e6 };
 }
 
+// app.js:1712. gpt-5-2025-08-07 is deprecated by OpenAI (shuts down 2026-12-11) and kept as an opt-in legacy tier.
+const OPENAI_PRICING: Record<string, { in: number; out: number }> = {
+  'gpt-5.6-terra': { in: 2.5 / 1e6, out: 15 / 1e6 }, 'gpt-5.6-luna': { in: 1 / 1e6, out: 6 / 1e6 },
+  'gpt-5.6-sol': { in: 5 / 1e6, out: 30 / 1e6 }, 'gpt-5-2025-08-07': { in: 0.625 / 1e6, out: 5 / 1e6 },
+};
+const GEMINI_FLASH = { in: 0.1 / 1e6, out: 0.4 / 1e6 };
+const GEMINI_DEFAULT = { in: 1.25 / 1e6, out: 10 / 1e6 };
+
+export type UsageProvider = 'anthropic' | 'deepseek' | 'openai' | 'gemini';
+
 export interface TurnUsage {
   inputTokens: number;
   outputTokens: number;
   cacheHitTokens?: number;
-  provider: 'anthropic' | 'deepseek';
+  provider: UsageProvider;
   model: string;
 }
 
@@ -21,7 +33,16 @@ export function responseCost(u: TurnUsage): number {
   if (!u.inputTokens && !u.outputTokens) return 0;
   if (u.provider === 'deepseek') {
     const hit = u.cacheHitTokens || 0;
-    return Math.max(0, u.inputTokens - hit) * DEEPSEEK.inMiss + hit * DEEPSEEK.inHit + u.outputTokens * DEEPSEEK.out;
+    const d = u.model === 'deepseek-v4-pro' ? DEEPSEEK_PRO : DEEPSEEK;
+    return Math.max(0, u.inputTokens - hit) * d.inMiss + hit * d.inHit + u.outputTokens * d.out;
+  }
+  if (u.provider === 'openai') {
+    const p = OPENAI_PRICING[u.model] ?? OPENAI_PRICING['gpt-5.6-terra']!;
+    return u.inputTokens * p.in + u.outputTokens * p.out;
+  }
+  if (u.provider === 'gemini') {
+    const p = u.model === 'gemini-2.0-flash' ? GEMINI_FLASH : GEMINI_DEFAULT;
+    return u.inputTokens * p.in + u.outputTokens * p.out;
   }
   const p = claudePricing(u.model);
   return u.inputTokens * p.in + u.outputTokens * p.out;

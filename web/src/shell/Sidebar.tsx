@@ -3,10 +3,11 @@ import { clsx } from 'clsx';
 import { FileText, MessageSquare, PanelLeftClose, Pencil, Search, Settings, Trash2 } from 'lucide-react';
 import { useAppStore } from '../state/app-store';
 import { useUiStore } from '../state/ui-store';
-import { deleteChat, newChat, selectThread, setThreadGlyph } from '../state/actions';
+import { deleteChat, moveChat, newChat, selectThread, setThreadGlyph } from '../state/actions';
 import { ESC_PRIORITY, useEscLayer } from '../lib/keyboard';
 import { visibleThreads, MAIN_THREAD_ID } from '../db/thread-ops';
 import { flags } from '../flags';
+import { MoveToProjectButton } from '../projects/MoveToProjectButton';
 import { ProjectsSidebarSection } from '../projects/ProjectsSidebarSection';
 import { RecentBranches } from '../branch/RecentBranches';
 import { NotesSidebarSection } from '../notes/NotesSidebarSection';
@@ -113,6 +114,13 @@ export function Sidebar() {
                     <span className="truncate">{row.title}</span>
                     {row.unread && <span aria-label="Unread" className="ml-auto h-1.5 w-1.5 flex-none rounded-full bg-accent-2" />}
                   </button>
+                  {flags.projects && row.id !== MAIN_THREAD_ID && (
+                    <MoveToProjectButton
+                      label={`Move ${row.title} to a project`} current={row.projectId}
+                      onMove={pid => { void moveChat(row.id, pid); }}
+                      className="mr-0.5 grid h-6 w-6 flex-none place-items-center rounded-[5px] text-text-3 opacity-0 hover:bg-bg-3 hover:text-text focus-visible:opacity-100 group-hover:opacity-100"
+                    />
+                  )}
                   {row.id !== MAIN_THREAD_ID && (
                     <button
                       type="button" title="Delete chat" aria-label={`Delete ${row.title}`}

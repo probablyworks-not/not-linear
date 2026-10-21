@@ -14,7 +14,7 @@ export function esc(s: unknown): string { return String(s).replace(/[&<>"']/g, c
 // URLs) inside one already-HTML-escaped line. Called from renderTable() and
 // from most of the per-line branches in renderMarkdown() below; not exported,
 // since block-level structure (headings, lists, tables) is renderMarkdown's job.
-function inlineMd(raw: string): string {
+export function inlineMd(raw: string): string {
   // escape HTML, then apply inline patterns
   let s = esc(raw);
   s = s.replace(/\*\*\*(.+?)\*\*\*/g, '<strong><em>$1</em></strong>');
@@ -129,8 +129,8 @@ function normalizeMarkdownForDisplay(text: unknown): string {
   // Some models stream compact prose around tool calls or lists. Add block breaks
   // only before clear Markdown structures that are visibly glued to prior text.
   s = s.replace(/([a-z0-9][.!?])(?=[A-Z][a-z]{2,})/g, '$1\n\n');
-  s = s.replace(/([^\n])(\s*)(#{1,4}\s+)/g, '$1\n\n$3');
-  s = s.replace(/([^\n])[ \t]+(\d{1,2}\.\s+(?=[A-Z][A-Za-z0-9&/()'' -]{1,70}(?:\s|$)))/g, '$1\n\n$2');
+  s = s.replace(/([^\n#])(\s*)(#{1,4}\s+)/g, '$1\n\n$3');
+  s = s.replace(/([^\n#])[ \t]+(\d{1,2}\.\s+(?=[A-Z][A-Za-z0-9&/()'' -]{1,70}(?:\s|$)))/g, '$1\n\n$2');
 
   // Known recurring "Label:" field names seen in model output (e.g. structured
   // comparisons) that should start their own line even when glued to prior
@@ -156,7 +156,7 @@ function normalizeMarkdownForDisplay(text: unknown): string {
   ];
   fieldLabels.forEach((label: string) => {
     const escapedLabel = label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const re = new RegExp(`([^\\n\\s])[ \\t]*(${escapedLabel}:)`, 'g');
+    const re = new RegExp(`([^\\n\\s*_])[ \\t]*(${escapedLabel}:)`, 'g');
     s = s.replace(re, '$1\n$2');
   });
 
@@ -247,7 +247,7 @@ export function renderMarkdown(text: unknown): string {
         html += `<p class="md-number-line"><strong>${inlineMd(`${olm[1]}. ${olm[2]}`)}</strong></p>`;
         continue;
       }
-      if (listTag !== 'ol'){ closeList(); html += '<ol>'; listTag = 'ol'; }
+      if (listTag !== 'ol'){ closeList(); html += +olm[1]! === 1 ? '<ol>' : `<ol start="${+olm[1]!}">`; listTag = 'ol'; }
       html += `<li>${inlineMd(olm[2]!)}</li>`; continue;
     }
 

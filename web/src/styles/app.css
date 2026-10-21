@@ -23,6 +23,22 @@
   .branch-stack { display: none; }
 }
 
+/* Chat -> Notes: the card a filed note leaves in the reply, and the room the note pane takes. The pane
+   sets --note-pane-room, so the branch drawer sits to its left rather than under it. */
+.branch-stack { right: calc(var(--drawer-gap) + var(--note-pane-room, 0px)); }
+.note-ref {
+  display: flex; align-items: center; gap: 12px; margin-top: 12px; padding: 10px 12px; max-width: 420px;
+  border: 1px solid var(--rule-2); border-radius: 10px; background: var(--surface); cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+.note-ref:hover, .note-ref:focus-visible { border-color: var(--text-3); background: var(--bg-2); outline: none; }
+.note-ref-icon { display: grid; place-items: center; flex: none; width: 32px; height: 32px; border-radius: 8px; background: var(--bg-3); color: var(--text-2); }
+.note-ref-body { display: flex; flex-direction: column; min-width: 0; flex: 1; }
+.note-ref-kind { font-size: 12px; color: var(--text-3); }
+.note-ref-title { font-size: 14px; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.note-ref-open { flex: none; font-size: 12px; color: var(--text-2); }
+.note-ref:hover .note-ref-open { color: var(--text); }
+
 /* chat.css was written for the Tabler icon font (`<i class="ti">`); /web/ draws lucide SVGs. */
 .branch.collapsed [data-h="collapse"] svg { transform: rotate(180deg); }
 .branch-head .logo-ico { display: grid; place-items: center; }

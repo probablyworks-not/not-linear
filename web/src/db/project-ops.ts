@@ -70,6 +70,16 @@ export function removeChatFromProjectIn(state: PersistedState, tid: string): boo
   return true;
 }
 
+/** Files a chat in `pid`, or ungroups it when `pid` is null: the one move for both add and remove. */
+export function setChatProjectIn(state: PersistedState, tid: string, pid: string | null): boolean {
+  const t = state.threads[tid];
+  if (!t || tid === MAIN_THREAD_ID || t.kind === 'doc') return false;
+  if (pid === null) { delete t.projectId; return true; }
+  if (!state.projects[pid]) return false;
+  t.projectId = pid;
+  return true;
+}
+
 /**
  * app.js:5576 newChatInProject: the same thread object startNewChat builds, plus
  * `projectId`, and the project is touched. Returns the new thread's id.

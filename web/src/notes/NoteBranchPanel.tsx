@@ -1,10 +1,11 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { ArrowUp, ChevronUp, GitBranch, Maximize2, Minimize2, MoreHorizontal, Square, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAppStore } from '../state/app-store';
 import { claudeProvider } from '../providers/claude';
 import { deepseekProvider } from '../providers/deepseek';
-import { planModel, modelLabelFromId } from '../chat/models';
+import { planModel } from '../chat/models';
+import { ModelChip } from '../chat/ComposerMenus';
 import { friendlyError, highlightCodeIn, renderMarkdown } from '../lib/markdown';
 import { applySize, branchRail, clamp, resizeBounds, resizeDelta, type ResizeEdge, type ResizeStart } from '../branch/layout';
 import { apiMessages, buildNoteSystemPrompt, titleFromNoteQuote, truncate } from './note-branches';
@@ -27,14 +28,14 @@ interface Live { text: string }
 
 async function runReply(note: LegacyNote, br: NoteBranch, signal: AbortSignal, onDelta: (t: string) => void): Promise<{ text: string; error?: string }> {
   const app = useAppStore.getState();
-  const plan = planModel(app.prefs.model, false);
+  const plan = planModel(app.prefs.model, !!app.prefs.thinking);
   if (!plan.supported || (plan.provider !== 'claude' && plan.provider !== 'deepseek')) {
     return { text: '', error: 'Notes branches support Claude and DeepSeek models for now — pick one from the model menu.' };
   }
   const provider = plan.provider === 'claude' ? claudeProvider : deepseekProvider;
   let text = '';
   for await (const ev of provider.stream({
-    messages: apiMessages(br.quote, br.messages), tools: [], thinking: false, signal, model: plan.modelId,
+    messages: apiMessages(br.quote, br.messages), tools: [], thinking: plan.thinking, signal, model: plan.modelId,
     systemPrompt: buildNoteSystemPrompt(useNotesStore.getState().notes, note, br.quote, app.prefs),
   })) {
     if (ev.t === 'delta') { text += ev.text; onDelta(text); }
@@ -55,7 +56,6 @@ export function NoteBranchPanel({ note, branch, getAnchorTop, initialMessage, on
   onDelete(): void;
 }) {
   const refresh = useNotesStore(s => s.load);
-  const modelPref = useAppStore(s => s.prefs.model);
   const elRef = useRef<HTMLDivElement>(null);
   const bodyRef = useRef<HTMLDivElement>(null);
   const taRef = useRef<HTMLTextAreaElement>(null);
@@ -68,9 +68,15 @@ export function NoteBranchPanel({ note, branch, getAnchorTop, initialMessage, on
   const [geo, setGeo] = useState<BranchGeometry>({
     collapsed: branch.collapsed, reader: branch.reader, width: branch.width, height: branch.height, top: branch.top, userSized: branch.userSized,
   });
+  // The stack's width and the note page's right margin both read --nt-drawer-w (notes' own var, ADR-028),
+  // so a resized or expanded panel widens leftwards and pushes the page over instead of running off-screen.
+  useEffect(() => {
+    const gap = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--drawer-gap')) || 16;
+    const w = geo.reader ? Math.min(680, window.innerWidth - gap * 2) : geo.width;
+    if (w) document.documentElement.style.setProperty('--nt-drawer-w', `${Math.round(w)}px`);
+  }, [geo.reader, geo.width]);
   const streaming = live !== null;
   const empty = branch.messages.length === 0 && !live;
-  const label = useMemo(() => { const p = planModel(modelPref, false); return p.supported ? modelLabelFromId(p.modelId) : 'Unsupported model'; }, [modelPref]);
 
   const saveGeo = (next: BranchGeometry): void => { setGeo(next); void patchBranch(note.id, branch.bid, b => Object.assign(b, next)).then(() => refresh()); };
 
@@ -210,7 +216,7 @@ export function NoteBranchPanel({ note, branch, getAnchorTop, initialMessage, on
             onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); const t = draft; setDraft(''); void send(t); } }}
           />
           <div className="compose-row">
-            <div className="left"><span className="chip" title="Notes branches follow the main model">{label}</span></div>
+            <div className="left"><ModelChip branchId={null} className="branch-model-chip" /></div>
             <button
               type="button" className="send-btn" aria-label={streaming ? 'Stop' : 'Send'} disabled={!streaming && !draft.trim()}
               onClick={() => { if (streaming) ctrl.current?.abort(); else { const t = draft; setDraft(''); void send(t); } }}

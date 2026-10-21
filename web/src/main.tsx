@@ -12,11 +12,18 @@ import { viewForTab } from './shell/TabStrip';
 import { flags } from './flags';
 import { installRuntimeLogSync } from './lib/runtime-log-sync';
 import { togglePanel } from './feedback/feedback-store';
+import { branchCurrentSelection, copyLastReply, retryFailedTurn } from './chat/shortcuts';
 import './styles/app.css';
 
 registerView({ id: 'chat', label: 'Chat' });
 registerView({ id: 'notes', label: 'Notes' });
 registerView({ id: 'blank', label: 'New tab' });
+
+/** The thread the chat shortcuts act on, or null when a Notes page or blank tab is in front. */
+function activeChatThread(): string | null {
+  const id = useUiStore.getState().activeTabId ?? useAppStore.getState().currentThreadId;
+  return viewForTab(id) === 'chat' ? id : null;
+}
 
 async function boot(): Promise<void> {
   await useAppStore.getState().hydrate();
@@ -29,6 +36,10 @@ async function boot(): Promise<void> {
     newChat: () => { void newChat(); },
     toggleSearch: () => { if (flags.search) useUiStore.getState().setSearchOpen(!useUiStore.getState().searchOpen); },
     toggleFeedback: () => { if (flags.feedback) togglePanel(); },
+    toggleShortcuts: () => { const ui = useUiStore.getState(); ui.setShortcutsOpen(!ui.shortcutsOpen); },
+    branchSelection: () => { const id = activeChatThread(); if (id) void branchCurrentSelection(id); },
+    copyLastReply: () => { const id = activeChatThread(); if (id) void copyLastReply(id); },
+    retryLastReply: () => { const id = activeChatThread(); if (id) void retryFailedTurn(id); },
   });
   // The other app may have changed the shared row while this one was hidden.
   window.addEventListener('focus', () => { void syncFromDisk(); useAppStore.getState().refreshApiKeys(); });

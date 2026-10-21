@@ -39,7 +39,7 @@ export function FeedbackLog() {
     : 'Not loaded';
 
   return (
-    <Section label="Feedback" help={<>Logged anywhere with ⌘⇧B. Saved to <code>feedback/FEEDBACK.md</code> for the coding agent.</>}>
+    <Section label="Feedback" help={<>Logged anywhere with ⌘⇧F. Saved to <code>feedback/FEEDBACK.md</code> for the coding agent.</>}>
       <button
         type="button" aria-expanded={open} aria-controls="fb-log-view" onClick={() => setOpen(o => !o)}
         className="flex w-full items-center gap-[9px] rounded-[7px] border border-rule-2 bg-surface px-[11px] py-[9px] text-left text-sm text-text-2 hover:border-text-2 hover:bg-bg-2 hover:text-text"
@@ -62,7 +62,7 @@ export function FeedbackLog() {
           </div>
           <div className="max-h-[330px] overflow-auto" data-testid="fb-log-list">
             {q.isError && <div className="p-4 text-center text-sm text-text-3">Could not load — is the server running with the latest code?</div>}
-            {q.data && entries.length === 0 && <div className="p-4 text-center text-sm text-text-3">No feedback yet — press ⌘⇧B anywhere to log a bug or idea.</div>}
+            {q.data && entries.length === 0 && <div className="p-4 text-center text-sm text-text-3">No feedback yet — press ⌘⇧F anywhere to log a bug or idea.</div>}
             {entries.map(en => (
               <div key={en.id} data-entry={en.id} className="border-b border-rule px-3 py-2.5 last:border-b-0">
                 <div className="mb-1 flex items-center gap-2">

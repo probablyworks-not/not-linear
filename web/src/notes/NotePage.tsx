@@ -18,8 +18,11 @@ import { unwrapBranch, wrapSelectionInBranch, type TransactEditor } from './edit
 import { addBranch, branchesOf, removeBranch, type NoteBranch } from './notes-repo';
 import { uid } from './notes-ops';
 import { NoteContext } from './NoteContext';
-import { NoteSideMenu, NoteToolbar, mentionItems, slashItems } from './note-menus';
+import { NoteSideMenu, NoteToolbar, applyLastHighlight, mentionItems, slashItems } from './note-menus';
 import type { LegacyNote } from './types';
+
+/** Space the open branch drawer takes, so the page slides left instead of sitting under it. */
+const NOTE_ROOM = 'calc(var(--nt-drawer-w) + var(--drawer-gap) * 2)';
 
 const writer = createDebouncedWriter();
 
@@ -55,7 +58,7 @@ function openEditor(blocks: unknown[]): Opened {
   }
 }
 
-function NoteEditor({ note, editable }: { note: LegacyNote; editable: boolean }) {
+function NoteEditor({ note, editable, compact }: { note: LegacyNote; editable: boolean; compact: boolean }) {
   const [opened] = useState(() => openEditor(note.blocks));
   const store = useNotesStore.getState;
   // BlockNote otherwise follows the OS colour scheme, which can disagree with the app's theme.
@@ -138,9 +141,15 @@ function NoteEditor({ note, editable }: { note: LegacyNote; editable: boolean })
     void removeBranch(note.id, bid).then(() => store().load());
   };
 
+  const onEditorKeyDown = (e: React.KeyboardEvent): void => {
+    if (!opened.ok || !editable || !e.metaKey || e.ctrlKey || e.altKey || !e.shiftKey || e.key.toLowerCase() !== 'h') return;
+    e.preventDefault();
+    applyLastHighlight(opened.editor);
+  };
+
   const onEditorClick = (e: React.MouseEvent): void => {
     const bid = (e.target as HTMLElement).closest<HTMLElement>('.nt-br-anchor')?.dataset.bid;
-    if (bid && branches.some(b => b.bid === bid)) setOpenBid(bid);
+    if (bid && !compact && branches.some(b => b.bid === bid)) setOpenBid(bid);
   };
 
   const onTitleChange = (title: string): void => {
@@ -151,12 +160,16 @@ function NoteEditor({ note, editable }: { note: LegacyNote; editable: boolean })
   };
 
   return (
-    <div className="mx-auto w-full max-w-[820px] px-7 py-8" data-testid="note-page">
+    <div
+      // Width is set with the margin, not `w-full`: a full-width box plus a right margin overflows instead of making room.
+      className={compact ? 'w-full px-4 py-5' : 'mx-auto w-full max-w-[820px] px-7 py-8 transition-[margin,width] duration-[180ms] ease-out'} data-testid="note-page"
+      style={openBranch && !compact ? { marginRight: NOTE_ROOM, width: `calc(100% - ${NOTE_ROOM})` } : undefined}
+    >
       <NoteHeader note={note} editable={editable} onTitleChange={onTitleChange} />
       {!editable && <div className="pl-[54px]"><BackupNotice /></div>}
       {opened.ok ? (
         <NoteContext.Provider value={{ noteId: note.id, startBranch }}>
-          <div ref={wrapRef} onClick={onEditorClick}>
+          <div ref={wrapRef} onClick={onEditorClick} onKeyDown={onEditorKeyDown}>
           <BlockNoteView
             editor={opened.editor} editable={editable} onChange={onBodyChange} className="nl-editor" theme={blockNoteTheme}
             slashMenu={false} formattingToolbar={false} sideMenu={false}
@@ -174,7 +187,7 @@ function NoteEditor({ note, editable }: { note: LegacyNote; editable: boolean })
           Open it in the classic app to edit it. ({opened.error})
         </div>
       )}
-      {opened.ok && editable && (
+      {opened.ok && editable && !compact && (
         <div className="group mx-[54px] mt-7 flex cursor-text items-center gap-2.5 rounded-[10px] border border-rule-2 bg-surface px-3.5 py-2.5 transition-colors focus-within:border-branch" data-testid="note-cta">
           <GitBranch size={15} className="flex-none text-branch" aria-hidden />
           <input
@@ -185,7 +198,7 @@ function NoteEditor({ note, editable }: { note: LegacyNote; editable: boolean })
           <button type="button" aria-label="Ask AI" onClick={askAboutNote} className="grid h-7 w-7 flex-none place-items-center rounded-[7px] bg-branch text-white opacity-0 transition-opacity hover:brightness-110 focus:opacity-100 focus-visible:opacity-100 group-focus-within:opacity-100"><ArrowUp size={13} /></button>
         </div>
       )}
-      {openBranch && (
+      {openBranch && !compact && (
         <div className="branch-stack has-active nl-note-stack">
           <NoteBranchPanel
             key={openBranch.bid} note={note} branch={openBranch} getAnchorTop={getAnchorTop}
@@ -198,7 +211,8 @@ function NoteEditor({ note, editable }: { note: LegacyNote; editable: boolean })
   );
 }
 
-export function NotePage({ noteId }: { noteId: string }) {
+/** `compact` is the pane beside a chat: no branch drawer or Ask-AI bar (the chat is right there), tighter padding. */
+export function NotePage({ noteId, compact = false }: { noteId: string; compact?: boolean }) {
   const note = useNotesStore(s => s.notes.find(n => n.id === noteId));
   const loaded = useNotesStore(s => s.loaded);
   const revision = useNotesStore(s => s.revisions[noteId] ?? 0);
@@ -206,5 +220,5 @@ export function NotePage({ noteId }: { noteId: string }) {
 
   if (!loaded) return <p className="p-8 text-sm text-text-3">Loading&hellip;</p>;
   if (!note) return <p className="p-8 text-sm text-text-3" data-testid="note-missing">This note no longer exists.</p>;
-  return <NoteEditor key={`${noteId}:${revision}`} note={note} editable={backedUp} />;
+  return <NoteEditor key={`${noteId}:${revision}`} note={note} editable={backedUp} compact={compact} />;
 }

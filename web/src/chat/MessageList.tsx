@@ -2,6 +2,8 @@ import { Fragment } from 'react';
 import { MsgActions } from './MsgActions';
 import { markdownTextFromRendered } from '../lib/markdown';
 import type { StoredTurn } from './stream-html';
+import { ClarifySummary } from './ClarifySummary';
+import type { ClarifyAnswer } from './clarify';
 
 /** app.js:893 looksIncompleteResponse: a reply that stops mid-sentence, as one cut off by a limit does. */
 export function looksIncompleteResponse(text: string): boolean {
@@ -20,7 +22,7 @@ export interface ContinueOffer { turnId: string; count: number }
  * assistant message the model produced, matched to its element in order (legacy matches by index);
  * an error-only element has none, so it is skipped when counting.
  */
-export function MessageList({ turns, assistantMarkdown, title, offer, busy, onContinue, actionGap }: {
+export function MessageList({ turns, assistantMarkdown, title, offer, busy, onContinue, actionGap, clarifications }: {
   turns: readonly StoredTurn[];
   /** The conversation's assistant messages, oldest first. */
   assistantMarkdown: readonly string[];
@@ -32,6 +34,8 @@ export function MessageList({ turns, assistantMarkdown, title, offer, busy, onCo
   onContinue(count: number): void;
   /** How far to pull the row up into the flex gap so it sits just under its reply. */
   actionGap: number;
+  /** The answers given to each turn's clarifying questions, by turn id. */
+  clarifications?: Record<string, ClarifyAnswer[]>;
 }) {
   const replies = turns.filter(t => t.role === 'ai' && !isErrorOnly(t.html));
   const lastReply = replies[replies.length - 1];
@@ -52,6 +56,7 @@ export function MessageList({ turns, assistantMarkdown, title, offer, busy, onCo
         return (
           <Fragment key={`${t.id}-${t.role}`}>
             <div className={`msg ${t.role}`} data-turn-id={t.id} dangerouslySetInnerHTML={{ __html: t.html }} />
+            {t.role === 'user' && clarifications?.[t.id] && <ClarifySummary answers={clarifications[t.id]!} />}
             {md !== undefined && (
               <MsgActions
                 markdown={md} title={title} style={{ marginTop: -actionGap }}

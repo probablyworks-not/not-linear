@@ -85,3 +85,25 @@ export function canReparent(notes: readonly LegacyNote[], id: string, newParent:
   if (newParent !== null && (!notes.some(x => x.id === newParent) || collectIds(notes, id).includes(newParent))) return false;
   return true;
 }
+
+/** Notes filed in `pid`: top-level pages only, since a subpage travels with its parent. */
+export const projectNotes = (notes: readonly LegacyNote[], pid: string): LegacyNote[] =>
+  notes.filter(n => n.projectId === pid && (n.parent ?? null) === null);
+
+/**
+ * The notes after filing `id` (and its subpages) in `pid`, or ungrouping them with null. A subpage
+ * becomes a top-level page when it is filed, so the project lists it. Null when nothing would change.
+ */
+export function withNoteProject(notes: readonly LegacyNote[], id: string, pid: string | null): LegacyNote[] | null {
+  const top = notes.find(n => n.id === id);
+  if (!top) return null;
+  if ((top.projectId ?? null) === pid && (pid === null || (top.parent ?? null) === null)) return null;
+  const ids = new Set(collectIds(notes, id));
+  return notes.map(n => {
+    if (!ids.has(n.id)) return n;
+    const next: LegacyNote = { ...n };
+    if (pid === null) delete next.projectId; else next.projectId = pid;
+    if (n.id === id && pid !== null) next.parent = null;
+    return next;
+  });
+}

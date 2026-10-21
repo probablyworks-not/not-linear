@@ -53,6 +53,7 @@ function mainHost(threadId: string): TurnHost {
     },
     register: c => { controllers.set(threadId, c); },
     clear: () => { controllers.delete(threadId); },
+    noteThreadId: threadId,
   };
 }
 

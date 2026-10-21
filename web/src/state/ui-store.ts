@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { parseTabs, serializeTabs, TAB_STORAGE_KEY, type Tab } from './tabs';
 import { MAIN_THREAD_ID } from '../db/thread-ops';
+import { readPaneWidth, writePaneWidth } from '../notes/pane-width';
 
 // Shell state that belongs to no feature: sidebar, tabs, the confirm dialog.
 // Kept apart from app-store because none of it is in `appState` — legacy keeps
@@ -23,6 +24,7 @@ export interface UiState {
   modesOpen: boolean;
   skillsOpen: boolean;
   searchOpen: boolean;
+  shortcutsOpen: boolean;
   highlightsOpen: boolean;
   threadMapOpen: boolean;
   canvasOpen: boolean;
@@ -36,6 +38,10 @@ export interface UiState {
   tabs: Tab[];
   activeTabId: string | null;
   confirm: PendingConfirm | null;
+  /** The note open beside the chat, if any. */
+  notePaneId: string | null;
+  /** The pane's requested width in px; the drawn width is clamped to the window. */
+  notePaneWidth: number;
 }
 
 export interface UiActions {
@@ -44,6 +50,7 @@ export interface UiActions {
   setModesOpen(open: boolean): void;
   setSkillsOpen(open: boolean): void;
   setSearchOpen(open: boolean): void;
+  setShortcutsOpen(open: boolean): void;
   setHighlightsOpen(open: boolean): void;
   setThreadMapOpen(open: boolean): void;
   setCanvasOpen(open: boolean): void;
@@ -61,6 +68,10 @@ export interface UiActions {
   /** Resolves true on confirm, false on cancel/Esc/outside click. */
   askConfirm(req: ConfirmRequest): Promise<boolean>;
   resolveConfirm(ok: boolean): void;
+  openNotePane(noteId: string): void;
+  closeNotePane(): void;
+  /** `persist` is set when a drag ends: dragging itself writes nothing. */
+  setNotePaneWidth(width: number, persist?: boolean): void;
 }
 
 function persistTabs(tabs: Tab[], active: string | null): void {
@@ -73,6 +84,7 @@ export const useUiStore = create<UiState & UiActions>((set, get) => ({
   modesOpen: false,
   skillsOpen: false,
   searchOpen: false,
+  shortcutsOpen: false,
   highlightsOpen: false,
   threadMapOpen: false,
   canvasOpen: false,
@@ -84,12 +96,21 @@ export const useUiStore = create<UiState & UiActions>((set, get) => ({
   tabs: [],
   activeTabId: null,
   confirm: null,
+  notePaneId: null,
+  notePaneWidth: readPaneWidth(),
 
+  openNotePane(noteId) { set({ notePaneId: noteId }); },
+  closeNotePane() { set({ notePaneId: null }); },
+  setNotePaneWidth(width, persist = false) {
+    set({ notePaneWidth: width });
+    if (persist) writePaneWidth(width);
+  },
   setSidebarOpen(open) { set({ sidebarOpen: open }); },
   setSettingsOpen(open) { set({ settingsOpen: open }); },
   setModesOpen(open) { set({ modesOpen: open }); },
   setSkillsOpen(open) { set({ skillsOpen: open }); },
   setSearchOpen(open) { set({ searchOpen: open }); },
+  setShortcutsOpen(open) { set({ shortcutsOpen: open }); },
   setHighlightsOpen(open) { set({ highlightsOpen: open }); },
   setThreadMapOpen(open) { set({ threadMapOpen: open }); },
   setCanvasOpen(open) { set({ canvasOpen: open }); },

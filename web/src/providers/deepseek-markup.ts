@@ -5,11 +5,11 @@
 export const DEEPSEEK_TOOL_MARKUP_HOLD_CHARS = 180;
 
 const START_PATTERNS: Array<{ kind: 'tool_calls' | 'invoke'; re: RegExp }> = [
-  { kind: 'tool_calls', re: /<\s*(?:[｜|]\s*){0,3}(?:DSML\s*(?:[｜|]\s*){0,3})?tool[_▁ ]?calls\s*(?:[｜|]\s*){0,3}>/i },
+  { kind: 'tool_calls', re: /<\s*(?:[｜|]\s*){0,3}(?:DSML\s*(?:[｜|]\s*){0,3})?(?:(?:tool|function)[_▁ ]?)?calls\s*(?:[｜|]\s*){0,3}>/i },
   { kind: 'invoke', re: /<\s*(?:[｜|]\s*){0,3}(?:DSML\s*(?:[｜|]\s*){0,3})?invoke\b[^>]*>/i },
 ];
 const END_PATTERNS: Record<'tool_calls' | 'invoke', RegExp> = {
-  tool_calls: /<\s*\/\s*(?:[｜|]\s*){0,3}(?:DSML\s*(?:[｜|]\s*){0,3})?tool[_▁ ]?calls\s*(?:[｜|]\s*){0,3}>/i,
+  tool_calls: /<\s*\/\s*(?:[｜|]\s*){0,3}(?:DSML\s*(?:[｜|]\s*){0,3})?(?:(?:tool|function)[_▁ ]?)?calls\s*(?:[｜|]\s*){0,3}>/i,
   invoke: /<\s*\/\s*(?:[｜|]\s*){0,3}(?:DSML\s*(?:[｜|]\s*){0,3})?invoke\s*(?:[｜|]\s*){0,3}>/i,
 };
 
@@ -73,5 +73,13 @@ export function synthesisOnlyMessages<T extends { role: string; content: unknown
   return [...messages, {
     role: 'user' as const,
     content: 'Use the retrieved tool results already in this conversation to write the final answer now. Do not call tools. Do not output XML, DSML, tool-call markup, or code blocks for tool calls. Do not say you are going to look anything up.',
+  }];
+}
+
+/** Retry after a tool attempt that did not parse: answer now, from knowledge. */
+export function noToolsMessages<T extends { role: string; content: unknown }>(messages: readonly T[]): Array<T | { role: 'user'; content: string }> {
+  return [...messages, {
+    role: 'user' as const,
+    content: 'You cannot call tools or open links here. Answer now from your own knowledge, and say plainly which linked pages you could not read. Do not output XML, DSML, or tool-call markup.',
   }];
 }

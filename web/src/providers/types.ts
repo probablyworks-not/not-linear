@@ -22,7 +22,9 @@ export type ToolName =
   | 'github_search_issues'
   | 'github_search_code'
   | 'github_get_issue'
-  | 'github_get_file';
+  | 'github_get_file'
+  // Chat→Notes: offered only on a main thread, when the Notes feature is on.
+  | 'create_note';
 
 export interface TokenUsage {
   inputTokens: number;

@@ -1,15 +1,23 @@
 import { useEffect, useRef, useState } from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
-import { ArrowLeft, FilePlus, Folder, FolderMinus, FolderOpen, MessageSquare, Pencil, Plus, Trash2, Unlink } from 'lucide-react';
+import { ArrowLeft, FilePlus, Folder, FolderMinus, FolderOpen, MessageSquare, NotebookText, Pencil, Plus, Trash2, Unlink } from 'lucide-react';
 import { useAppStore } from '../state/app-store';
 import { useUiStore } from '../state/ui-store';
 import {
-  addExistingChat, addFilesToProject, closeProjectPanel, deleteChat, deleteProjectWithConfirm, linkProjectFolder,
+  addExistingChat, addFilesToProject, moveChat, closeProjectPanel, deleteChat, deleteProjectWithConfirm, linkProjectFolder,
   newChatInProject, openProjectChat, unlinkProjectFolder,
 } from '../state/actions';
 import { AttachmentRow } from '../attachments/AttachmentRow';
 import type { Attachment } from '../attachments/read-files';
 import { ESC_PRIORITY, useEscLayer } from '../lib/keyboard';
+import type { LegacyNote } from '../notes/types';
+import { flags } from '../flags';
+import { useNotesStore } from '../notes/notes-store';
+import { moveNoteToProject, newNoteInProject } from '../notes/notes-actions';
+import { openNote } from '../notes/open-note';
+import { projectNotes } from '../notes/notes-ops';
+import { NoteGlyph } from '../notes/NoteGlyph';
+import { MoveToProjectButton } from './MoveToProjectButton';
 import { projectChatIds, ungroupedChatIds } from '../db/project-ops';
 import type { PersistedState } from '../db/types';
 
@@ -40,7 +48,8 @@ export function ProjectPanel() {
 }
 
 function PanelBody({ pid }: { pid: string }) {
-  const project = useAppStore(s => s.projects[pid]);
+  const projects = useAppStore(s => s.projects);
+  const project = projects[pid];
   const threads = useAppStore(s => s.threadState);
   const dynamic = useAppStore(s => s.dynamicThreads);
   const deleted = useAppStore(s => s.deletedThreadIds);
@@ -49,10 +58,16 @@ function PanelBody({ pid }: { pid: string }) {
   const setRules = useAppStore(s => s.setProjectRules);
   const removeFile = useAppStore(s => s.removeProjectFile);
   const selectName = useUiStore(s => s.selectProjectName);
+  const allNotes = useNotesStore(s => s.notes);
+  const loadNotes = useNotesStore(s => s.load);
   const [picker, setPicker] = useState(false);
+  const [notePicker, setNotePicker] = useState(false);
   const [name, setName] = useState(project?.name ?? '');
   const [rules, setRulesDraft] = useState(project?.rules ?? '');
   const nameRef = useRef<HTMLInputElement>(null);
+
+  // The notes list is shared with the sidebar; make sure it is loaded when the panel opens first.
+  useEffect(() => { if (flags.notesV2) void loadNotes(); }, [loadNotes]);
 
   // Legacy focuses and selects a new project's name after a beat (app.js:5390). Focus is an external system.
   useEffect(() => {
@@ -66,6 +81,9 @@ function PanelBody({ pid }: { pid: string }) {
   const view = { projects: { [pid]: project }, threads, dynamic, deletedThreads: deleted } as unknown as PersistedState;
   const chatIds = projectChatIds(view, pid);
   const ungrouped = ungroupedChatIds(view);
+  const notes = projectNotes(allNotes, pid);
+  const ungroupedNotes = allNotes.filter(n => (n.parent ?? null) === null && !(typeof n.projectId === 'string' && projects[n.projectId]));
+  const noteTitle = (n: LegacyNote): string => (typeof n.title === 'string' && n.title ? n.title : 'Untitled');
   const titleOf = (id: string): string => (threads[id]?.title as string | undefined) || 'Untitled chat';
   const primary = 'flex items-center gap-1.5 rounded-lg border border-text bg-text px-3 py-2 text-sm font-medium text-bg';
   const ghost = 'flex items-center gap-1.5 rounded-lg border border-rule-2 px-3 py-2 text-sm text-text-2 hover:border-text-2 hover:text-text';
@@ -96,6 +114,16 @@ function PanelBody({ pid }: { pid: string }) {
             <button type="button" className={ghost} onClick={() => setPicker(p => !p)} aria-expanded={picker}>
               <Plus size={13} aria-hidden />Add existing chat
             </button>
+            {flags.notesV2 && (
+              <>
+                <button type="button" className={ghost} onClick={() => { void newNoteInProject(pid); }}>
+                  <NotebookText size={13} aria-hidden />New note
+                </button>
+                <button type="button" className={ghost} onClick={() => setNotePicker(p => !p)} aria-expanded={notePicker}>
+                  <Plus size={13} aria-hidden />Add existing note
+                </button>
+              </>
+            )}
           </div>
 
           <section className="rounded-xl border border-rule bg-surface p-4">
@@ -119,6 +147,10 @@ function PanelBody({ pid }: { pid: string }) {
                   <MessageSquare size={14} aria-hidden className="flex-none" />
                   <span className="min-w-0 flex-1 truncate">{titleOf(id)}</span>
                 </button>
+                <MoveToProjectButton
+                  label={`Move ${titleOf(id)} to another project`} current={pid} onMove={to => { void moveChat(id, to); }}
+                  className="grid h-6 w-6 flex-none place-items-center rounded-[5px] text-text-3 hover:bg-bg-3 hover:text-text"
+                />
                 <button
                   type="button" title="Remove from project" aria-label={`Remove ${titleOf(id)} from project`}
                   onClick={() => { void removeFrom(id); }}
@@ -136,6 +168,44 @@ function PanelBody({ pid }: { pid: string }) {
               </div>
             ))}
           </section>
+
+          {flags.notesV2 && (
+            <section className="rounded-xl border border-rule bg-surface p-4" data-testid="project-notes">
+              <div className="mb-2 font-mono text-xs uppercase tracking-widest text-text-3">Notes in this project</div>
+              {notePicker && (
+                <div className="mb-2 rounded-lg border border-rule bg-bg p-1" data-testid="existing-note-picker">
+                  {ungroupedNotes.length === 0 && <div className="p-2.5 text-sm text-text-3">No ungrouped notes to add.</div>}
+                  {ungroupedNotes.map(n => (
+                    <button key={n.id} type="button" className={`${row} w-full text-left`} onClick={() => { void moveNoteToProject(n.id, pid); }}>
+                      <span className="grid w-[18px] flex-none place-items-center"><NoteGlyph value={n.emoji} size={14} /></span>
+                      <span className="min-w-0 flex-1 truncate">{noteTitle(n)}</span>
+                      <Plus size={14} aria-hidden className="flex-none" />
+                    </button>
+                  ))}
+                </div>
+              )}
+              {notes.length === 0 && <div className="p-2.5 text-sm text-text-3">No notes yet — create one above.</div>}
+              {notes.map(n => (
+                <div key={n.id} data-note={n.id} className={`${row} group`}>
+                  <button type="button" className="flex min-w-0 flex-1 items-center gap-2.5 text-left" onClick={() => { closeProjectPanel(); openNote(n.id); }}>
+                    <span className="grid w-[18px] flex-none place-items-center"><NoteGlyph value={n.emoji} size={14} /></span>
+                    <span className="min-w-0 flex-1 truncate">{noteTitle(n)}</span>
+                  </button>
+                  <MoveToProjectButton
+                    label={`Move ${noteTitle(n)} to another project`} current={pid} onMove={to => { void moveNoteToProject(n.id, to); }}
+                    className="grid h-6 w-6 flex-none place-items-center rounded-[5px] text-text-3 hover:bg-bg-3 hover:text-text"
+                  />
+                  <button
+                    type="button" title="Remove from project" aria-label={`Remove ${noteTitle(n)} from project`}
+                    onClick={() => { void moveNoteToProject(n.id, null); }}
+                    className="grid h-6 w-6 flex-none place-items-center rounded-[5px] text-text-3 hover:bg-bg-3 hover:text-text"
+                  >
+                    <FolderMinus size={13} />
+                  </button>
+                </div>
+              ))}
+            </section>
+          )}
 
           <section className="rounded-xl border border-rule bg-surface p-4">
             <div className="mb-2 font-mono text-xs uppercase tracking-widest text-text-3">Project rules</div>

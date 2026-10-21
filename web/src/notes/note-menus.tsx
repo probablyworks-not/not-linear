@@ -118,6 +118,16 @@ const HIGHLIGHTS = ['yellow', 'blue', 'green', 'pink', 'gray'];
 const TEXT_VAR: Record<string, string> = { red: '--tx-red', orange: '--tx-orange', green: '--tx-green', blue: '--tx-blue', purple: '--tx-purple' };
 const HL_VAR: Record<string, string> = { yellow: '--hl-yellow', blue: '--hl-blue', green: '--hl-green', pink: '--hl-pink', gray: '--hl-gray' };
 
+let lastHighlight = 'yellow';
+
+/** ⌘⇧H: apply the highlight last picked from the menu (yellow until one is), or clear it if the selection already has it. */
+export function applyLastHighlight(editor: unknown): void {
+  const e = editor as MenuEditor;
+  const active = e.getActiveStyles().highlight;
+  if (active === lastHighlight) e.removeStyles({ highlight: active });
+  else e.addStyles({ highlight: lastHighlight });
+}
+
 function Swatch({ cssVar, text }: { cssVar: string; text?: boolean }) {
   return text
     ? <span aria-hidden className="grid h-4 w-4 place-items-center text-[13px] font-semibold" style={{ color: `var(${cssVar})` }}>A</span>
@@ -152,7 +162,7 @@ function ColourMenu() {
         <C.Generic.Menu.Label>Highlight</C.Generic.Menu.Label>
         <C.Generic.Menu.Item onClick={() => { if (hl) editor.removeStyles({ highlight: hl }); }} checked={!hl}>none</C.Generic.Menu.Item>
         {HIGHLIGHTS.map(v => (
-          <C.Generic.Menu.Item key={v} icon={<Swatch cssVar={HL_VAR[v]!} />} onClick={() => editor.addStyles({ highlight: v })} checked={hl === v}>{`${v} highlight`}</C.Generic.Menu.Item>
+          <C.Generic.Menu.Item key={v} icon={<Swatch cssVar={HL_VAR[v]!} />} onClick={() => { lastHighlight = v; editor.addStyles({ highlight: v }); }} checked={hl === v}>{`${v} highlight`}</C.Generic.Menu.Item>
         ))}
       </C.Generic.Menu.Dropdown>
     </C.Generic.Menu.Root>

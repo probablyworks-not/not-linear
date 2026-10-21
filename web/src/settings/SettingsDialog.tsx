@@ -11,6 +11,7 @@ import { flags } from '../flags';
 import { ChangelogSection } from '../changelog/ChangelogSection';
 import { FeedbackLog } from '../feedback/FeedbackLog';
 import { RuntimeLogs } from './RuntimeLogs';
+import { getClarifyFirst, setClarifyFirst } from '../chat/clarify-pref';
 
 /**
  * Ports the Settings panel (index.html #prefs, app.js:4287). Defaults shown
@@ -107,6 +108,8 @@ function SettingsForm() {
         <Segmented label="Default model" value={prefs.model || 'sonnet'} choices={MODELS} columns={2} onChange={id => { void setPref('model', id); }} />
       </Section>
 
+      {flags.clarify && <ClarifyFirstSection />}
+
       {flags.modes && (
         <Section label="Conversation modes" help="Instructions added to the system prompt. Applies to every chat. Picking the active mode lives in the composer.">
           <button
@@ -160,5 +163,23 @@ function SettingsForm() {
 
       {flags.logs && <RuntimeLogs />}
     </>
+  );
+}
+
+function ClarifyFirstSection() {
+  const [on, setOn] = useState(getClarifyFirst);
+  const toggle = (): void => { setClarifyFirst(!on); setOn(!on); };
+  return (
+    <Section label="Clarify intent first" help="Before answering, the model may ask a few quick questions when your message is ambiguous, then uses your answers to shape the reply. Clear messages are answered straight away. Works with every model.">
+      <div className="flex items-center justify-between gap-2.5">
+        <span className="text-sm text-text-2">Ask clarifying questions</span>
+        <button
+          type="button" role="switch" aria-checked={on} aria-label="Clarify intent first" onClick={toggle}
+          className={`relative h-[18px] w-8 flex-none rounded-full border transition-colors ${on ? 'border-accent bg-accent' : 'border-rule bg-bg-3'}`}
+        >
+          <span className={`absolute left-0.5 top-0.5 h-3 w-3 rounded-full bg-bg shadow-md transition-transform ${on ? 'translate-x-3.5' : ''}`} />
+        </button>
+      </div>
+    </Section>
   );
 }

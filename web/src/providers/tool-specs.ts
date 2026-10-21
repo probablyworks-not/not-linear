@@ -25,6 +25,8 @@ import type { ToolName } from './types';
 export interface ToolContext {
   apiKeys: Partial<Record<'serper' | 'firecrawl' | 'tavily' | 'exa' | 'github', string>>;
   searxngUrl?: string;
+  /** The chat can file a long document as a note (main threads only). */
+  notes?: boolean;
 }
 
 export interface ToolSpec {
@@ -117,6 +119,20 @@ export const TOOL_SPECS: readonly ToolSpec[] = [
       required: ['url'],
     },
     available: (ctx) => Boolean(ctx.apiKeys.firecrawl),
+  },
+  {
+    name: 'create_note',
+    description:
+      'Save a long, standalone document as a note in the user\'s Notes, in the same project as this chat, so they can read it again later in a side pane. Use it when the user asks for something meant to be kept and re-read (a report, plan, spec, research summary, comparison, study guide, checklist) or your answer would run past roughly 400 words of structured material. Do NOT use it for short answers, conversation, or code snippets. Write the whole document in markdown in `content`, without repeating the title as a heading. After the tool succeeds, reply in one to three sentences saying what the note covers; do not repeat its content in the chat.',
+    jsonSchema: {
+      type: 'object',
+      properties: {
+        title: { type: 'string', description: 'A short, specific title for the note' },
+        content: { type: 'string', description: 'The full document in markdown (headings, lists, tables, code blocks allowed)' },
+      },
+      required: ['title', 'content'],
+    },
+    available: (ctx) => Boolean(ctx.notes),
   },
   ...githubSpecs(),
 ];

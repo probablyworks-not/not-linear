@@ -22,7 +22,7 @@ export interface RunTurnInput {
 }
 
 export interface RunTurnDeps {
-  providers: Record<'claude' | 'deepseek', ChatProvider>;
+  providers: Record<'claude' | 'deepseek', ChatProvider> & Partial<Record<'openai' | 'gemini', ChatProvider>>;
   /** Whether a DeepSeek key is stored; without one there is nothing to fall back to. */
   canFallBackToDeepSeek: boolean;
 }
@@ -38,7 +38,11 @@ export async function* runTurn(input: RunTurnInput, deps: RunTurnDeps): AsyncGen
   let plan = input.plan;
   let switched = false;
   while (true) {
-    const provider = deps.providers[plan.provider as 'claude' | 'deepseek'];
+    const provider = deps.providers[plan.provider];
+    if (!provider) {
+      yield { ev: { t: 'error', kind: 'config', message: `No ${plan.provider} provider is available.` }, plan };
+      return;
+    }
     let streamedText = false;
     let retryOnDeepSeek = false;
     for await (const ev of provider.stream({

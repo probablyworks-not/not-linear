@@ -28,6 +28,7 @@ export const MODELS: readonly Choice[] = [
   { id: 'sonnet-4-5', label: 'Sonnet 4.5', blurb: 'Older gen.' },
   { id: 'haiku', label: 'Haiku 4.5', blurb: 'Cheap, fast.' },
   { id: 'deepseek', label: 'DeepSeek Flash', blurb: 'Fast, cheap.' },
+  { id: 'deepseek-pro', label: 'DeepSeek Pro', blurb: 'Stronger, pricier.' },
   { id: 'deepseek-r1', label: 'DeepSeek Thinking', blurb: 'Deep thinking.' },
   { id: 'gpt-4o', label: 'GPT-5.6 Terra', blurb: 'Balanced, general use.' },
   { id: 'gpt-4o-mini', label: 'GPT-5.6 Luna', blurb: 'Fast & cheap.' },

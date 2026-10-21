@@ -1,10 +1,11 @@
 import type { ProviderId } from '../providers/types';
+import type { UsageProvider } from './usage';
 
 // Ported from providers/tools.js providerForModelPref / modelIdForModelPref and
 // claude.js's thinking gate. Pref ids are persisted, so they are never renamed.
 
 export type ModelPlan =
-  | { supported: true; provider: ProviderId; modelId: string; thinking: boolean; usageProvider: 'anthropic' | 'deepseek' }
+  | { supported: true; provider: ProviderId; modelId: string; thinking: boolean; usageProvider: UsageProvider }
   | { supported: false; reason: string };
 
 const CLAUDE_IDS: Record<string, string> = {
@@ -16,6 +17,15 @@ const CLAUDE_IDS: Record<string, string> = {
   haiku: 'claude-haiku-4-5-20251001',
 };
 const CLAUDE_THINKING = new Set(['opus', 'sonnet', 'opus-4-8', 'sonnet-4-6']);
+const OPENAI_IDS: Record<string, string> = {
+  'gpt-4o': 'gpt-5.6-terra',
+  'gpt-4o-mini': 'gpt-5.6-luna',
+  'gpt-5': 'gpt-5-2025-08-07',
+};
+const GEMINI_IDS: Record<string, string> = {
+  'gemini-flash': 'gemini-2.0-flash',
+  'gemini-pro': 'gemini-2.5-pro-preview-05-06',
+};
 const OTHER_PROVIDER = /^(gpt-|gemini-)/;
 
 /** The model the composer falls back to, as in core/state.js. */
@@ -26,8 +36,13 @@ export function planModel(pref: string | undefined, thinkingPref: boolean): Mode
   if (p === 'deepseek' || p === 'deepseek-r1') {
     return { supported: true, provider: 'deepseek', modelId: 'deepseek-v4-flash', thinking: p === 'deepseek-r1', usageProvider: 'deepseek' };
   }
+  if (p === 'deepseek-pro') {
+    return { supported: true, provider: 'deepseek', modelId: 'deepseek-v4-pro', thinking: false, usageProvider: 'deepseek' };
+  }
+  if (OPENAI_IDS[p]) return { supported: true, provider: 'openai', modelId: OPENAI_IDS[p], thinking: false, usageProvider: 'openai' };
+  if (GEMINI_IDS[p]) return { supported: true, provider: 'gemini', modelId: GEMINI_IDS[p], thinking: false, usageProvider: 'gemini' };
   if (OTHER_PROVIDER.test(p)) {
-    return { supported: false, reason: 'This model opens in the classic app until its provider moves over. Pick a Claude or DeepSeek model in Settings.' };
+    return { supported: false, reason: 'This model is not available here yet. Pick a Claude, DeepSeek, OpenAI or Gemini model in Settings.' };
   }
   return {
     supported: true,
@@ -50,6 +65,12 @@ export function modelLabelFromId(id: string | undefined, thinking = false): stri
   if (model.includes('sonnet')) return 'Claude Sonnet 5';
   if (model === 'deepseek-v4-flash') return thinking ? 'DeepSeek Flash (Thinking)' : 'DeepSeek Flash';
   if (model === 'deepseek-v4-pro') return 'DeepSeek Pro';
+  if (model === 'gpt-5.6-luna') return 'GPT-5.6 Luna';
+  if (model === 'gpt-5.6-terra') return 'GPT-5.6 Terra';
+  if (model === 'gpt-5.6-sol') return 'GPT-5.6 Sol';
+  if (model === 'gpt-5-2025-08-07') return 'GPT-5';
+  if (model.includes('gemini-2.0-flash')) return 'Gemini 2.0 Flash';
+  if (model.includes('gemini-2.5-pro')) return 'Gemini 2.5 Pro';
   if (model === 'gpt-5.6-luna') return 'GPT-5.6 Luna';
   if (model === 'gpt-5.6-terra') return 'GPT-5.6 Terra';
   if (model === 'gpt-5.6-sol') return 'GPT-5.6 Sol';

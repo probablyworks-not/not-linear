@@ -1,6 +1,6 @@
 import { NOTES_KEY, NOTES_OPEN_KEY, NOTES_SELECTED_KEY, openNotesDb } from '../db/notes';
 import { postJson } from '../lib/api';
-import { canReparent, collectIds, newNote, withDuplicate } from './notes-ops';
+import { canReparent, collectIds, newNote, withDuplicate, withNoteProject } from './notes-ops';
 import type { LegacyBlock, LegacyNote } from './types';
 
 // The only place `web/` writes Notes. Same rule as chat-repo.ts: one read-modify-write per `rw`
@@ -145,6 +145,17 @@ export async function createNote(parent: string | null): Promise<LegacyNote> {
   return note;
 }
 
+export interface NoteInit { title: string; blocks: LegacyBlock[]; emoji?: string; projectId?: string | null }
+
+/** A finished page in one write (a chat filing a document), top level, optionally inside a project. */
+export async function createNoteFrom(init: NoteInit): Promise<LegacyNote> {
+  const note: LegacyNote = { ...newNote(null), title: init.title, blocks: init.blocks };
+  if (init.emoji) note.emoji = init.emoji;
+  if (init.projectId) note.projectId = init.projectId;
+  await mutateNotes(notes => [...notes, note]);
+  return note;
+}
+
 /** Removes the pages and tidies the expanded and selected keys, in the one transaction (legacy deleteNoteIds). */
 export async function deleteNotes(ids: string[]): Promise<boolean> {
   const gone = new Set(ids);
@@ -183,6 +194,11 @@ export async function reparentNote(id: string, newParent: string | null): Promis
     notes => (canReparent(notes, id, newParent) ? notes.map(n => (n.id === id ? { ...n, parent: newParent } : n)) : null),
     newParent ? () => rewriteOpenIds(d, open => [...new Set([...open, newParent])]) : undefined,
   );
+}
+
+/** Files a page and its subpages in a project (or ungroups them with null). Subpages are lifted to the top level. */
+export function setNoteProject(id: string, pid: string | null): Promise<boolean> {
+  return mutateNotes(notes => withNoteProject(notes, id, pid));
 }
 
 export interface Cover { src: string; posY: number }

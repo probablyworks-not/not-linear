@@ -1,5 +1,6 @@
 import { TOOL_SPECS, type ToolContext } from '../providers/tool-specs';
 import type { ToolName } from '../providers/types';
+import { flags } from '../flags';
 
 // What Settings shows next to the API keys: which of the model's tools are
 // live right now and, if not, what turns them on. Availability itself comes
@@ -16,6 +17,7 @@ const LABEL: Record<ToolName, { label: string; needs: string | null }> = {
   github_search_code: { label: 'GitHub code search', needs: 'a GitHub token' },
   github_get_issue: { label: 'GitHub issue reader', needs: 'a GitHub token' },
   github_get_file: { label: 'GitHub file reader', needs: 'a GitHub token' },
+  create_note: { label: 'Save long answers as notes', needs: null },
 };
 
 export interface ToolStatus { name: ToolName; label: string; on: boolean; needs: string | null }
@@ -23,7 +25,7 @@ export interface ToolStatus { name: ToolName; label: string; on: boolean; needs:
 export function toolStatuses(ctx: ToolContext): ToolStatus[] {
   return TOOL_SPECS.map(spec => {
     const meta = LABEL[spec.name];
-    const on = spec.available(ctx);
+    const on = spec.available({ notes: flags.chatNotes, ...ctx });
     return { name: spec.name, label: meta.label, on, needs: on ? null : meta.needs };
   });
 }

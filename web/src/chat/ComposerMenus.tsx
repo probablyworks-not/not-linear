@@ -24,7 +24,7 @@ function ModelIcon({ id }: { id: string }) {
   if (id.startsWith('opus')) return <Crown size={14} className={cls} />;
   if (id.startsWith('sonnet')) return <Sparkles size={14} className={cls} />;
   if (id === 'haiku') return <Zap size={14} className={cls} />;
-  if (id === 'deepseek') return <Bot size={14} className={cls} />;
+  if (id === 'deepseek' || id === 'deepseek-pro') return <Bot size={14} className={cls} />;
   if (id === 'deepseek-r1') return <Brain size={14} className={cls} />;
   if (id.startsWith('gemini')) return <Diamond size={14} className={cls} />;
   return <Bot size={14} className={cls} />;

@@ -4,6 +4,7 @@ import { titleFromPrompt } from '../chat/title';
 import { addUsageToBucket, type TurnUsage } from '../chat/usage';
 import { esc } from '../lib/markdown';
 import type { ChatMessage } from '../providers/types';
+import type { ClarifyAnswer } from '../chat/clarify';
 import type { PersistedState } from './types';
 
 // The one place a chat turn becomes a change to the shared `state` row. Pure,
@@ -25,6 +26,8 @@ export interface TurnSnapshot {
   /** Set once, on the write that records a finished reply. */
   usage?: TurnUsage;
   markUnread?: boolean;
+  /** The user's answers to this turn's clarifying questions. Additive on the thread: the classic app keeps unknown fields. */
+  clarified?: ClarifyAnswer[];
 }
 
 /** Returns false when the thread no longer exists (deleted mid-stream), so nothing is resurrected. */
@@ -46,5 +49,9 @@ export function applyTurnSnapshot(state: PersistedState, threadId: string, snap:
   }
   if (snap.usage) addUsageToBucket(thread, snap.usage);
   if (snap.markUnread) thread.unread = true;
+  if (snap.clarified?.length) {
+    const saved = (thread.clarifications ?? {}) as Record<string, ClarifyAnswer[]>;
+    thread.clarifications = { ...saved, [snap.turnId]: snap.clarified };
+  }
   return true;
 }

@@ -4,11 +4,13 @@ import { readApiKeys } from '../lib/api-keys';
 import { friendlyError } from '../lib/markdown';
 import { claudeProvider } from '../providers/claude';
 import { deepseekProvider } from '../providers/deepseek';
+import { geminiProvider, openaiProvider } from '../providers/openai';
 import type { TurnSnapshot } from '../db/turn-ops';
 import { planModel } from './models';
 import { runTurn, type RunTurnDeps } from './run-turn';
 import { availableTools } from '../providers/tool-specs';
 import { executeTool } from '../tools/tool-runners';
+import { runCreateNote, type NoteRef } from './note-tool';
 import { toolEnv } from '../tools/env';
 import { aiTurnHTML, userTurnHTML, type AiTurnContent } from './stream-html';
 import { useAppStore } from '../state/app-store';
@@ -20,6 +22,8 @@ import type { TurnUsage } from './usage';
 import { flags } from '../flags';
 import { selectForTurn } from '../skills/skills-store';
 import { renderSkillsBlock } from '../skills/skills-prompt';
+import { awaitAnswers, renderClarifyBlock, runClarify, shouldClarify, type ClarifyAnswer } from './clarify';
+import { getClarifyFirst } from './clarify-pref';
 
 function lastAssistantText(history: ChatMessage[]): string {
   const m = [...history].reverse().find(h => h.role === 'assistant');
@@ -37,7 +41,7 @@ const SAVE_DEBOUNCE_MS = 350;
 const saveWriter = createDebouncedWriter<string>(SAVE_DEBOUNCE_MS);
 
 const defaultDeps = (): RunTurnDeps => ({
-  providers: { claude: claudeProvider, deepseek: deepseekProvider },
+  providers: { claude: claudeProvider, deepseek: deepseekProvider, openai: openaiProvider, gemini: geminiProvider },
   canFallBackToDeepSeek: !!readApiKeys().deepseek,
 });
 
@@ -74,6 +78,11 @@ export interface Turn {
   sources?: { names: string[]; mode: string };
   /** No "Try again" for a failure (the popover's Ask has none in legacy). */
   noRetry?: boolean;
+  /**
+   * The answers to this turn's clarifying questions, once decided (an empty list means skipped or
+   * none were needed). A retry replays them rather than asking again.
+   */
+  clarified?: ClarifyAnswer[];
 }
 
 export interface TurnHost {
@@ -86,6 +95,8 @@ export interface TurnHost {
   write(snap: TurnSnapshot): Promise<void>;
   register(controller: AbortController): void;
   clear(): void;
+  /** Set on a main thread: the chat the model may file documents from as notes. Branch panels leave it out. */
+  noteThreadId?: string;
 }
 
 export function snapshotOf(turn: Turn, content: AiTurnContent | null, assistantText: string | null, usage?: TurnUsage): TurnSnapshot {
@@ -98,6 +109,7 @@ export function snapshotOf(turn: Turn, content: AiTurnContent | null, assistantT
     assistantText,
     titleSeed: turn.titleSeed,
     usage,
+    clarified: turn.clarified,
   };
 }
 
@@ -109,16 +121,19 @@ export async function runAndPersist(host: TurnHost, turn: Turn): Promise<void> {
   const chat = useChatStore.getState();
   chat.setFailed(key, undefined);
   chat.setContinue(key, undefined);
-  chat.setLive(key, { turnId: turn.turnId, userText: turn.displayText ?? turn.userText, bubbleHTML: turn.bubbleHTML ?? (turn.files?.length ? userBubbleInnerHTML(turn.displayText ?? turn.userText, turn.files) : undefined), text: '', thinking: '', status: null });
+  chat.setLive(key, { turnId: turn.turnId, userText: turn.displayText ?? turn.userText, bubbleHTML: turn.bubbleHTML ?? (turn.files?.length ? userBubbleInnerHTML(turn.displayText ?? turn.userText, turn.files) : undefined), text: '', thinking: '', status: null, clarified: turn.clarified?.length ? turn.clarified : undefined });
 
   let text = '';
   let thinking = '';
+  const notes: NoteRef[] = [];
   // Immediate: the user's bubble must survive a reload even if the reply never arrives.
   await host.write(snapshotOf(turn, { text: '', thinking: '' }, ''));
 
   const finish = async (content: AiTurnContent | null, assistantText: string | null, usage?: TurnUsage): Promise<void> => {
     saveWriter.cancel(key);
-    await host.write(snapshotOf(turn, content, assistantText, usage));
+    // A note that was saved keeps its card even if the reply around it was stopped or failed.
+    const withNotes = notes.length ? { ...(content ?? { text: '', thinking: '' }), notes: [...notes] } : content;
+    await host.write(snapshotOf(turn, withNotes, assistantText, usage));
     host.clear();
     useChatStore.getState().setLive(key, undefined);
   };
@@ -144,18 +159,44 @@ export async function runAndPersist(host: TurnHost, turn: Turn): Promise<void> {
   const messagesFor = turn.messagesFor ?? ((p: ProviderId): ChatMessage[] => [...turn.history, { role: 'user', content: userContentFor(p, turn.userText, turn.files) }]);
   try {
     const env = toolEnv();
-    const tools = availableTools({ apiKeys: env.apiKeys, searxngUrl: env.searxngUrl });
+    const canFileNotes = flags.chatNotes && !!host.noteThreadId;
+    const tools = availableTools({ apiKeys: env.apiKeys, searxngUrl: env.searxngUrl, notes: canFileNotes });
+    const toolRunner = async (name: string, toolInput: Record<string, unknown>, signal: AbortSignal): Promise<string> => {
+      if (name !== 'create_note') return (executeTool as never as (n: string, i: Record<string, unknown>, s: AbortSignal) => Promise<string>)(name, toolInput, signal);
+      return runCreateNote(toolInput, {
+        threadId: host.noteThreadId ?? key,
+        onCreated: ref => { notes.push(ref); useChatStore.getState().patchLive(key, { notes: [...notes] }); },
+      });
+    };
     // P7 skills: appended to extraContext so both hosts (main + branch) and every provider get it with no provider edits.
     const picked = flags.skills ? await selectForTurn(turn.userText, lastAssistantText(turn.history), turn.skills) : [];
     if (flags.skills) useChatStore.getState().setSkillsUsed(key, picked.map(p => ({ name: p.skill.name, reason: p.reason, score: p.score })));
     if (picked.length) useChatStore.getState().patchLive(key, { skills: picked.map(p => p.skill.name) });
-    const extra = [turn.extraContext, renderSkillsBlock(picked)].filter(Boolean).join('\n\n') || undefined;
-    const input = { messagesFor, systemPrompt: host.systemPrompt(extra), plan, signal: controller.signal, tools, toolRunner: executeTool as never };
+    // Questions before answers: ask whether the request is ambiguous, wait for the user, and anchor the reply on what they say.
+    if (shouldClarify({ enabled: flags.clarify && getClarifyFirst(), userText: turn.userText, continueCount: turn.continueCount, noRetry: turn.noRetry, alreadyClarified: !!turn.clarified })) {
+      useChatStore.getState().patchLive(key, { status: 'Understanding your request…' });
+      const questions = await runClarify({ plan, userText: turn.userText, history: turn.history, signal: controller.signal }, depsFactory());
+      if (controller.signal.aborted) { await fail('Response stopped before completion.', false, true); return; }
+      if (questions.length) {
+        useChatStore.getState().patchLive(key, { clarify: questions, status: null });
+        const answers = await awaitAnswers(key, controller.signal);
+        if (controller.signal.aborted) { await fail('Response stopped before completion.', false, true); return; }
+        turn.clarified = answers ?? [];
+        // Written now so the summary survives a reload even if the reply never arrives.
+        await host.write(snapshotOf(turn, { text: '', thinking: '' }, ''));
+        useChatStore.getState().patchLive(key, { clarify: undefined, clarified: turn.clarified });
+      } else {
+        turn.clarified = [];
+      }
+      useChatStore.getState().patchLive(key, { status: null });
+    }
+    const extra = [turn.extraContext, renderSkillsBlock(picked), renderClarifyBlock(turn.clarified ?? [])].filter(Boolean).join('\n\n') || undefined;
+    const input = { messagesFor, systemPrompt: host.systemPrompt(extra), plan, signal: controller.signal, tools, toolRunner };
     for await (const { ev, plan: used } of runTurn(input, depsFactory())) {
       if (ev.t === 'delta') {
         text += ev.text;
         useChatStore.getState().patchLive(key, { text, status: null });
-        saveWriter.schedule(key, () => host.write(snapshotOf(turn, { text, thinking }, text)));
+        saveWriter.schedule(key, () => host.write(snapshotOf(turn, { text, thinking, notes: notes.length ? [...notes] : undefined }, text)));
       } else if (ev.t === 'thinking') {
         thinking += ev.text;
         useChatStore.getState().patchLive(key, { thinking });

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { aiContentHTML } from './stream-html';
+import { aiContentHTML, noteCardHTML } from './stream-html';
 import { WorkingStatus } from './WorkingStatus';
 import { phaseFromStatus, statusDetail } from './status-copy';
 import type { LiveTurn } from './chat-store';
@@ -41,6 +41,7 @@ export function LiveAiTurn({ turn }: { turn: LiveTurn }) {
       {answering
         ? <div className="ai-content" dangerouslySetInnerHTML={{ __html: aiContentHTML({ text: turn.text, thinking: '' }) }} />
         : <div className="ai-content">{!turn.status && <WorkingStatus phase="thinking" />}</div>}
+      {turn.notes?.map(n => <div key={n.id} dangerouslySetInnerHTML={{ __html: noteCardHTML(n) }} />)}
     </div>
   );
 }

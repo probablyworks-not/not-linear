@@ -16,7 +16,7 @@ import {
 } from '../lib/api-client';
 import { isToolFatal, toolResultFallbackMarkdown, toolStatusLabel, type ToolResultRecord } from '../tools/tool-runners';
 import { toOpenAITools, type ToolSpec } from './tool-specs';
-import { consumeDeepSeekVisibleContent, synthesisOnlyMessages } from './deepseek-markup';
+import { consumeDeepSeekVisibleContent, noToolsMessages, synthesisOnlyMessages } from './deepseek-markup';
 import { errorKindOf, messageOf, sseData } from './sse';
 import type { ChatMessage, ChatProvider, ChatRequest, ErrorKind, ProviderEvent, TokenUsage } from './types';
 
@@ -24,7 +24,7 @@ const ENDPOINT = 'https://api.deepseek.com/v1/chat/completions';
 const MAX_REQUESTS = 10;
 
 interface WireToolCall { id: string; type: 'function'; function: { name: string; arguments: string } }
-interface WireMessage { role: string; content: string | null; tool_calls?: WireToolCall[]; tool_call_id?: string }
+interface WireMessage { role: string; content: string | null; tool_calls?: WireToolCall[]; tool_call_id?: string; reasoning_content?: string }
 
 interface DeepSeekEvent {
   usage?: { prompt_tokens?: number; prompt_cache_hit_tokens?: number; completion_tokens?: number };
@@ -70,6 +70,7 @@ export const deepseekProvider: ChatProvider = {
     let requestCount = 0;
     let toolRounds = 0;
     let lastToolResults: ToolResultRecord[] = [];
+    let retriedNoTools = false;
     const usageOf = (stopReason?: string): TokenUsage => ({
       inputTokens, outputTokens, cacheHitTokens: cacheHit, stopReason, requestCount,
       context: { system: req.systemPrompt, messages: current, tools: specs.map(t => t.name) },
@@ -95,12 +96,13 @@ export const deepseekProvider: ChatProvider = {
         return;
       }
 
-      // Tools are offered only while under the round limit, and never in thinking mode. Once they
-      // are spent, the model is told to answer from the results already in the conversation.
-      const canUseTools = specs.length > 0 && !req.thinking && toolRounds < DEEPSEEK_MAX_TOOL_ROUNDS;
+      // Tools are offered only while under the round limit (thinking mode too: its reasoning is sent
+      // back with each tool round). Once they are spent, or after a no-tools retry, the model is
+      // told to answer from what is already in the conversation.
+      const canUseTools = specs.length > 0 && !retriedNoTools && toolRounds < DEEPSEEK_MAX_TOOL_ROUNDS;
       const synthesizing = !canUseTools && toolRounds > 0;
       if (synthesizing && lastToolResults.length) yield { t: 'status', label: 'Synthesizing answer from retrieved sources…' };
-      const requestMessages = synthesizing ? synthesisOnlyMessages(current) : current;
+      const requestMessages = retriedNoTools ? noToolsMessages(current) : synthesizing ? synthesisOnlyMessages(current) : current;
 
       let res: Awaited<ReturnType<typeof loggedFetch>>;
       try {
@@ -139,6 +141,7 @@ export const deepseekProvider: ChatProvider = {
       let emittedText = false;
       let held = '';
       let suppressedPseudo = false;
+      let reasoning = '';
       // After tool results are in hand a stalled answer must surface fast (bug #012), so the idle timeout is shorter.
       const waitingOnSynthesis = requestCount > 1 && lastToolResults.length > 0;
 
@@ -167,7 +170,7 @@ export const deepseekProvider: ChatProvider = {
           if (!choice) continue;
           finishReason = choice.finish_reason || finishReason;
           const delta = choice.delta;
-          if (delta?.reasoning_content) yield { t: 'thinking', text: delta.reasoning_content };
+          if (delta?.reasoning_content) { reasoning += delta.reasoning_content; yield { t: 'thinking', text: delta.reasoning_content }; }
           if (delta?.content) yield* emit(delta.content);
           for (const tc of delta?.tool_calls ?? []) {
             const slot = (tcBuf[tc.index] ??= { id: '', name: '', args: '' });
@@ -213,6 +216,19 @@ export const deepseekProvider: ChatProvider = {
             finishReason = 'pseudo_tool_call_filtered';
           }
         }
+        // Thinking mode offers no tools, so a tool attempt there leaves cut markup and no answer:
+        // ask once more, plainly, to answer without them.
+        if (suppressedPseudo && req.thinking && !lastToolResults.length && !retriedNoTools) {
+          retriedNoTools = true;
+          yield { t: 'status', label: 'Answering without tools…' };
+          continue;
+        }
+        if (suppressedPseudo && !lastToolResults.length && (retriedNoTools || !full.trim())) {
+          yield fail('other', req.thinking
+            ? "DeepSeek tried to use a tool, which Thinking mode doesn't offer. Switch to non-thinking Flash, or ask again without needing a lookup."
+            : 'DeepSeek tried to call a tool but sent no usable request. Try again.', { requestCount, toolRounds, outputChars: 0 });
+          return;
+        }
         endBackendTrace(trace, 'end', { provider: 'deepseek', model, inputTokens, outputTokens, requestCount, toolRounds, finishReason, outputChars: full.length });
         // DeepSeek says 'length'; the Continue affordance reads Anthropic's 'max_tokens'.
         yield { t: 'done', text: full, usage: usageOf(finishReason === 'length' ? 'max_tokens' : finishReason ?? undefined) };
@@ -224,7 +240,8 @@ export const deepseekProvider: ChatProvider = {
         yield fail('other', 'DeepSeek requested a tool call but did not send a usable tool request.', { requestCount, toolRounds, outputChars: full.length });
         return;
       }
-      current = [...current, { role: 'assistant', content: full || null, tool_calls: toolCalls }];
+      // DeepSeek requires the reasoning of a tool round to come back with it, within the same turn.
+      current = [...current, { role: 'assistant', content: full || null, tool_calls: toolCalls, ...(req.thinking && reasoning ? { reasoning_content: reasoning } : {}) }];
 
       // One at a time, unlike Claude's parallel run: each result is appended as it arrives.
       const records: ToolResultRecord[] = [];

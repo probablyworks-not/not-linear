@@ -78,6 +78,13 @@ export async function newProject(): Promise<void> {
   if (pid) await openProjectPanel(pid, { selectName: true });
 }
 
+/** Files a chat in a project (moving it from any other), or ungroups it with null. */
+export async function moveChat(tid: string, pid: string | null): Promise<void> {
+  const app = useAppStore.getState();
+  if (!(await app.moveChatToProject(tid, pid))) return;
+  toast(pid ? `Chat moved to ${app.projects[pid]?.name || 'Untitled project'}` : 'Chat removed from project');
+}
+
 /** app.js:5576 newChatInProject. */
 export async function newChatInProject(pid: string): Promise<void> {
   await useAppStore.getState().flushPrefs();

@@ -1,12 +1,13 @@
 import { toast } from 'sonner';
+import { useAppStore } from '../state/app-store';
 import { useUiStore } from '../state/ui-store';
-import { selectThread } from '../state/actions';
+import { closeProjectPanel, selectThread } from '../state/actions';
 import { mountView } from '../registry/views';
 import { viewForTab } from '../shell/TabStrip';
 import { downscaleImage } from '../lib/downscale-image';
 import { collectIds } from './notes-ops';
 import {
-  createNote, deleteNotes, duplicateNote, patchNote, reparentNote, setExpanded, type Cover,
+  createNote, deleteNotes, duplicateNote, patchNote, reparentNote, setExpanded, setNoteProject, type Cover,
 } from './notes-repo';
 import { useNotesStore } from './notes-store';
 import { openNote, openNotesIndex } from './open-note';
@@ -54,6 +55,22 @@ export async function duplicatePage(id: string): Promise<void> {
 export async function movePage(id: string, parent: string | null): Promise<void> {
   const moved = await guarded('move the page', () => reparentNote(id, parent));
   if (moved) toast(parent ? `moved into ${titleOf(parent)}` : 'moved to top level');
+}
+
+export async function moveNoteToProject(id: string, pid: string | null): Promise<void> {
+  const moved = await guarded('move the note', () => setNoteProject(id, pid));
+  if (!moved) return;
+  const name = pid ? useAppStore.getState().projects[pid]?.name || 'Untitled project' : '';
+  toast(pid ? `moved into ${name}` : 'removed from project');
+}
+
+export async function newNoteInProject(pid: string): Promise<void> {
+  const made = await guarded('create a page', async () => {
+    const n = await createNote(null);
+    await setNoteProject(n.id, pid);
+    return n;
+  });
+  if (made) { closeProjectPanel(); openNote(made.id); }
 }
 
 function closeTabsFor(ids: string[]): void {

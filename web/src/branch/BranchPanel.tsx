@@ -9,6 +9,9 @@ import { openBranchFromAnchor, openParentBranch } from './open-from';
 import { useUiStore } from '../state/ui-store';
 import { BranchComposer } from './BranchComposer';
 import { LiveAiTurn } from '../chat/LiveAiTurn';
+import { ClarifyCard } from '../chat/ClarifyCard';
+import { ClarifySummary } from '../chat/ClarifySummary';
+import { resolveClarify } from '../chat/clarify';
 import { MessageList } from '../chat/MessageList';
 import { parseStream } from '../chat/stream-html';
 import { branchRowsForThread } from '../chat/branch-model';
@@ -219,7 +222,14 @@ export function BranchPanel({ branch: b, flags, registerEl, onLayout, onMenu }: 
             <div className="msg user" data-turn-id={live.turnId} data-live>
               <div className="bub"><div>{live.userText}</div></div>
             </div>
-            <LiveAiTurn turn={live} />
+            {live.clarify
+              ? <ClarifyCard questions={live.clarify} onSubmit={answers => resolveClarify(branchKey(b.id), answers)} onSkip={() => resolveClarify(branchKey(b.id), null)} />
+              : (
+                <>
+                  {!!live.clarified?.length && <ClarifySummary answers={live.clarified} />}
+                  <LiveAiTurn turn={live} />
+                </>
+              )}
           </>
         )}
         {failed && !live && (

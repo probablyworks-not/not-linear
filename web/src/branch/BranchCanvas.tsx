@@ -12,7 +12,12 @@ import { CANVAS_NODE_H, CANVAS_NODE_W, canvasLayout, edgePath } from './canvas-l
 import { ESC_PRIORITY, useEscLayer } from '../lib/keyboard';
 
 const truncate = (s: string, n: number): string => (s.length > n ? s.slice(0, n - 1).trim() + '…' : s);
-const INITIAL_PAN = { x: 60, y: 40 };
+const INITIAL_VIEW = { x: 60, y: 40, z: 1 };
+const MIN_ZOOM = 0.25;
+const MAX_ZOOM = 2;
+const ZOOM_STEP = 1.2;
+const FIT_PADDING = 40;
+const clampZoom = (z: number): number => Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, z));
 
 /**
  * The spatial branch canvas (app.js:2823): every branch the chat has ever had, as a tree you
@@ -26,12 +31,13 @@ export function BranchCanvas({ threadId }: { threadId: string }) {
   const setOpen = useUiStore(s => s.setCanvasOpen);
   const thread = useAppStore(s => s.threadState[threadId]);
   const openPanels = useBranchStore(s => s.open);
-  const [pan, setPan] = useState(INITIAL_PAN);
+  const [view, setView] = useState(INITIAL_VIEW);
+  const viewport = useRef<HTMLDivElement>(null);
   const [grabbing, setGrabbing] = useState(false);
   const drag = useRef<{ sx: number; sy: number; px: number; py: number } | null>(null);
 
   // Closing puts the view back at the origin, so each opening starts there (no effect needed).
-  const close = useCallback(() => { setPan(INITIAL_PAN); setOpen(false); }, [setOpen]);
+  const close = useCallback(() => { setView(INITIAL_VIEW); setOpen(false); }, [setOpen]);
   useEscLayer('branchCanvas', ESC_PRIORITY.branchCanvas, open, close);
 
   const rows = useMemo(
@@ -40,11 +46,42 @@ export function BranchCanvas({ threadId }: { threadId: string }) {
   );
   const layout = useMemo(() => canvasLayout(rows), [rows]);
 
+  // Zoom keeps the point at the middle of the viewport fixed, so it grows and shrinks around what you are looking at.
+  const zoomBy = useCallback((factor: number): void => {
+    const el = viewport.current;
+    const cx = (el?.clientWidth ?? 0) / 2;
+    const cy = (el?.clientHeight ?? 0) / 2;
+    setView(v => {
+      const z = clampZoom(v.z * factor);
+      return { x: cx - (cx - v.x) * (z / v.z), y: cy - (cy - v.y) * (z / v.z), z };
+    });
+  }, []);
+
+  const fit = useCallback((): void => {
+    const el = viewport.current;
+    if (!el) return;
+    const z = clampZoom(Math.min(1, (el.clientWidth - FIT_PADDING * 2) / layout.width, (el.clientHeight - FIT_PADDING * 2) / layout.height));
+    setView({ x: (el.clientWidth - layout.width * z) / 2, y: (el.clientHeight - layout.height * z) / 2, z });
+  }, [layout.width, layout.height]);
+
+  // ⌘+ / ⌘− / ⌘0 while the canvas is up. They are claimed here so the browser's page zoom does not also fire.
+  useEffect(() => {
+    if (!open) return undefined;
+    const onKey = (e: KeyboardEvent): void => {
+      if (!(e.metaKey || e.ctrlKey) || e.altKey) return;
+      if (e.key === '=' || e.key === '+') { e.preventDefault(); zoomBy(ZOOM_STEP); }
+      else if (e.key === '-' || e.key === '_') { e.preventDefault(); zoomBy(1 / ZOOM_STEP); }
+      else if (e.key === '0') { e.preventDefault(); fit(); }
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [open, zoomBy, fit]);
+
   // Dragging the background pans; a drag that ends outside the viewport must still end.
   useEffect(() => {
     const move = (e: MouseEvent): void => {
       const d = drag.current;
-      if (d) setPan({ x: d.px + e.clientX - d.sx, y: d.py + e.clientY - d.sy });
+      if (d) setView(v => ({ ...v, x: d.px + e.clientX - d.sx, y: d.py + e.clientY - d.sy }));
     };
     const up = (): void => { drag.current = null; setGrabbing(false); };
     window.addEventListener('mousemove', move);
@@ -74,14 +111,15 @@ export function BranchCanvas({ threadId }: { threadId: string }) {
         </button>
       </div>
       <div
+        ref={viewport}
         className={clsx('relative flex-1 overflow-hidden bg-[radial-gradient(var(--rule-2)_1px,transparent_1px)] bg-[length:26px_26px] bg-[position:-4px_-4px]', grabbing ? 'cursor-grabbing' : 'cursor-grab')}
         onMouseDown={e => {
           if ((e.target as HTMLElement).closest('[data-bc-id]')) return;
-          drag.current = { sx: e.clientX, sy: e.clientY, px: pan.x, py: pan.y };
+          drag.current = { sx: e.clientX, sy: e.clientY, px: view.x, py: view.y };
           setGrabbing(true);
         }}
       >
-        <div className="absolute left-0 top-0 origin-top-left" style={{ transform: `translate(${pan.x}px, ${pan.y}px)` }} data-testid="canvas-plane">
+        <div className="absolute left-0 top-0 origin-top-left" style={{ transform: `translate(${view.x}px, ${view.y}px) scale(${view.z})` }} data-testid="canvas-plane">
           <svg className="pointer-events-none absolute left-0 top-0 overflow-visible" width={layout.width} height={layout.height} aria-hidden="true">
             {rows.map(r => {
               const pkey = r.parentBid && layout.byId[r.parentBid] ? r.parentBid : 'doc';

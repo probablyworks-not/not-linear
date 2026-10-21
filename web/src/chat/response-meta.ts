@@ -1,5 +1,5 @@
 import { esc } from '../lib/markdown';
-import { fmtTokenCount, fmtUsd, responseCost, type TurnUsage } from './usage';
+import { fmtTokenCount, fmtUsd, responseCost, type TurnUsage, type UsageProvider } from './usage';
 import { modelLabelFromId } from './models';
 import type { TokenUsage } from '../providers/types';
 
@@ -10,7 +10,7 @@ import type { TokenUsage } from '../providers/types';
 
 export interface ResponseMeta {
   usage: TokenUsage;
-  provider: 'anthropic' | 'deepseek';
+  provider: UsageProvider;
   model: string;
   thinking?: boolean;
 }

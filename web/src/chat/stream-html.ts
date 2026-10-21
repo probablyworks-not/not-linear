@@ -38,6 +38,8 @@ export interface AiTurnContent {
   meta?: ResponseMeta;
   /** Project-folder files the answer drew on, shown as chips under it. */
   sources?: { names: string[]; label: string; icon: 'brain' | 'files' };
+  /** Notes the model filed from this reply: a card each, opening the note beside the chat. */
+  notes?: Array<{ id: string; title: string }>;
 }
 
 export function aiContentHTML(c: AiTurnContent): string {
@@ -52,12 +54,21 @@ function sourcesBarHTML(s: NonNullable<AiTurnContent['sources']>): string {
   return `<div class="msg-sources"><i class="ti ${s.icon === 'brain' ? 'ti-brain' : 'ti-files'}"></i><span class="msg-sources-label">${esc(s.label)}</span>${s.names.map(n => `<span class="msg-source-chip">${esc(n)}</span>`).join('')}</div>`;
 }
 
+/**
+ * The card for a note filed from a reply. Plain markup inside the saved HTML (the chat schema stays
+ * as it is); the legacy app shows it as an ordinary block. ChatView opens the note on a click.
+ */
+export function noteCardHTML(n: { id: string; title: string }): string {
+  const icon = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3h11a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6z"/><path d="M6 3v18"/><path d="M10 8h5"/><path d="M10 12h5"/></svg>';
+  return `<div class="note-ref" role="button" tabindex="0" data-note-id="${esc(n.id)}"><span class="note-ref-icon">${icon}</span><span class="note-ref-body"><span class="note-ref-kind">Note</span><span class="note-ref-title">${esc(n.title)}</span></span><span class="note-ref-open">Open</span></div>`;
+}
+
 export function aiTurnHTML(turnId: string, c: AiTurnContent): string {
   const status = c.stopNote ? `<span class="err-msg"><i class="ti ti-alert-circle"></i>${esc(c.stopNote)}</span>` : '';
   const thinking = c.thinking
     ? `<div class="ai-thinking active"><button class="thinking-toggle"><span class="thinking-live-spinner" style="display: none;"></span><span class="thinking-label">View reasoning</span><i class="ti ti-chevron-down"></i></button><div class="thinking-body">${esc(c.thinking)}</div></div>`
     : '<div class="ai-thinking"><button class="thinking-toggle"><span class="thinking-live-spinner"></span><span class="thinking-label">Reasoning…</span><i class="ti ti-chevron-down"></i></button><div class="thinking-body"></div></div>';
-  return `<div class="msg ai" data-turn-id="${turnId}"><div class="ai-status">${status}</div>${thinking}<div class="ai-content">${aiContentHTML(c)}</div>${c.sources?.names.length ? sourcesBarHTML(c.sources) : ''}${c.meta ? responseMetaHTML(c.meta) : ''}</div>`;
+  return `<div class="msg ai" data-turn-id="${turnId}"><div class="ai-status">${status}</div>${thinking}<div class="ai-content">${aiContentHTML(c)}</div>${(c.notes ?? []).map(noteCardHTML).join('')}${c.sources?.names.length ? sourcesBarHTML(c.sources) : ''}${c.meta ? responseMetaHTML(c.meta) : ''}</div>`;
 }
 
 function parse(html: string): HTMLTemplateElement {

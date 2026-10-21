@@ -19,12 +19,15 @@ export const ESC_PRIORITY = {
   storyPlayer: 140,
   searchPalette: 130,
   confirm: 120,
+  shortcutsSheet: 115,
   modesModal: 110,
   skillsModal: 111,
   projectPanel: 100,
   projectsView: 90,
   sidebar: 80,
   ctxRankingPopover: 70,
+  // The clarifying-questions card is inline, so every dialog and menu outranks it; Esc skips it.
+  clarifyCard: 55,
   modelMenu: 60,
   modeMenu: 50,
   branchMenu: 48,
@@ -58,22 +61,34 @@ export function handleEscape(): boolean {
   return true;
 }
 
+export interface GlobalKeyHandlers {
+  newChat(): void;
+  toggleSearch(): void;
+  toggleFeedback(): void;
+  branchSelection(): void;
+  copyLastReply(): void;
+  retryLastReply(): void;
+  toggleShortcuts(): void;
+}
+
 /** Installs the single global keydown listener. Returns its teardown. */
-export function installGlobalKeys(handlers: { newChat(): void; toggleSearch(): void; toggleFeedback(): void }): () => void {
+export function installGlobalKeys(handlers: GlobalKeyHandlers): () => void {
   const onKey = (e: KeyboardEvent): void => {
-    if (e.key === 'Escape') {
-      handleEscape();
-    } else if ((e.metaKey || e.ctrlKey) && ((e.shiftKey && e.key.toLowerCase() === 'b') || (!e.shiftKey && e.key.toLowerCase() === 'q'))) {
-      // Feedback: ⌘⇧B everywhere; ⌘Q works in the native shell (browsers reserve it for quit).
-      e.preventDefault();
-      handlers.toggleFeedback();
-    } else if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
-      e.preventDefault();
-      handlers.toggleSearch();
-    } else if ((e.metaKey || e.ctrlKey) && e.key === 'n') {
-      e.preventDefault();
-      handlers.newChat();
-    }
+    if (e.key === 'Escape') { handleEscape(); return; }
+    if (!(e.metaKey || e.ctrlKey) || e.altKey) return;
+    const key = e.key.toLowerCase();
+    const run = (fn: () => void): void => { e.preventDefault(); fn(); };
+    if (e.shiftKey) {
+      if (key === 'b') run(handlers.branchSelection);
+      else if (key === 'f') run(handlers.toggleFeedback);
+      else if (key === 'c') run(handlers.copyLastReply);
+      else if (key === 'r') run(handlers.retryLastReply);
+    } else if (key === 'q') {
+      // ⌘Q works in the native shell as a Feedback alias (browsers reserve it for quit).
+      run(handlers.toggleFeedback);
+    } else if (key === 'k') run(handlers.toggleSearch);
+    else if (key === 'n') run(handlers.newChat);
+    else if (key === '/') run(handlers.toggleShortcuts);
   };
   document.addEventListener('keydown', onKey);
   return () => document.removeEventListener('keydown', onKey);

@@ -7,7 +7,7 @@ import { connectKey, disconnectKey, readApiKeys } from '../lib/api-keys';
 import { applyTheme } from '../lib/theme';
 import { MODE_PREF_KEYS } from '../settings/modes';
 import {
-  addChatToProjectIn, createProjectIn, deleteProjectIn, newChatInProjectIn, removeChatFromProjectIn,
+  addChatToProjectIn, setChatProjectIn, createProjectIn, deleteProjectIn, newChatInProjectIn, removeChatFromProjectIn,
   renameProjectIn, touchOnOpen,
   addProjectFilesIn, removeProjectFileIn, setProjectPathIn, setProjectRulesIn,
 } from '../db/project-ops';
@@ -104,6 +104,8 @@ export interface AppActions {
   setProjectPath(pid: string, path: string): Promise<boolean>;
   addChatToProject(pid: string, tid: string): Promise<boolean>;
   removeChatFromProject(tid: string): Promise<boolean>;
+  /** Files a chat in a project, moving it from any other, or ungroups it with null. */
+  moveChatToProject(tid: string, pid: string | null): Promise<boolean>;
   /** Returns the new chat's id. */
   newChatInProject(pid: string): Promise<string | null>;
   /** The caller owns the confirm. Chats are kept and move back to Threads. */
@@ -332,6 +334,11 @@ export const useAppStore = create<AppState & AppActions>((set, get) => ({
 
   async addChatToProject(pid, tid) {
     try { return applyProjectWrite(set, await updateChatState(s => addChatToProjectIn(s, pid, tid))); }
+    catch (e) { set({ error: e instanceof Error ? e.message : String(e) }); return false; }
+  },
+
+  async moveChatToProject(tid, pid) {
+    try { return applyProjectWrite(set, await updateChatState(s => setChatProjectIn(s, tid, pid))); }
     catch (e) { set({ error: e instanceof Error ? e.message : String(e) }); return false; }
   },
 
