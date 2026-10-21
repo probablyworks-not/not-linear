@@ -54,3 +54,7 @@ _archive/
 
 # Personal agent config and hooks (deploy hook is machine-specific)
 .claude/
+
+# Personal planning docs (open-source prep)
+plan_final.md
+licenses_plan.md
