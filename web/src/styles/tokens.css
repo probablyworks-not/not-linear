@@ -207,3 +207,53 @@ html[data-theme="light"]{
   --sec-artifacts:#8161C9; --sec-artifacts-soft:#F7F6FB; --sec-artifacts-line:#C9C4DD;
   --sec-files:#3E8E6A; --sec-files-soft:rgba(62,142,106,0.08); --sec-files-line:rgba(62,142,106,0.25);
 }
+
+/* ---- Canvas (ADR-066) ----
+   The thinking-canvas design's palette, adopted verbatim in `light` where it was authored, and
+   derived for `dark-mono` and `grey`. These are the only place its hex values exist: a literal
+   colour inside a component is still a lint error (bug #022), so components use the Tailwind class
+   or var(--cv-…).
+
+   The six highlight tones carry *source relationships* — which passage spawned which branch — and
+   the four island accents carry context categories. Neither is decoration, and neither may be
+   spent on anything else, the same rule --branch and --highlight already live under. On dark the
+   pastels become low-alpha washes of the same hue so the text on top stays readable rather than
+   being inverted into mud. The six tones are *saturated* on dark rather than faded pastels: the
+   light values washed at low alpha over near-black all converge to the same brown-grey, and six
+   tones nobody can tell apart carry no relationship information at all. */
+:root{
+  --cv-ground:#0C0C0C;
+  --cv-card:#121212; --cv-card-warm:#151515; --cv-card-inset:#181818;
+  --cv-edge:#262626; --cv-divider:#1E1E1E;
+  --cv-connector:rgba(180,199,229,0.42);
+  --cv-hl-blue:rgba(90,150,245,0.30);   --cv-hl-pink:rgba(235,120,185,0.30);
+  --cv-hl-brown:rgba(195,135,85,0.32);  --cv-hl-green:rgba(110,195,105,0.28);
+  --cv-hl-yellow:rgba(235,195,60,0.30); --cv-hl-orange:rgba(245,150,70,0.30);
+  --cv-island-memory:#9BB38C; --cv-island-rules:#C9A2BA;
+  --cv-island-files:#8FAEC4;  --cv-island-outputs:#CCAE6E;
+  --sec-canvas:#6BB8C7; --sec-canvas-soft:rgba(107,184,199,0.10); --sec-canvas-line:rgba(107,184,199,0.26);
+}
+html[data-theme="grey"], [data-preview-theme="grey"]{
+  --cv-ground:#1A1A1A;
+  --cv-card:#232323; --cv-card-warm:#272727; --cv-card-inset:#2B2B2B;
+  --cv-edge:#3A3A3A; --cv-divider:#303030;
+  --cv-connector:rgba(180,199,229,0.46);
+  --cv-hl-blue:rgba(90,150,245,0.32);   --cv-hl-pink:rgba(235,120,185,0.32);
+  --cv-hl-brown:rgba(195,135,85,0.34);  --cv-hl-green:rgba(110,195,105,0.30);
+  --cv-hl-yellow:rgba(235,195,60,0.32); --cv-hl-orange:rgba(245,150,70,0.32);
+  --cv-island-memory:#A4BC95; --cv-island-rules:#D0AAC1;
+  --cv-island-files:#97B6CC;  --cv-island-outputs:#D4B676;
+  --sec-canvas:#74C1D0; --sec-canvas-soft:rgba(116,193,208,0.10); --sec-canvas-line:rgba(116,193,208,0.26);
+}
+html[data-theme="light"], [data-preview-theme="light"]{
+  --cv-ground:#F5F6F4;
+  --cv-card:#FFFFFF; --cv-card-warm:#F6F5F2; --cv-card-inset:#F0EEEA;
+  --cv-edge:#D2CFC8; --cv-divider:#E3E1DC;
+  --cv-connector:#B4C7E5;
+  --cv-hl-blue:#CCE0FF;   --cv-hl-pink:#F6CCE3;
+  --cv-hl-brown:#E6CFBA;  --cv-hl-green:#CEE5C7;
+  --cv-hl-yellow:#F7E7A5; --cv-hl-orange:#F7D0AC;
+  --cv-island-memory:#AFC5A0; --cv-island-rules:#D5B4C7;
+  --cv-island-files:#9DBBCE;  --cv-island-outputs:#DCBE82;
+  --sec-canvas:#2F8795; --sec-canvas-soft:rgba(47,135,149,0.08); --sec-canvas-line:rgba(47,135,149,0.25);
+}

@@ -17,6 +17,12 @@ export const ESC_PRIORITY = {
   // The icon picker closes on its own Escape in legacy, before anything else on the page.
   glyphPicker: 165,
   branchCanvas: 150,
+  // Canvas (C2+). The workspace itself is a tab and dismisses nothing; these are the surfaces that
+  // open over it. The scoped composer sits just above the selection popover because Escape should
+  // drop the composer before clearing the selection it is attached to.
+  canvasOutputDetail: 144,
+  canvasLibrary: 142,
+  canvasComposer: 12,
   storyPlayer: 140,
   searchPalette: 130,
   confirm: 120,

@@ -8,6 +8,8 @@ import { confirmDeleteProject } from '../ui/confirm-copy';
 import { pickFiles } from '../attachments/pick-files';
 import { readFiles } from '../attachments/read-files';
 import { LOCAL_HEADER } from '../lib/api';
+import { flags } from '../flags';
+import { unassignCanvasesOfProject } from '../canvas/canvas-repo';
 
 // Shell-level operations that span both stores. These are what the legacy
 // `register*Opener` bridges became: plain functions, callable from anywhere.
@@ -114,6 +116,17 @@ export async function deleteProjectWithConfirm(pid: string): Promise<void> {
   if (!p) return;
   if (!(await useUiStore.getState().askConfirm(confirmDeleteProject(p.name || 'Untitled project')))) return;
   closeProjectPanel();
+  // Canvases outlive their project (AC-17): they move to the Unassigned listing rather than being
+  // deleted, the same way the project's chats go back to Threads. Done before the project row
+  // goes, so a failure here leaves the project — and its canvases — intact and reachable.
+  if (flags.canvas) {
+    try {
+      await unassignCanvasesOfProject(pid);
+    } catch (e) {
+      toast(`Could not keep this project's canvases: ${e instanceof Error ? e.message : String(e)}`);
+      return;
+    }
+  }
   if (await useAppStore.getState().deleteProject(pid)) toast('Project deleted');
 }
 

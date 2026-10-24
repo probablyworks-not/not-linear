@@ -23,12 +23,15 @@ import { ImagePreview } from '../ui/ImagePreview';
 import { FilePreview } from '../ui/FilePreview';
 import { ExportButton } from '../notes/ExportButton';
 import { SaveToArtifactsButton } from '../notes/SaveToArtifactsButton';
-import { NOTE_TAB_PREFIX, isNoteTabId } from '../state/tabs';
+import { NOTE_TAB_PREFIX, canvasIdOfTab, isCanvasTabId, isNoteTabId } from '../state/tabs';
 import { flags } from '../flags';
 import { useEdgeReveal } from '../lib/edge-reveal';
 
 // BlockNote is large; chat should not pay for it at startup.
 const NotesView = lazy(() => import('../notes/NotesView').then(m => ({ default: m.NotesView })));
+// Lazy for the same reason Notes is: the spatial editor and React Flow arrive in C3, and the
+// initial bundle must not carry them.
+const CanvasWorkspace = lazy(() => import('../canvas/view/CanvasWorkspace').then(m => ({ default: m.CanvasWorkspace })));
 
 export function AppShell() {
   const sidebarOpen = useUiStore(s => s.sidebarOpen);
@@ -81,6 +84,10 @@ export function AppShell() {
           <main className="flex flex-1 flex-col"><ChatView key={activeTabId} threadId={activeTabId} /></main>
         ) : view === 'notes' && flags.notesV2 ? (
           <Suspense fallback={<main className="flex-1 p-8 text-sm text-text-3">Loading&hellip;</main>}><NotesView /></Suspense>
+        ) : view === 'canvas' && flags.canvas && activeTabId && isCanvasTabId(activeTabId) ? (
+          <Suspense fallback={<main className="flex-1 p-8 text-sm text-text-3">Loading&hellip;</main>}>
+            <CanvasWorkspace key={activeTabId} canvasId={canvasIdOfTab(activeTabId)} />
+          </Suspense>
         ) : (
           <main className="flex flex-1 items-center justify-center px-7 py-16">
             {view === 'blank' ? (

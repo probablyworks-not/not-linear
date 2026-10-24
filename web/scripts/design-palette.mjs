@@ -21,7 +21,10 @@ const GROUPS = [
   ['Accent & links', ['accent', 'accent-2', 'accent-soft', 'link', 'link-hover']],
   ['Interaction hues', ['branch', 'branch-soft', 'branch-strong', 'highlight', 'highlight-soft', 'highlight-strong']],
   ['Status', ['danger', 'danger-soft', 'danger-strong', 'success', 'annotate', 'scrim']],
-  ['Project sections', ['sec-notes', 'sec-notes-soft', 'sec-notes-line', 'sec-artifacts', 'sec-artifacts-soft', 'sec-artifacts-line', 'sec-files', 'sec-files-soft', 'sec-files-line']],
+  ['Project sections', ['sec-notes', 'sec-notes-soft', 'sec-notes-line', 'sec-artifacts', 'sec-artifacts-soft', 'sec-artifacts-line', 'sec-files', 'sec-files-soft', 'sec-files-line', 'sec-canvas', 'sec-canvas-soft', 'sec-canvas-line']],
+  ['Canvas surfaces', ['cv-ground', 'cv-card', 'cv-card-warm', 'cv-card-inset', 'cv-edge', 'cv-divider', 'cv-connector']],
+  ['Canvas source tones', ['cv-hl-blue', 'cv-hl-pink', 'cv-hl-brown', 'cv-hl-green', 'cv-hl-yellow', 'cv-hl-orange']],
+  ['Canvas context islands', ['cv-island-memory', 'cv-island-rules', 'cv-island-files', 'cv-island-outputs']],
   ['Code syntax', ['syn-keyword', 'syn-string', 'syn-number', 'syn-comment', 'syn-function', 'syn-tag', 'syn-attr']],
 ];
 const THEMES = [['dark', 'Dark (default)'], ['grey', 'Grey'], ['light', 'Light']];

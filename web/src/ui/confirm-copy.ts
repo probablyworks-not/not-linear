@@ -35,3 +35,14 @@ export function confirmDeleteProject(name: string): ConfirmRequest {
     actionLabel: 'Delete project',
   };
 }
+
+/** Canvas (C2). Unlike a chat or a project, a deleted canvas is really gone — say so. */
+export function confirmDeleteCanvas(title: string): ConfirmRequest {
+  return {
+    heading: 'Delete canvas?',
+    name: title,
+    before: 'This removes',
+    after: ' and everything in it. This cannot be undone.',
+    actionLabel: 'Delete canvas',
+  };
+}

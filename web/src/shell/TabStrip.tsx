@@ -1,10 +1,11 @@
 import { clsx } from 'clsx';
-import { FileText, MessageSquare, NotebookText, Plus, SquarePen, X } from 'lucide-react';
+import { FileText, Frame, MessageSquare, NotebookText, Plus, SquarePen, X } from 'lucide-react';
 import { useMemo } from 'react';
 import { useAppStore } from '../state/app-store';
 import { useUiStore } from '../state/ui-store';
-import { NOTE_TAB_PREFIX, isNoteTabId, isSingletonTab, SINGLETON_TABS } from '../state/tabs';
+import { NOTE_TAB_PREFIX, canvasIdOfTab, isCanvasTabId, isNoteTabId, isSingletonTab, SINGLETON_TABS } from '../state/tabs';
 import { useNotesStore } from '../notes/notes-store';
+import { useCanvasStore } from '../canvas/canvas-store';
 import { selectThread } from '../state/actions';
 import { mountView } from '../registry/views';
 import { Glyph } from '../ui/Glyph';
@@ -12,9 +13,10 @@ import { NoteGlyph } from '../notes/NoteGlyph';
 import { MAIN_THREAD_ID, STATIC_THREAD_IDS, visibleThreads } from '../db/thread-ops';
 
 /** Which registry view a tab belongs to. */
-export function viewForTab(id: string): 'chat' | 'notes' | 'blank' {
+export function viewForTab(id: string): 'chat' | 'notes' | 'canvas' | 'blank' {
   if (id === 'blank') return 'blank';
   if (id === 'notes' || isNoteTabId(id)) return 'notes';
+  if (isCanvasTabId(id)) return 'canvas';
   return 'chat';
 }
 
@@ -36,6 +38,15 @@ export function TabStrip() {
   const dynamic = useAppStore(s => s.dynamicThreads);
   const deleted = useAppStore(s => s.deletedThreadIds);
   const notes = useNotesStore(s => s.notes);
+  const byProject = useCanvasStore(s => s.byProject);
+  const unassignedCanvases = useCanvasStore(s => s.unassigned);
+
+  // A canvas tab's label comes from whatever summaries are loaded; a tab restored before its
+  // project has been opened falls back to "Canvas" rather than showing a raw id.
+  const canvasTitles = useMemo(() => {
+    const all = [...Object.values(byProject).flat(), ...unassignedCanvases];
+    return new Map(all.map(c => [c.id, c.title]));
+  }, [byProject, unassignedCanvases]);
 
   const titles = useMemo(() => {
     const rows = visibleThreads({
@@ -63,9 +74,12 @@ export function TabStrip() {
           const active = tab.id === activeId;
           const label = isSingletonTab(tab.id)
             ? SINGLETON_TABS[tab.id].label
-            : isNoteTabId(tab.id) ? noteLabel(notes, tab.id) : (titles.get(tab.id) ?? tab.id);
+            : isNoteTabId(tab.id) ? noteLabel(notes, tab.id)
+            : isCanvasTabId(tab.id) ? canvasTitles.get(canvasIdOfTab(tab.id)) ?? 'Canvas'
+            : (titles.get(tab.id) ?? tab.id);
           const Icon = tab.id === 'blank' ? SquarePen
             : tab.id === 'notes' || isNoteTabId(tab.id) ? NotebookText
+            : isCanvasTabId(tab.id) ? Frame
             : STATIC_THREAD_IDS.has(tab.id) ? FileText : MessageSquare;
           return (
             <div

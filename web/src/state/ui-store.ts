@@ -20,7 +20,7 @@ interface PendingConfirm extends ConfirmRequest { resolve(ok: boolean): void }
 
 export type SettingsTab = 'general' | 'models' | 'skills' | 'integrations' | 'modes' | 'updates' | 'logs';
 
-export type ProjectView = 'overview' | 'notes' | 'files' | 'artifacts';
+export type ProjectView = 'overview' | 'notes' | 'files' | 'artifacts' | 'canvas';
 
 export interface UiState {
   sidebarOpen: boolean;

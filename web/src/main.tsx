@@ -19,6 +19,7 @@ import './styles/app.css';
 
 registerView({ id: 'chat', label: 'Chat' });
 registerView({ id: 'notes', label: 'Notes' });
+registerView({ id: 'canvas', label: 'Canvas' });
 registerView({ id: 'blank', label: 'New tab' });
 
 /** The thread the chat shortcuts act on, or null when a Notes page or blank tab is in front. */

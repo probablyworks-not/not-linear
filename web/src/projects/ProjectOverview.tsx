@@ -8,6 +8,7 @@ import { projectChatIds, ungroupedChatIds } from '../db/project-ops';
 import type { PersistedState } from '../db/types';
 import type { Attachment } from '../attachments/read-files';
 import { useNotesStore } from '../notes/notes-store';
+import { canvasesOf, useCanvasStore } from '../canvas/canvas-store';
 import { projectNotes } from '../notes/notes-ops';
 import { getProjectSources } from './extras/sources';
 import { useExtrasStore } from './extras/extras-store';
@@ -22,6 +23,8 @@ import { MemoryCard } from './cards/MemoryCard';
 import { NotesView } from './views/NotesView';
 import { FilesView } from './views/FilesView';
 import { ArtifactsView } from './views/ArtifactsView';
+import { CanvasesCard } from './cards/CanvasesCard';
+import { CanvasesView } from './views/CanvasesView';
 
 const NO_ITEMS: never[] = [];
 
@@ -43,6 +46,9 @@ export function ProjectOverview({ pid }: { pid: string }) {
   const extrasError = useExtrasStore(s => s.error[pid]);
   const loadExtras = useExtrasStore(s => s.load);
   const removeMemory = useExtrasStore(s => s.removeMemory);
+  const canvases = useCanvasStore(s => canvasesOf(s, pid));
+  const canvasError = useCanvasStore(s => s.error[pid]);
+  const loadCanvases = useCanvasStore(s => s.load);
 
   const [chatPicker, setChatPicker] = useState(false);
   const [notePicker, setNotePicker] = useState(false);
@@ -53,6 +59,7 @@ export function ProjectOverview({ pid }: { pid: string }) {
   // The notes list is shared with the sidebar, and artifacts and memory come from their sources: external systems.
   useEffect(() => { if (flags.notesV2) void loadNotes(); }, [loadNotes]);
   useEffect(() => { void loadExtras(pid); }, [loadExtras, pid]);
+  useEffect(() => { if (flags.canvas) void loadCanvases(pid); }, [loadCanvases, pid]);
 
   // Legacy focuses and selects a new project's name after a beat (app.js:5390). Focus is an external system.
   useEffect(() => {
@@ -75,6 +82,7 @@ export function ProjectOverview({ pid }: { pid: string }) {
   if (view === 'notes') return <NotesView pid={pid} projectName={project.name} notes={notes} ungrouped={ungroupedNotes} />;
   if (view === 'files') return <FilesView pid={pid} projectName={project.name} files={files} path={project.path} />;
   if (view === 'artifacts') return <ArtifactsView pid={pid} projectName={project.name} artifacts={artifacts} />;
+  if (view === 'canvas' && flags.canvas) return <CanvasesView pid={pid} projectName={project.name} canvases={canvases} />;
 
   return (
     <div data-testid="project-overview">
@@ -88,6 +96,7 @@ export function ProjectOverview({ pid }: { pid: string }) {
         <ChatsCard pid={pid} rows={rows} ungrouped={ungrouped} picker={chatPicker} onTogglePicker={() => setChatPicker(p => !p)} />
         {flags.notesV2 && <NotesCard pid={pid} notes={notes} ungrouped={ungroupedNotes} picker={notePicker} onTogglePicker={() => setNotePicker(p => !p)} />}
         <ArtifactsCard artifacts={artifacts} error={extrasError} />
+        {flags.canvas && <CanvasesCard pid={pid} canvases={canvases} error={canvasError} />}
         <RulesCard
           rules={project.rules} editing={editingRules} onEdit={setEditingRules}
           onDraft={v => { void setRules(pid, v); }} onFlush={() => { void useAppStore.getState().flushPrefs(); }}

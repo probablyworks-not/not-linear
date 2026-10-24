@@ -1,8 +1,8 @@
 import type { ReactNode } from 'react';
 
-export type Accent = 'neutral' | 'notes' | 'artifacts' | 'files';
+export type Accent = 'neutral' | 'notes' | 'artifacts' | 'files' | 'canvas';
 
-const TEXT: Record<Accent, string> = { neutral: 'text-text-2', notes: 'text-sec-notes', artifacts: 'text-sec-artifacts', files: 'text-sec-files' };
+const TEXT: Record<Accent, string> = { neutral: 'text-text-2', notes: 'text-sec-notes', artifacts: 'text-sec-artifacts', files: 'text-sec-files', canvas: 'text-sec-canvas' };
 
 /**
  * The frame every overview card shares: a mono header (icon, label, count, optional right-hand action) and a body.
@@ -37,7 +37,8 @@ export function SectionCard({ accent, icon, label, count, empty, tinted, span, t
 
 /** The centred "nothing here yet" body the empty cards share. */
 export function EmptyBody({ accent, icon, title, hint, children }: { accent: Accent; icon: ReactNode; title: string; hint: string; children?: ReactNode }) {
-  const wash = accent === 'notes' ? 'bg-sec-notes-soft' : accent === 'artifacts' ? 'bg-sec-artifacts-soft' : accent === 'files' ? 'bg-sec-files-soft' : 'bg-bg-2';
+  const wash = accent === 'notes' ? 'bg-sec-notes-soft' : accent === 'artifacts' ? 'bg-sec-artifacts-soft'
+    : accent === 'files' ? 'bg-sec-files-soft' : accent === 'canvas' ? 'bg-sec-canvas-soft' : 'bg-bg-2';
   return (
     <div className="flex flex-col items-center gap-1 px-2 pb-1.5 pt-3.5 text-center">
       <span className={`mb-1 grid h-11 w-11 place-items-center rounded-xl ${wash} ${TEXT[accent]}`}>{icon}</span>
