@@ -2,9 +2,11 @@
 
 Version 1.0 · 24 October 2026 · Target branch `feature-canvas` (from `refactor/p0-repo-hygiene`)
 
-**Status: C0 and C1 done (24 Oct 2026). Everything from C2 on is unbuilt.** The data layer exists
-and is tested (56 tests); there is no Canvas UI, no `flags.canvas`, and no model call.
-`@xyflow/react@12.12.0` is installed but imported nowhere — its first import is C3. The only
+**Status: C0, C1 and C2 done (24 Oct 2026). Everything from C3 on is unbuilt.** The data layer and
+the first surface exist and are tested (75 tests), behind `flags.canvas`, which is **false** — so
+none of it is reachable in the app yet and none of it has e2e coverage. There is no spatial editor
+and no model call. `@xyflow/react@12.12.0` is installed but imported nowhere — its first import is
+C3. The only
 measured numbers in this document are the C0 spike's, in §7 C0 and ADR-067; every other performance
 figure, capability and acceptance criterion is still a target, not a result.
 
@@ -417,6 +419,21 @@ that resolves context and output versions without importing React Flow.
 tab-identity regression passes (**#042 / #043** — open A → open B → back to A → reload with both
 tabs open). `docs/DESIGN.md` updated in place, `cd web && pnpm shots` re-run.
 **Closes:** UI-01, UI-02, the identity half of UI-03, AC-17.
+
+> **Result — done ([ADR-069](../docs/project-notes/DECISIONS.md)), 19 tests.** `canvas:<id>` per
+> canvas, never a singleton, inside the unchanged `nl_tabs_v1` envelope. The palette is its own
+> `--cv-*` namespace, so one feature cannot restyle the app. Project deletion moves canvases to an
+> Unassigned listing, and the unassign runs before the project row goes so a failure strands
+> nothing. Two defects: **#059**, an allocating Zustand selector that cost 40 e2e failures and
+> which `flags.canvas: false` did *not* prevent (the flag gated rendering, not the subscription);
+> and the six dark-theme source tones converging to one brown-grey, caught only by looking at the
+> regenerated palette.
+>
+> **Carried into C3, both unresolved:** the exit criterion above is met at the *pure* level only —
+> `flags.canvas` is false, so there is **no e2e coverage** and the real browser reload path for
+> `canvas:<id>` is unverified. Exercise it first in C3. And `--cv-hl-blue` on dark now sits close
+> to `--branch`; both signal "this passage spawned a thread", so decide at C3 whether that reads as
+> coherent or confusing.
 
 ### C3 — Spatial workspace, Ink composer, reading projection *(still no model call)* → [`TASK-C3`](../docs/project-notes/TASKS.md)
 
