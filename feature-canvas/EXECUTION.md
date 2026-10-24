@@ -321,6 +321,11 @@ in §8 must be green before each stop.
 
 ### C-PRE — Commit refactor P6 (Notes) → [`TASK-C-PRE`](../docs/project-notes/TASKS.md)
 
+> **Resolved 24 Oct 2026 — no work was needed.** P6 was already committed on 2026-10-05 as
+> `2b48250`, `flags.notesV2` is `true`, and all four contended files were last touched by `1daf8f6`.
+> The handoff docs describing P6 as uncommitted are stale. **C2 is unblocked.** The paragraph below
+> records the blocker as it was understood when the plan was written.
+
 Refactor P6 is built and automated-green but **uncommitted**, and it owns
 `web/src/projects/ProjectOverview.tsx`, `web/src/state/ui-store.ts`, `web/src/flags.ts` and
 `web/src/projects/cards/` — the same files C2 edits. The designs pipeline's P2 is already blocked on
@@ -515,13 +520,15 @@ cd web && pnpm test && pnpm typecheck && pnpm lint && pnpm check:licenses
 cd web && pnpm e2e          # builds web/ first — check $? before trusting the result
 ```
 
-> **The e2e suite is currently red and that blocks this gate.** As of 24 Oct 2026 on
-> `refactor/p0-repo-hygiene`: **19 failed / 256 passed**, across `web-notes-blocks`,
-> `web-notes-branches`, `web-notes`, `web-projects`, `web-modes` and `web-branches`, several as 30s
-> timeouts. Confirmed pre-existing — removing `@xyflow/react` and reinstalling reproduced the
-> identical failures. **Triage this before C1's stop**, or the phase gate this section depends on
-> cannot distinguish a Canvas regression from the existing noise. Everything else is green:
-> typecheck, lint, licences, 657 vitest tests, 158+158 contract tests, 7 proxy tests.
+> **The e2e suite was red when this plan was written; it is green now.** It stood at 19 failed /
+> 256 passed, and as of 24 Oct 2026 it is **274 passed / 0 failed** (bugs #057, #058). Neither cause
+> was a product regression: three specs asserted behaviour `1daf8f6` deliberately changed, and ~14
+> Notes specs clicked a sidebar row that has no click handler, so they passed only when the click
+> point happened to land on the inner name button. **One caveat for Canvas:** those Notes tests were
+> not exercising what their names claimed for however long they had drifted, so the Notes editor's
+> real e2e coverage is thinner than the count implies — do not lean on it as a regression oracle
+> without reading the assertions. Everything else is green: typecheck, lint, licences, 657 vitest,
+> 158+158 contract, 7 proxy.
 
 New Canvas tests:
 
@@ -589,7 +596,6 @@ Decisions 1–3 (storage, colour, scope and renderer) are **closed** — see §2
 | Media provider selection | chosen from actual capability and cost tests, not from library availability | C5 |
 | React Flow attribution badge | maintainer's call; MIT imposes no visible-attribution requirement | C3 |
 | Branch-card placement overlap | accept overlap (FR-06 forbids moving other cards), or add collision-aware placement | C3 |
-| e2e suite triage | fix or quarantine the 19 pre-existing failures so the phase gate is meaningful | before C1's stop |
 | Legacy-app coexistence | a stale legacy tab can already overwrite a `/web/` change (`FEATURES.md` §6b). Canvas's own database is unaffected, but the artifact extension is shared — gate those writes until compatibility is established | C4 |
 
 ---
