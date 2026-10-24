@@ -2,11 +2,12 @@
 
 Version 1.0 · 24 October 2026 · Target branch `feature-canvas` (from `refactor/p0-repo-hygiene`)
 
-**Status: C0, C1 and C2 done (24 Oct 2026). Everything from C3 on is unbuilt.** The data layer and
-the first surface exist and are tested (75 tests), behind `flags.canvas`, which is **false** — so
-none of it is reachable in the app yet and none of it has e2e coverage. There is no spatial editor
-and no model call. `@xyflow/react@12.12.0` is installed but imported nowhere — its first import is
-C3. The only
+**Status: C0–C4 done (24 Oct 2026). The v1 gate is met. C5 is unbuilt.** The loop works end to end
+and `flags.canvas` is **true**: 109 unit tests and 6 browser tests cover it. What that does *not*
+mean: **no manual smoke test has been run and no call has reached a real provider** — every model
+call in the suite is mocked. Media (images, video) is C5 and an unsupported output type says so
+rather than pretending. Canvas search results and a dedicated output-detail surface (UI-08/UI-09)
+were not built; a reply saves straight to project Artifacts and is read there. The only
 measured numbers in this document are the C0 spike's, in §7 C0 and ADR-067; every other performance
 figure, capability and acceptance criterion is still a target, not a result.
 
