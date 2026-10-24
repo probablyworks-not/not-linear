@@ -7,7 +7,7 @@ import { toast } from '../ui/toast';
 import { ESC_PRIORITY, useEscLayer } from '../lib/keyboard';
 import { MODELS } from '../settings/options';
 import { getMode, getModes } from '../settings/modes';
-import { ModeIcon } from '../settings/ModesDialog';
+import { ModeIcon } from '../settings/ModeIcon';
 import { useBranchStore } from '../branch/branch-store';
 import { branchModelPref, setBranchModelPref } from '../branch/actions';
 
@@ -113,7 +113,7 @@ export function ModelMenu({ anchor, branchId, onClose }: { anchor: HTMLElement; 
 export function ModeMenu({ anchor, onClose }: { anchor: HTMLElement; onClose(): void }) {
   const prefs = useAppStore(s => s.prefs);
   const setPref = useAppStore(s => s.setPref);
-  const setModesOpen = useUiStore(s => s.setModesOpen);
+  const openSettings = useUiStore(s => s.openSettings);
   const current = getMode(prefs).id;
   return (
     <FloatingMenu anchor={anchor} label="Select conversation mode" onClose={onClose} escId="modeMenu" escPriority={ESC_PRIORITY.modeMenu}>
@@ -128,7 +128,7 @@ export function ModeMenu({ anchor, onClose }: { anchor: HTMLElement; onClose(): 
         </button>
       ))}
       <div className="my-[3px] h-px bg-rule" />
-      <button type="button" role="menuitem" className={MENU_ITEM} onClick={() => { onClose(); setModesOpen(true); }}>
+      <button type="button" role="menuitem" className={MENU_ITEM} onClick={() => { onClose(); openSettings('modes'); }}>
         <Plus size={14} className="w-4 flex-none text-text-2" />
         <span>New / manage modes<span className="block text-xs text-text-3">Edit prompts and instructions</span></span>
       </button>

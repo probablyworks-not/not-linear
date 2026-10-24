@@ -23,6 +23,9 @@ export type ToolName =
   | 'github_search_code'
   | 'github_get_issue'
   | 'github_get_file'
+  // Linked project folder: offered only when the chat's project has one.
+  | 'list_project_files'
+  | 'read_project_file'
   // Chat→Notes: offered only on a main thread, when the Notes feature is on.
   | 'create_note';
 

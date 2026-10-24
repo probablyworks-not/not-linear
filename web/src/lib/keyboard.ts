@@ -12,6 +12,8 @@ export const ESC_PRIORITY = {
   // The capture preview wins over everything: legacy handles its Escape in the capture phase.
   // Legacy closes the image preview on its own Escape listener, ahead of the ladder; it sits just under the capture preview.
   imagePreview: 160,
+  // A previewed html/svg file sits with the image preview: both are "a thing from a reply, full size".
+  filePreview: 159,
   // The icon picker closes on its own Escape in legacy, before anything else on the page.
   glyphPicker: 165,
   branchCanvas: 150,
@@ -21,6 +23,9 @@ export const ESC_PRIORITY = {
   shortcutsSheet: 115,
   modesModal: 110,
   skillsModal: 111,
+  // Settings is a full page, so it sits above the sidebar behind it; its skill detail closes first.
+  settingsDetail: 108,
+  settingsPage: 106,
   projectPanel: 100,
   projectsView: 90,
   sidebar: 80,

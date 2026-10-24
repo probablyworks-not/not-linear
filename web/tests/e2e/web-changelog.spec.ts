@@ -1,13 +1,13 @@
 import { test, expect, type Page } from '@playwright/test';
+import { openSettings } from './helpers';
 import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseStoryChapters } from '../../src/changelog/parse';
 import { FALLBACK_CHANGELOG_MD } from '../../src/changelog/fallback-changelog';
 
-// P4 item 3: the changelog viewer in /web/ Settings. The Product story player
-// and its sidebar entry are deliberately NOT ported (maintainer's call), and a
-// test below keeps that explicit.
+// Settings -> Product updates (it used to be a collapsed section of the Settings dialog).
+// The Product story player and its sidebar entry are deliberately NOT part of /web/.
 //
 // Expected content is derived from the real CHANGELOG.md with the port's parser,
 // which tests/changelog/parse-differential.test.ts proves equals the legacy one.
@@ -24,78 +24,53 @@ const MULTI_MD = [
 const multi = parseStoryChapters(MULTI_MD);
 const serveMulti = (page: Page) => page.route('**/CHANGELOG.md', route => route.fulfill({ status: 200, contentType: 'text/markdown', body: MULTI_MD }));
 
-async function openWeb(page: Page): Promise<void> {
-  await page.goto('/web/');
-  await expect(page.getByRole('button', { name: 'Open left pane' })).toBeVisible();
-}
-async function openChangelog(page: Page): Promise<void> {
-  await page.getByRole('button', { name: 'Open left pane' }).click();
-  await page.getByRole('button', { name: 'Open settings' }).click();
-  await page.getByRole('button', { name: 'View changelog' }).click();
-  await expect(page.getByTestId('changelog-source')).not.toHaveText('Loading');
-}
-const date = (p: Page) => p.getByTestId('chapter-date');
-const narrative = (p: Page) => p.getByTestId('chapter-narrative');
-const older = (p: Page) => p.getByRole('button', { name: 'Older' });
-const newer = (p: Page) => p.getByRole('button', { name: 'Newer' });
+const openUpdates = async (page: Page): Promise<void> => { await openSettings(page, 'Product updates'); };
+const cards = (p: Page) => p.getByTestId('release-card');
 
-test.describe('the viewer', () => {
-  test('is collapsed and fetches nothing until expanded, then shows the newest chapter from CHANGELOG.md', async ({ page }) => {
+test.describe('the page', () => {
+  test('is not fetched until the tab opens, then lists every chapter newest first from CHANGELOG.md', async ({ page }) => {
     let requests = 0;
     await page.route('**/CHANGELOG.md', route => { requests++; return route.continue(); });
-    await openWeb(page);
-    await page.getByRole('button', { name: 'Open left pane' }).click();
-    await page.getByRole('button', { name: 'Open settings' }).click();
-    await expect(page.getByRole('button', { name: 'View changelog' })).toHaveAttribute('aria-expanded', 'false');
+    await openSettings(page);
     expect(requests).toBe(0);
-
-    await page.getByRole('button', { name: 'View changelog' }).click();
-    await expect(page.getByTestId('changelog-source')).toHaveText('CHANGELOG.md');
-    await expect(date(page)).toHaveText(chapters[0]!.date);
-    await expect(narrative(page)).toHaveText(chapters[0]!.narrative);
-    await expect(page.getByTestId('chapter-item')).toHaveCount(chapters[0]!.items.length);
+    await page.getByRole('tab', { name: /^Product updates/ }).click();
+    await expect(cards(page)).toHaveCount(chapters.length);
+    await expect(cards(page).first().getByTestId('release-date')).toHaveText(chapters[0]!.date);
+    await expect(cards(page).first().getByTestId('release-summary')).toHaveText(chapters[0]!.narrative);
+    await expect(cards(page).first()).toContainText('Latest');
+    if (chapters.length > 1) await expect(cards(page).nth(1)).not.toContainText('Latest');
+    await expect(page.getByTestId('changelog-source')).toContainText('Reads from CHANGELOG.md');
     expect(requests).toBe(1);
-    await expect(page.getByText('Reads from')).toContainText('CHANGELOG.md');
   });
 
-  test('Older and Newer page through every chapter and disable at the ends', async ({ page }) => {
+  test('groups items under New / Improved / Fixed and hides empty groups', async ({ page }) => {
     await serveMulti(page);
-    await openWeb(page);
-    await openChangelog(page);
-    await expect(newer(page)).toBeDisabled();
-    await expect(older(page)).toBeEnabled();
-    expect(multi.length).toBeGreaterThan(2);
-    await older(page).click();
-    await expect(date(page)).toHaveText(multi[1]!.date);
-    await expect(narrative(page)).toHaveText(multi[1]!.narrative);
-    for (let i = 2; i < multi.length; i++) await older(page).click();
-    await expect(date(page)).toHaveText(multi.at(-1)!.date);
-    await expect(older(page)).toBeDisabled();
-    await expect(newer(page)).toBeEnabled();
-    await newer(page).click();
-    await expect(date(page)).toHaveText(multi.at(-2)!.date);
+    await openUpdates(page);
+    await expect(cards(page)).toHaveCount(3);
+    const first = cards(page).first();
+    await expect(first.getByText('New', { exact: true })).toBeVisible();
+    await expect(first.getByText('Fixed', { exact: true })).toBeVisible();
+    await expect(first.getByText('Improved', { exact: true })).toHaveCount(0);
+    await expect(first.getByTestId('release-item')).toHaveCount(multi[0]!.items.length);
+    await expect(cards(page).nth(2).getByText('Fixed', { exact: true })).toHaveCount(0);
   });
 
-  test('refresh re-reads the file and returns to the newest chapter', async ({ page }) => {
+  test('Refresh re-reads the file; leaving and returning does not refetch', async ({ page }) => {
     let requests = 0;
     await page.route('**/CHANGELOG.md', route => { requests++; return route.fulfill({ status: 200, contentType: 'text/markdown', body: MULTI_MD }); });
-    await openWeb(page);
-    await openChangelog(page);
-    await older(page).click();
+    await openUpdates(page);
+    await expect(cards(page)).toHaveCount(3);
+    await page.getByRole('tab', { name: /^General/ }).click();
+    await page.getByRole('tab', { name: /^Product updates/ }).click();
+    await expect(cards(page)).toHaveCount(3);
+    expect(requests).toBe(1);
     await page.getByRole('button', { name: 'Reload changelog' }).click();
     await expect.poll(() => requests).toBe(2);
-    await expect(date(page)).toHaveText(multi[0]!.date);
   });
 
-  test('reopening does not refetch (legacy loads once per page)', async ({ page }) => {
-    let requests = 0;
-    await page.route('**/CHANGELOG.md', route => { requests++; return route.continue(); });
-    await openWeb(page);
-    await openChangelog(page);
-    await page.getByRole('button', { name: 'View changelog' }).click();
-    await page.getByRole('button', { name: 'View changelog' }).click();
-    await expect(date(page)).toBeVisible();
-    expect(requests).toBe(1);
+  test('it is gone from General (no changelog section in the settings form any more)', async ({ page }) => {
+    await openSettings(page);
+    await expect(page.getByRole('button', { name: 'View changelog' })).toHaveCount(0);
   });
 });
 
@@ -106,31 +81,23 @@ test.describe('fallback to the bundled copy (BUGS.md #007)', () => {
     ['a blank body', (r: import('@playwright/test').Route) => r.fulfill({ status: 200, contentType: 'text/markdown', body: '   \n' })],
     ['a network failure', (r: import('@playwright/test').Route) => r.abort()],
   ] as const) {
-    test(`shows the bundled copy on ${name}`, async ({ page }) => {
+    test(`shows the bundled copy, and says so, on ${name}`, async ({ page }) => {
       await page.route('**/CHANGELOG.md', handler);
-      await openWeb(page);
-      await openChangelog(page);
-      await expect(page.getByTestId('changelog-source')).toHaveText('Bundled copy');
-      await expect(date(page)).toHaveText(parseStoryChapters(FALLBACK_CHANGELOG_MD)[0]!.date);
+      await openUpdates(page);
+      await expect(cards(page).first().getByTestId('release-date')).toHaveText(parseStoryChapters(FALLBACK_CHANGELOG_MD)[0]!.date);
+      await expect(page.getByTestId('changelog-source')).toContainText('bundled with the app');
     });
   }
 
-  test('a file with no entries says so rather than showing nothing', async ({ page }) => {
+  test('a file with no entries shows an empty state rather than nothing', async ({ page }) => {
     await page.route('**/CHANGELOG.md', r => r.fulfill({ status: 200, contentType: 'text/markdown', body: '# Changelog\n\nNothing yet.\n' }));
-    await openWeb(page);
-    await openChangelog(page);
-    await expect(page.getByText('No changelog entries found.')).toBeVisible();
+    await openUpdates(page);
+    await expect(page.getByTestId('empty-state')).toContainText('No updates yet');
   });
 });
 
-test.describe('parity with the legacy viewer', () => {
-});
-
 test('the Product story is not part of /web/ for now', async ({ page }) => {
-  await openWeb(page);
-  await page.getByRole('button', { name: 'Open left pane' }).click();
+  await openSettings(page, 'Product updates');
   await expect(page.getByText('Product story')).toHaveCount(0);
-  await page.getByRole('button', { name: 'Open settings' }).click();
-  await page.getByRole('button', { name: 'View changelog' }).click();
   await expect(page.getByRole('button', { name: /Play the story/ })).toHaveCount(0);
 });

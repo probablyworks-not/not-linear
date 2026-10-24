@@ -20,7 +20,7 @@ from fastapi.responses import PlainTextResponse
 from .. import config
 from ..legacy import LegacyJSONResponse, err, legacy_json, ok, read_json
 from ..services import consent, link_preview as link_preview_service
-from ..services import macos, project_scan, runtime_logs
+from ..services import macos, project_files, project_scan, runtime_logs
 
 router = APIRouter()
 
@@ -74,6 +74,33 @@ async def scan_project(request: Request) -> LegacyJSONResponse:
             return err(consent.describe_refusal(folder_path), status=403)
         return _passthrough(project_scan.scan_project(folder_path))
     return await legacy_json(handler)
+
+
+async def _folder_read(request: Request, run: Any) -> LegacyJSONResponse:
+    """Shared body of the two live-read endpoints: root from the body, consent, then ``run(root, data)``."""
+    async def handler() -> LegacyJSONResponse:
+        data = await read_json(request)
+        root = (data.get("path") or "").strip()
+        if not root:
+            return err("path required")
+        # No trust-on-first-use seeding here: a folder is only readable once scan_project has seen it
+        # (or the picker approved it), so this endpoint never widens what the ledger allows.
+        if not consent.is_allowed(root):
+            return err(consent.describe_refusal(root), status=403)
+        return _passthrough(run(root, data))
+    return await legacy_json(handler)
+
+
+@router.post("/__notlinear_list_dir")
+async def list_dir(request: Request) -> LegacyJSONResponse:
+    return await _folder_read(request, lambda root, data: project_files.list_dir(root, str(data.get("sub") or "")))
+
+
+@router.post("/__notlinear_read_file")
+async def read_file(request: Request) -> LegacyJSONResponse:
+    return await _folder_read(request, lambda root, data: project_files.read_file(
+        root, str(data.get("file") or ""), int(data.get("offset") or 0), str(data.get("query") or ""),
+    ))
 
 
 @router.post("/__notlinear_link_preview")

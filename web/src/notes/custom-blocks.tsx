@@ -4,6 +4,7 @@ import 'katex/dist/katex.min.css';
 import { Bookmark, Code2, Download, Link2Off, Paperclip } from 'lucide-react';
 import { createReactBlockSpec, createReactInlineContentSpec } from '@blocknote/react';
 import { postJson } from '../lib/api';
+import { linkLabel } from '../lib/link-text';
 import { classifyMediaUrl, humanFileSize, isAllowedFrameSrc, isHttpUrl, readData, transformEmbedUrl } from './embeds';
 import { NoteGlyph } from './NoteGlyph';
 import { useNoteId } from './NoteContext';
@@ -272,7 +273,7 @@ export const media = createReactBlockSpec(
       }
       if (kind === 'video') return <video controls src={url} className="w-full rounded-md" contentEditable={false} />;
       if (kind === 'audio') return <audio controls src={url} className="w-full" contentEditable={false} />;
-      return <Card label="Media"><Link2Off size={13} className="mr-1 inline" aria-hidden />can&rsquo;t embed this link &mdash; <a href={url} target="_blank" rel="noopener noreferrer" className="underline">{url}</a></Card>;
+      return <Card label="Media"><Link2Off size={13} className="mr-1 inline" aria-hidden />can&rsquo;t embed this link &mdash; <a href={url} title={url} target="_blank" rel="noopener noreferrer" className="underline">{linkLabel(url)}</a></Card>;
     },
   },
 );
@@ -354,7 +355,7 @@ export const bookmark = createReactBlockSpec(
         );
       }
       if (d.fetchFailed === true) {
-        return <a href={url} target="_blank" rel="noopener noreferrer" contentEditable={false} className="my-1 block truncate rounded-md border border-rule-2 bg-bg-2 px-3 py-2 text-sm text-text-2 hover:bg-bg-3">{url}</a>;
+        return <a href={url} title={url} target="_blank" rel="noopener noreferrer" contentEditable={false} className="my-1 block truncate rounded-md border border-rule-2 bg-bg-2 px-3 py-2 text-sm text-text-2 hover:bg-bg-3">{linkLabel(url)}</a>;
       }
       if (!asText(d.title)) return <Card label="Bookmark">fetching preview&hellip;</Card>;
       const fav = asText(d.favicon);
@@ -392,7 +393,7 @@ export const embed = createReactBlockSpec(
           />
         );
       }
-      if (!isAllowedFrameSrc(d.embedSrc)) return <Card label="Embed"><a href={url} target="_blank" rel="noopener noreferrer" className="underline">{url}</a></Card>;
+      if (!isAllowedFrameSrc(d.embedSrc)) return <Card label="Embed"><a href={url} title={url} target="_blank" rel="noopener noreferrer" className="underline">{linkLabel(url)}</a></Card>;
       return <iframe title="Embedded page" className={FRAME} src={d.embedSrc} sandbox={SANDBOX} loading="lazy" contentEditable={false} />;
     },
   },

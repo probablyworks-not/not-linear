@@ -1,4 +1,4 @@
-import type { Page, Route } from '@playwright/test';
+import { expect, type Page, type Route } from '@playwright/test';
 
 /**
  * Installs a fake Anthropic API before the app loads.
@@ -49,4 +49,13 @@ export async function readPersistedState(page: Page): Promise<Record<string, unk
       };
     });
   });
+}
+
+/** Loads the app, opens Settings from the sidebar footer and, if given, the named tab. */
+export async function openSettings(page: Page, tab?: string): Promise<void> {
+  await page.goto('/web/');
+  await page.getByRole('button', { name: 'Open left pane' }).click();
+  await page.getByRole('button', { name: 'Open settings' }).click();
+  await expect(page.getByRole('dialog', { name: 'Settings' })).toBeVisible();
+  if (tab) await page.getByRole('tab', { name: new RegExp(`^${tab}`) }).click();
 }

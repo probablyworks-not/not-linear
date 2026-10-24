@@ -4,7 +4,8 @@ import { useUiStore } from '../state/ui-store';
 import { useNotesStore } from './notes-store';
 import { openNote } from './open-note';
 import { NoteGlyph } from './NoteGlyph';
-import { PANE_DEFAULT, clampPaneWidth, paneLayout } from './pane-width';
+import { SaveToArtifactsButton } from './SaveToArtifactsButton';
+import { PANE_DEFAULT, SIDEBAR_PX, clampPaneWidth, paneLayout } from './pane-width';
 
 // BlockNote is large and chat should not pay for it until a note is actually opened.
 const NotePage = lazy(() => import('./NotePage').then(m => ({ default: m.NotePage })));
@@ -36,18 +37,34 @@ export function NotePane({ noteId }: { noteId: string }) {
   const [top, setTop] = useState(0);
   const [dragging, setDragging] = useState(false);
   const live = useRef(requested);
-  const layout = paneLayout(requested, viewport);
+  const sidebarOpen = useUiStore(s => s.sidebarOpen);
+  const reserved = sidebarOpen ? SIDEBAR_PX : 0;
+  const layout = paneLayout(requested, viewport, reserved);
 
   // The store is normally filled by the Notes view; a chat can open a note without ever visiting it.
   useEffect(() => { void load(); }, [load]);
 
-  // Sit below the top bar when it is showing (it floats away when idle), as the branch drawer does.
+  // Sit below the top bar while it is showing. It slides in and out on a transition, so keep measuring
+  // for as long as it moves; measuring only on scroll left the bar drawn over this pane's close button.
   useLayoutEffect(() => {
+    let raf = 0;
+    let until = 0;
     const measure = (): void => setTop(Math.max(0, document.querySelector('[data-topbar]')?.getBoundingClientRect().bottom ?? 0));
+    const track = (): void => {
+      measure();
+      if (performance.now() < until) raf = requestAnimationFrame(track);
+    };
+    const kick = (): void => { until = performance.now() + 300; cancelAnimationFrame(raf); raf = requestAnimationFrame(track); };
+    const bar = document.querySelector('[data-topbar]')?.parentElement ?? null;
+    const watch = bar ? new MutationObserver(kick) : null;
+    if (bar) watch?.observe(bar, { attributes: true, attributeFilter: ['data-shown', 'class'] });
     measure();
     window.addEventListener('resize', measure);
     window.addEventListener('scroll', measure, { passive: true });
-    return () => { window.removeEventListener('resize', measure); window.removeEventListener('scroll', measure); };
+    return () => {
+      cancelAnimationFrame(raf); watch?.disconnect();
+      window.removeEventListener('resize', measure); window.removeEventListener('scroll', measure);
+    };
   }, []);
 
   // Tell the rest of the page how much room the pane takes.
@@ -65,7 +82,7 @@ export function NotePane({ noteId }: { noteId: string }) {
   };
   const onPointerMove = (e: React.PointerEvent<HTMLDivElement>): void => {
     if (!dragging) return;
-    live.current = clampPaneWidth(window.innerWidth - e.clientX, window.innerWidth);
+    live.current = clampPaneWidth(window.innerWidth - e.clientX, window.innerWidth, reserved);
     setWidth(live.current);
   };
   const endDrag = (): void => {
@@ -77,7 +94,7 @@ export function NotePane({ noteId }: { noteId: string }) {
     const dir = e.key === 'ArrowLeft' ? 1 : e.key === 'ArrowRight' ? -1 : 0;
     if (!dir) return;
     e.preventDefault();
-    setWidth(clampPaneWidth(layout.width + dir * ARROW_STEP, window.innerWidth), true);
+    setWidth(clampPaneWidth(layout.width + dir * ARROW_STEP, window.innerWidth, reserved), true);
   };
 
   const title = typeof note?.title === 'string' && note.title ? note.title : 'Untitled';
@@ -97,6 +114,7 @@ export function NotePane({ noteId }: { noteId: string }) {
       <div className="flex flex-none items-center gap-2 border-b border-rule px-3 py-1.5">
         <span className="grid h-5 w-5 flex-none place-items-center text-sm">{note ? <NoteGlyph value={note.emoji} /> : null}</span>
         <span className="min-w-0 flex-1 truncate text-sm text-text-2" data-testid="note-pane-title">{title}</span>
+        <SaveToArtifactsButton noteId={noteId} />
         <button
           type="button" title="Open as full page" aria-label="Open as full page"
           onClick={() => { close(); openNote(noteId); }}

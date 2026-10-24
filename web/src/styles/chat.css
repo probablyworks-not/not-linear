@@ -81,13 +81,17 @@
 .msg.ai li{margin:2px 0;line-height:1.65;font-size:inherit}
 .msg.ai hr{border:none;border-top:1px solid var(--rule);margin:10px 0}
 .msg.ai .md-table-wrap{width:100%;overflow-x:auto;margin:8px 0 12px;border:1px solid var(--rule);border-radius:8px;background:var(--surface-tint)}
-.msg.ai table{width:100%;min-width:560px;border-collapse:collapse;font-family:Inter,system-ui,sans-serif;font-size:13px;line-height:1.45;color:var(--text-2)}
+.msg.ai table{width:100%;min-width:560px;border-collapse:collapse;font-family:var(--font);font-size:13px;line-height:1.45;color:var(--text-2)}
 .msg.ai th,.msg.ai td{text-align:left;vertical-align:top;padding:9px 10px;border-bottom:1px solid var(--rule)}
 .msg.ai th{font-size:11px;font-weight:600;letter-spacing:0.04em;text-transform:uppercase;color:var(--text);background:var(--th-tint)}
 .msg.ai tr:last-child td{border-bottom:none}
 .msg.ai td:first-child{color:var(--text);font-weight:600;white-space:nowrap}
 .msg.ai th.md-align-center,.msg.ai td.md-align-center{text-align:center}
 .msg.ai th.md-align-right,.msg.ai td.md-align-right{text-align:right}
+/* Links in a reply: hue + underline + italic, so a citation reads as a link
+   at a glance and never as body text (see lib/link-text for the label). */
+.msg.ai a{color:var(--link);font-style:italic;text-decoration:underline;text-decoration-thickness:1px;text-underline-offset:2px;transition:color 120ms ease}
+.msg.ai a:hover{color:var(--link-hover);text-decoration-thickness:2px}
 .msg.ai code{font-family:var(--mono);font-size:12px;background:var(--bg-3);padding:1px 5px;border-radius:3px;color:var(--text-2)}
 .msg.ai .md-number-line{margin-top:18px;font-size:15.5px}
 .msg.ai .md-number-line:first-child{margin-top:0}
@@ -106,6 +110,28 @@
 .msg.ai .code-copy-btn:hover{background:var(--bg-2);color:var(--text)}
 .msg.ai .code-copy-btn i{font-size:13px}
 .msg.ai .code-copy-btn.copied{color:var(--accent-2)}
+.msg.ai .code-block-head .code-copy-btn:not(.artifact-save-btn){margin-left:auto}
+.msg.ai .artifact-save-btn{margin-left:6px}
+
+/* A generated html/svg block reads as a file, not as source: the card is what you see, and the
+   original head + <pre> stay in the DOM behind "Show code" (see chat/artifact-buttons.ts). */
+.msg.ai .artifact-file-card{background:var(--surface)}
+.msg.ai .artifact-file-card > .code-block-head,
+.msg.ai .artifact-file-card > pre{display:none}
+.msg.ai .artifact-file-card.code-open > .code-block-head,
+.msg.ai .artifact-file-card.code-open > pre{display:revert}
+.msg.ai .artifact-file-card.code-open > .code-block-head{display:flex;border-top:1px solid var(--rule)}
+.msg.ai .artifact-card{display:flex;flex-direction:column;gap:10px;padding:12px 14px}
+.msg.ai .artifact-card-head{display:flex;align-items:flex-start;gap:10px}
+.msg.ai .artifact-card-text{min-width:0}
+.msg.ai .artifact-card-title{font-size:13px;font-weight:500;color:var(--text);line-height:1.35;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.msg.ai .artifact-card-meta{margin-top:2px;font-family:var(--mono);font-size:11px;color:var(--text-3)}
+.msg.ai .artifact-card-actions{display:flex;flex-wrap:wrap;align-items:center;gap:6px}
+.msg.ai .artifact-card-btn{display:flex;align-items:center;height:28px;padding:0 11px;border:1px solid var(--rule);border-radius:999px;background:var(--bg-2);font-family:var(--font);font-size:12px;color:var(--text-2);cursor:pointer;transition:color 120ms,border-color 120ms,background 120ms}
+.msg.ai .artifact-card-btn:hover{color:var(--text);border-color:var(--rule-2)}
+.msg.ai .artifact-card-btn-primary{border-color:var(--accent-soft);background:var(--accent-soft);color:var(--text)}
+.msg.ai .artifact-card-code-toggle{margin-left:auto;background:none;border:none;padding:0 2px;font-family:var(--font);font-size:12px;color:var(--text-3);cursor:pointer;transition:color 120ms}
+.msg.ai .artifact-card-code-toggle:hover{color:var(--text-2)}
 .msg.ai pre{background:none;border:none;border-radius:0;padding:12px 14px;overflow-x:auto;margin:0;font-family:var(--mono);font-size:12px;line-height:1.6;color:var(--text-2)}
 .msg.ai pre code{background:none;padding:0;border-radius:0;font-size:inherit;color:inherit;white-space:pre}
 .msg.ai .hljs-keyword,.msg.ai .hljs-title.function_,.msg.ai .hljs-title.class_{color:var(--syn-keyword)}

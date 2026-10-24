@@ -11,9 +11,7 @@ import { TabStrip } from './TabStrip';
 import { ConfirmDialog } from '../ui/ConfirmDialog';
 import { Toaster } from '../ui/toast';
 import { DevUpdateNotice } from '../ui/DevUpdateNotice';
-import { SettingsDialog } from '../settings/SettingsDialog';
-import { SkillsDialog } from '../skills/SkillsDialog';
-import { ModesDialog } from '../settings/ModesDialog';
+import { SettingsPage } from '../settings/SettingsPage';
 import { SearchPalette } from '../search/SearchPalette';
 import { ShortcutsDialog } from '../ui/ShortcutsDialog';
 import { ProjectsGrid } from '../projects/ProjectsGrid';
@@ -22,7 +20,9 @@ import { ChatView } from '../chat/ChatView';
 import { Breadcrumbs } from '../chat/Breadcrumbs';
 import { NoteBreadcrumbs } from '../notes/NoteBreadcrumbs';
 import { ImagePreview } from '../ui/ImagePreview';
+import { FilePreview } from '../ui/FilePreview';
 import { ExportButton } from '../notes/ExportButton';
+import { SaveToArtifactsButton } from '../notes/SaveToArtifactsButton';
 import { NOTE_TAB_PREFIX, isNoteTabId } from '../state/tabs';
 import { flags } from '../flags';
 import { useEdgeReveal } from '../lib/edge-reveal';
@@ -71,7 +71,7 @@ export function AppShell() {
           )}
         >
           <TabStrip />
-          <Topbar trail={trail} actions={view === 'notes' && flags.notesV2 && activeTabId && isNoteTabId(activeTabId) ? <ExportButton noteId={activeTabId.slice(NOTE_TAB_PREFIX.length)} /> : undefined} />
+          <Topbar trail={trail} actions={view === 'notes' && flags.notesV2 && activeTabId && isNoteTabId(activeTabId) ? <><SaveToArtifactsButton noteId={activeTabId.slice(NOTE_TAB_PREFIX.length)} /><ExportButton noteId={activeTabId.slice(NOTE_TAB_PREFIX.length)} /></> : undefined} />
         </div>
         {error && (
           // Errors read as a calm statement of what happened, not an apology.
@@ -103,15 +103,14 @@ export function AppShell() {
           </main>
         )}
       </div>
-      {flags.settings && <SettingsDialog />}
-      {flags.modes && <ModesDialog />}
-      {flags.skills && <SkillsDialog />}
+      {flags.settings && <SettingsPage />}
       {flags.search && <SearchPalette />}
       {flags.projects && <ProjectsGrid />}
       {flags.projects && <ProjectPanel />}
       <ShortcutsDialog />
       <ConfirmDialog />
       <ImagePreview />
+      <FilePreview />
       <Toaster />
       <DevUpdateNotice />
     </div>

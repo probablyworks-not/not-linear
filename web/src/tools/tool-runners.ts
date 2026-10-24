@@ -3,6 +3,7 @@ import {
   SEARCH_TIMEOUT_MS, PAGE_READ_TIMEOUT_MS, SCRAPE_TIMEOUT_MS,
 } from '../lib/api-client';
 import { toolEnv } from './env';
+import { runListProjectFiles, runReadProjectFile } from './folder-tools';
 import type { ToolName } from '../providers/types';
 
 // The model-facing tools, ported from providers/tools.js. Each runner hits one service and
@@ -277,12 +278,15 @@ export async function runGithubGetFile(repoIn: unknown, pathIn: unknown, refIn: 
 
 // ---------- dispatch ----------
 
+/** What the app (not the model) knows about this turn. */
+export interface ToolRunContext { /** The chat's linked folder; the model only ever names paths inside it. */ folderRoot?: string }
+
 export interface ToolInput { query?: string; url?: string; offset?: number; repo?: string; number?: number; path?: string; ref?: string }
 
 /** What a provider calls. Throws only for abort and ToolFatalError; every other failure is a result string. */
-export type ToolRunner = (name: ToolName | string, input: ToolInput, signal: AbortSignal) => Promise<string>;
+export type ToolRunner = (name: ToolName | string, input: ToolInput, signal: AbortSignal, ctx?: ToolRunContext) => Promise<string>;
 
-export const executeTool: ToolRunner = async (name, input, signal) => {
+export const executeTool: ToolRunner = async (name, input, signal, ctx = {}) => {
   const trace = beginBackendTrace('tool', { tool: name, input: safeJsonForLog(input) });
   try {
     let result: string;
@@ -296,6 +300,8 @@ export const executeTool: ToolRunner = async (name, input, signal) => {
     else if (name === 'github_search_code') result = await runGithubSearchCode(String(input.query), signal);
     else if (name === 'github_get_issue') result = await runGithubGetIssue(input.repo, input.number, signal, { query: input.query, offset: input.offset });
     else if (name === 'github_get_file') result = await runGithubGetFile(input.repo, input.path, input.ref, signal, { query: input.query, offset: input.offset });
+    else if (name === 'list_project_files') result = ctx.folderRoot ? await runListProjectFiles(ctx.folderRoot, input.path, signal) : 'No project folder is linked to this chat.';
+    else if (name === 'read_project_file') result = ctx.folderRoot ? await runReadProjectFile(ctx.folderRoot, input.path, { query: input.query, offset: input.offset }, signal) : 'No project folder is linked to this chat.';
     else result = 'Unknown tool: ' + name;
     endBackendTrace(trace, 'end', { tool: name, outputChars: String(result || '').length, outputPreview: safeJsonForLog(result, 500) });
     return result;
@@ -320,6 +326,8 @@ export function toolResultTitle(name: string, input: ToolInput = {}): string {
   if (name === 'github_search_code') return `GitHub code: ${input.query || 'search'}`;
   if (name === 'github_get_issue') return `GitHub issue: ${input.repo || ''}#${input.number ?? ''}`;
   if (name === 'github_get_file') return `GitHub file: ${input.repo || ''}/${input.path || ''}`;
+  if (name === 'list_project_files') return `Project folder: ${input.path || '.'}`;
+  if (name === 'read_project_file') return `Project file: ${input.path || ''}`;
   return name || 'Tool result';
 }
 
@@ -351,5 +359,7 @@ export function toolStatusLabel(name: string, input: ToolInput): string {
   if (name === 'github_search_code') return `Searching GitHub code for "${input.query}"…`;
   if (name === 'github_get_issue') return `Reading ${input.repo}#${input.number}…`;
   if (name === 'github_get_file') return `Reading ${input.repo}/${input.path}…`;
+  if (name === 'list_project_files') return `Reading folder ${input.path || '.'}…`;
+  if (name === 'read_project_file') return `Reading ${input.path}…`;
   return `Reading ${input.url}…`;
 }

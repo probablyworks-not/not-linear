@@ -63,7 +63,7 @@ test('a loose note and chat can be filed in a project, moved to another, and ung
 
   // Both show in the project panel.
   await side(page).locator('[data-project="p1"]').getByText('Research').click();
-  const panel = page.getByRole('dialog').filter({ has: page.getByLabel('Project name') });
+  const panel = page.getByRole('dialog').filter({ has: page.getByTestId('project-title') });
   await expect(panel.locator('[data-chat="chat-1"]')).toBeVisible();
   await expect(panel.locator('[data-note="a"]')).toBeVisible();
 

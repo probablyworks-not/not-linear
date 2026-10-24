@@ -30,6 +30,7 @@ export const MODELS: readonly Choice[] = [
   { id: 'deepseek', label: 'DeepSeek Flash', blurb: 'Fast, cheap.' },
   { id: 'deepseek-pro', label: 'DeepSeek Pro', blurb: 'Stronger, pricier.' },
   { id: 'deepseek-r1', label: 'DeepSeek Thinking', blurb: 'Deep thinking.' },
+  { id: 'gpt-5.6-sol', label: 'GPT-5.6 Sol', blurb: 'Most capable.' },
   { id: 'gpt-4o', label: 'GPT-5.6 Terra', blurb: 'Balanced, general use.' },
   { id: 'gpt-4o-mini', label: 'GPT-5.6 Luna', blurb: 'Fast & cheap.' },
   { id: 'gpt-5', label: 'GPT-5', blurb: 'Legacy, retires Dec 2026.' },

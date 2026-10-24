@@ -22,6 +22,8 @@ export const MODEL_STREAM_IDLE_TIMEOUT_MS = 120000;
 export const TOOL_SYNTHESIS_IDLE_TIMEOUT_MS = 30000;
 /** DeepSeek gets this many tool rounds before it is made to answer from what it has (bug #015). */
 export const DEEPSEEK_MAX_TOOL_ROUNDS = 2;
+/** Exploring a codebase takes many small reads (list, read, list, read…), so the folder tools get a larger budget than web research. */
+export const DEEPSEEK_MAX_FOLDER_TOOL_ROUNDS = 8;
 
 type TrackedResponse = Response & { _notlinearRequestId?: number };
 

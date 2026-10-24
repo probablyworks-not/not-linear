@@ -1,13 +1,25 @@
-// Ported from frontend/core/markdown.js, string-for-string. This is a hand-rolled
+// Ported from frontend/core/markdown.js, string-for-string, with one deliberate
+// divergence: link text is shortened to the site name (see anchor() below). This is a hand-rolled
 // renderer on purpose: ADR-038 dual-writes this HTML into `stream` for the legacy
 // app to re-read, so React must emit exactly what legacy emits. Do not swap in a
 // markdown library. A test renders both and compares.
+
+import { labelIsUrl, linkDisplayText } from './link-text';
 
 // esc: HTML-escape a string (&, <, >, ", '). The building block every other
 // function in this file uses before inserting raw text into HTML, so nothing
 // here is vulnerable to injecting markup via message content. Also re-used
 // directly by app.js and the feature views for their own non-markdown escaping.
 export function esc(s: unknown): string { return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' } as Record<string, string>)[c]!); }
+
+// anchor: one `<a>` for a link. The visible text is the site name rather than
+// the address (see lib/link-text); the full URL stays in href and title. A link
+// we named ourselves is marked `data-site`, which is what lib/name-links looks
+// for when it upgrades the label to the page's own title after render.
+function anchor(url: string, label: string, named = false): string {
+  const mark = named ? ' data-site="1"' : '';
+  return `<a href="${url}" target="_blank" rel="noopener noreferrer" title="${url}"${mark}>${label}</a>`;
+}
 
 // inlineMd: internal helper — render inline (single-line) markdown spans
 // (bold/italic/bold+italic, inline code, markdown links, and auto-linked bare
@@ -28,14 +40,15 @@ export function inlineMd(raw: string): string {
   const mdLinks: string[] = [];
   s = s.replace(/\[([^\]]*)\]\((https?:\/\/[^)]+)\)/g, (_: string, label: string, url: string) => {
     const i = mdLinks.length;
-    mdLinks.push(`<a href="${url}" target="_blank" rel="noopener noreferrer">${label || url}</a>`);
+    const bare = labelIsUrl(label, url);
+    mdLinks.push(anchor(url, bare ? linkDisplayText(url) : label, bare));
     return `\x02${i}\x03`;
   });
-  // auto-link bare URLs
+  // auto-link bare URLs — shown as the article's name (or the site), address in the tooltip
   s = s.replace(/https?:\/\/[^\s<>"{}|\\^`]+/g, (url: string) => {
     const m = url.match(/^(.+?)([.,;:!?]+)$/);
-    if (m) return `<a href="${m[1]}" target="_blank" rel="noopener noreferrer">${m[1]}</a>${m[2]}`;
-    return `<a href="${url}" target="_blank" rel="noopener noreferrer">${url}</a>`;
+    if (m) return `${anchor(m[1]!, linkDisplayText(m[1]!), true)}${m[2]}`;
+    return anchor(url, linkDisplayText(url), true);
   });
   // restore markdown links
   // eslint-disable-next-line no-control-regex -- \x02/\x03 are the placeholder delimiters chosen above, verbatim from legacy
@@ -124,10 +137,55 @@ function renderTable(headers: string[], dividerLine: string, rows: string[]): st
 // recognizable Markdown structures so we don't add spurious breaks inside
 // normal prose. Also normalizes CRLF/CR to LF first so line-based regexes work
 // consistently regardless of the source's line endings.
+
+// A model asked for "an HTML file" often answers with the document itself and no fence. Without
+// one every tag was escaped into prose (the reply read as a wall of `<article style="…">` lines),
+// so it is fenced here, before anything else looks at the text: downstream the block is an
+// ordinary ```html block and picks up the file card, Download and Save-to-artifacts for free.
+
+/** Tags that only ever open a document or a standalone figure — enough on their own. */
+const STRONG_HTML_START = /^\s*(?:<!doctype\s+html|<html\b|<head\b|<body\b|<article\b|<main\b|<svg\b)/i;
+/** Tags that are a document only when the text also ends on a closing tag. */
+const WEAK_HTML_START = /^\s*(?:<section\b|<div\b|<table\b|<figure\b)/i;
+
+/** Wraps an unfenced raw HTML/SVG answer in a fence. Returns `text` unchanged when it is prose. */
+export function fenceRawHtml(text: string): string {
+  if (text.includes('```')) return text; // already fenced, or mixed prose and code: leave it alone
+  const lines = text.split('\n');
+  const start = lines.findIndex(l => STRONG_HTML_START.test(l) || WEAK_HTML_START.test(l));
+  if (start < 0) return text;
+  const body = lines.slice(start).join('\n').trimEnd();
+  if ((body.match(/<[a-z!][^>]*>/gi) ?? []).length < 4) return text; // a stray tag in prose is not a page
+  if (!STRONG_HTML_START.test(body) && !/<\/[a-z][\w-]*>$/i.test(body)) return text;
+  const lang = /^\s*<svg\b/i.test(body) ? 'svg' : 'html';
+  const before = lines.slice(0, start).join('\n').trimEnd();
+  return `${before ? before + '\n\n' : ''}\`\`\`${lang}\n${body}\n\`\`\``;
+}
+
+/** Applies `fn` to the prose between fenced blocks, never to the code inside them. */
+function outsideFences(s: string, fn: (chunk: string) => string): string {
+  const out: string[] = [];
+  let buf: string[] = [];
+  let inFence = false;
+  const flush = (): void => { if (buf.length) out.push(inFence ? buf.join('\n') : fn(buf.join('\n'))); buf = []; };
+  for (const line of s.split('\n')) {
+    if (line.trimEnd().startsWith('```')) { flush(); inFence = !inFence; out.push(line); continue; }
+    buf.push(line);
+  }
+  flush();
+  return out.join('\n');
+}
+
 function normalizeMarkdownForDisplay(text: unknown): string {
-  let s = String(text || '').replace(/\r\n?/g, '\n');
+  const whole = fenceRawHtml(String(text || '').replace(/\r\n?/g, '\n'));
   // Some models stream compact prose around tool calls or lists. Add block breaks
-  // only before clear Markdown structures that are visibly glued to prior text.
+  // only before clear Markdown structures that are visibly glued to prior text. Every
+  // fix-up below is prose-shaped, so none of it may run on code inside a fence.
+  return outsideFences(whole, prose => proseBlockBreaks(prose));
+}
+
+function proseBlockBreaks(text: string): string {
+  let s = text;
   s = s.replace(/([a-z0-9][.!?])(?=[A-Z][a-z]{2,})/g, '$1\n\n');
   s = s.replace(/([^\n#])(\s*)(#{1,4}\s+)/g, '$1\n\n$3');
   s = s.replace(/([^\n#])[ \t]+(\d{1,2}\.\s+(?=[A-Z][A-Za-z0-9&/()'' -]{1,70}(?:\s|$)))/g, '$1\n\n$2');
@@ -252,7 +310,9 @@ export function renderMarkdown(text: unknown): string {
     }
 
     // compact field label line
-    const labelm = line.match(labelLineRe);
+    // `Source: x` is a label line, but `See https://…` only looks like one: the
+    // scheme's colon must not swallow the URL, or it never gets auto-linked.
+    const labelm = /\bhttps?:$/i.test(line.match(labelLineRe)?.[1] ?? '') ? null : line.match(labelLineRe);
     if (labelm){
       closeList();
       html += `<p class="md-label-line"><strong>${inlineMd(labelm[1]!)}</strong>${labelm[2] ? ' ' + inlineMd(labelm[2]) : ''}</p>`;
@@ -301,7 +361,10 @@ export function renderMermaidIn(el: Element): void {
   if (!nodes.length) return;
   nodes.forEach(n => n.setAttribute('data-mermaid-rendered', '1'));
   mermaidReady ??= import('mermaid').then(m => {
-    m.default.initialize({ startOnLoad: false, theme: 'dark', securityLevel: 'loose', fontFamily: 'Space Grotesk, system-ui, sans-serif' });
+    // mermaid wants a literal font stack, so read the app's token rather than
+    // repeating it here and letting the two drift apart.
+    const appFont = getComputedStyle(document.documentElement).getPropertyValue('--font').trim();
+    m.default.initialize({ startOnLoad: false, theme: 'dark', securityLevel: 'loose', fontFamily: appFont || 'system-ui, sans-serif' });
     return m.default;
   });
   void mermaidReady.then(m => m.run({ nodes })).catch(() => { /* a bad diagram stays as its source text */ });

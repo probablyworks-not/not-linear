@@ -12,8 +12,12 @@ Superseded by ADR-035. These tests are the specification.
 
 from __future__ import annotations
 
+import http.client
+import inspect
+import socket
 import sys
 from pathlib import Path
+from unittest import mock
 
 import pytest
 
@@ -102,11 +106,47 @@ class TestRedirectPolicy:
     def test_redirect_limit_is_small_and_declared(self) -> None:
         assert safe_fetch.MAX_REDIRECTS == 3
 
-    def test_redirects_are_followed_manually_not_by_urllib(self) -> None:
+    def test_redirects_are_followed_manually_not_by_a_library(self) -> None:
         """Validating only the first URL is the usual way this is got wrong.
 
-        The handler must suppress urllib's automatic redirect following so each
-        hop goes back through resolve_and_validate.
+        fetch_text drives http.client directly and loops itself, so every hop
+        goes back through resolve_and_validate. Nothing may hand redirect
+        following to a library that would resolve and connect unchecked.
         """
-        handler = safe_fetch._NoRedirect()
-        assert handler.redirect_request(None, None, 302, "", {}, "http://10.0.0.1/") is None
+        src = inspect.getsource(safe_fetch.fetch_text)
+        assert "resolve_and_validate" in src
+        assert "urljoin" in src and "continue" in src
+        assert "urlopen" not in src and "build_opener" not in src
+
+
+class TestPinnedConnection:
+    """Pinning the address must not cost TLS identity.
+
+    Connecting to https://<ip>/ sends the IP as SNI — CDNs answer that with a
+    handshake failure, and the certificate would not validate either. The
+    connection is made by hostname, with only the socket's destination
+    overridden, so SNI and the certificate check still see the real host.
+    """
+
+    def test_https_connection_is_named_by_host_and_addressed_by_ip(self) -> None:
+        target = safe_fetch.ResolvedTarget(hostname="example.com", ip="93.184.216.34", port=443, family=socket.AF_INET)
+        conn = safe_fetch._connect(target, "https", timeout=1.0)
+        try:
+            assert isinstance(conn, http.client.HTTPSConnection)
+            assert conn.host == "example.com"  # SNI + cert check + Host header
+            captured: list[tuple[str, int]] = []
+            with mock.patch.object(socket, "create_connection", lambda addr, *a, **k: captured.append(addr)):
+                conn._create_connection(("example.com", 443), 1.0, None)
+            assert captured == [("93.184.216.34", 443)]  # but the socket goes to the validated IP
+        finally:
+            conn.close()
+
+    def test_plain_http_is_pinned_the_same_way(self) -> None:
+        target = safe_fetch.ResolvedTarget(hostname="example.com", ip="93.184.216.34", port=80, family=socket.AF_INET)
+        conn = safe_fetch._connect(target, "http", timeout=1.0)
+        try:
+            assert isinstance(conn, http.client.HTTPConnection)
+            assert not isinstance(conn, http.client.HTTPSConnection)
+            assert conn.host == "example.com"
+        finally:
+            conn.close()

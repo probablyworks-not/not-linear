@@ -7,6 +7,7 @@ import { ArrowUp, GitBranch } from 'lucide-react';
 import { toast } from 'sonner';
 import { appliedTheme, onThemeChange } from '../lib/theme';
 import { createDebouncedWriter } from '../lib/debounced-writer';
+import { pasteUrlAsLink, upgradeLinkNames, type LinkEditor } from './paste-link';
 import { captureBaseline, loadNoteBlocks, saveNoteBlocks, type EditorBlock, type NoteSession } from './adapter';
 import { saveNoteBlocksTo, saveNoteTitle } from './notes-repo';
 import { useNotesStore } from './notes-store';
@@ -49,6 +50,14 @@ function openEditor(blocks: unknown[]): Opened {
       tables: { splitCells: false, cellBackgroundColor: false, cellTextColor: false, headers: false },
       // Images are stored inline as data URLs, as legacy does.
       uploadFile: fileToDataUrl,
+      // A pasted URL reads as the site it points at, not a line of address text.
+      // With text selected it links that text instead, as the default handler would.
+      pasteHandler: ({ event, editor: ed2, defaultPasteHandler }) => {
+        const text = event.clipboardData?.getData('text/plain')?.trim() ?? '';
+        if (!/^https?:\/\/\S+$/i.test(text)) return defaultPasteHandler();
+        pasteUrlAsLink(ed2 as unknown as Parameters<typeof pasteUrlAsLink>[0], text);
+        return true;
+      },
       initialContent: loaded.editorBlocks.length > 0 ? (loaded.editorBlocks as never) : undefined,
     });
     captureBaseline(loaded.session, editor.document as unknown as EditorBlock[]);
@@ -102,6 +111,7 @@ function NoteEditor({ note, editable, compact }: { note: LegacyNote; editable: b
 
   const onBodyChange = (): void => {
     if (!editable) return;
+    if (opened.ok) upgradeLinkNames(opened.editor as unknown as LinkEditor);
     store().setDirty(note.id, true);
     writer.schedule(key, persist);
   };

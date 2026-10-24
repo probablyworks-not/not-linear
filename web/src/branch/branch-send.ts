@@ -15,6 +15,7 @@ import type { ChatMessage, ProviderId } from '../providers/types';
 import type { Attachment } from '../attachments/read-files';
 import { userContentFor } from '../chat/user-content';
 import { folderContextFor } from '../chat/project-context';
+import { buildClarifyBrief } from '../chat/clarify-brief';
 import { branchAttachKey, filesFor, threadAttachKey, useAttachments } from '../attachments/attachments-store';
 import type { PersistedThread } from '../db/types';
 
@@ -55,6 +56,15 @@ function branchHost(threadId: string, first: OpenBranch): TurnHost {
       const pid = app.threadState[threadId]?.projectId;
       return buildSystemPrompt({ prefs: app.prefs, project: typeof pid === 'string' ? app.projects[pid] : undefined, apiKeys: readApiKeys(), extraContext });
     },
+    clarifyBrief: turn => {
+      const app = useAppStore.getState();
+      const pid = app.threadState[threadId]?.projectId;
+      return buildClarifyBrief({
+        project: typeof pid === 'string' ? app.projects[pid] : undefined,
+        folderSources: turn.sources?.names,
+        fileNames: turn.files?.map(f => f.name),
+      });
+    },
     write: async snap => {
       await useAppStore.getState().updateThreads(state => {
         const t = state.threads[threadId];
@@ -76,6 +86,7 @@ function branchHost(threadId: string, first: OpenBranch): TurnHost {
     },
     register: c => registerBranchStream(id, c),
     clear: () => clearBranchStream(id),
+    threadId,
   };
 }
 

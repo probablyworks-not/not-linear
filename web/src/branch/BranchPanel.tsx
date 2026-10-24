@@ -18,6 +18,7 @@ import { branchRowsForThread } from '../chat/branch-model';
 import { formatUsage } from '../chat/usage';
 import { branchRail, resizeBounds, resizeDelta, applySize, type ResizeEdge, type ResizeStart } from './layout';
 import { highlightCodeIn, renderMermaidIn } from '../lib/markdown';
+import { nameLinksIn } from '../lib/name-links';
 
 const EDGES: Array<{ edge: ResizeEdge; title: string }> = [
   { edge: 'top', title: 'Resize upward' },
@@ -88,6 +89,7 @@ export function BranchPanel({ branch: b, flags, registerEl, onLayout, onMenu }: 
     if (live || !bodyRef.current) return;
     renderMermaidIn(bodyRef.current);
     void highlightCodeIn(bodyRef.current);
+    void nameLinksIn(bodyRef.current);
   }, [content?.bodyHTML, live]);
 
   // Pulse when jumped to or reopened (legacy's `flash`, an inline box-shadow for 700ms).

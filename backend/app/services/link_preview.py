@@ -7,6 +7,7 @@ as its own commit so the move stays reviewable (planned ADR-035).
 
 from __future__ import annotations
 
+import http.client
 import re
 import urllib.error
 import urllib.request
@@ -72,11 +73,20 @@ def link_preview(url):
             url,
             max_bytes=LINK_PREVIEW_MAX_BYTES,
             timeout=LINK_PREVIEW_TIMEOUT_S,
-            user_agent="notlinear-link-preview/1",
+            # A browser-shaped UA: sites that serve a title to a reader and a
+            # block page to "notlinear-link-preview/1" are common enough that
+            # the old string made the feature look broken rather than polite.
+            user_agent=(
+                "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
+                "(KHTML, like Gecko) Chrome/129.0.0.0 Safari/537.36"
+            ),
         )
     except BlockedURLError as exc:
         return {"ok": False, "error": str(exc)}
-    except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError, ValueError, OSError) as exc:
+    # http.client.HTTPException is not an OSError, so it needs naming: fetch_text
+    # drives http.client directly now (see ADR-061 addendum / BUGS #061).
+    except (urllib.error.URLError, urllib.error.HTTPError, http.client.HTTPException,
+            TimeoutError, ValueError, OSError) as exc:
         return {"ok": False, "error": str(exc)}
 
     p = _LinkPreviewParser()

@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import fc from 'fast-check';
 import { legacyToBlockNote, blockNoteToLegacy } from '../../src/notes/convert';
+import { FALLBACK_LANGUAGE } from '../../src/notes/code-languages';
 import { annotate } from './annotate';
 import { legacyBlock } from './generators';
 
@@ -74,6 +75,22 @@ describe('legacy -> BlockNote -> legacy', () => {
       }),
       { numRuns: 400 },
     );
+  });
+
+  // A `lang` the editor cannot highlight throws while the code block renders — outside any
+  // try/catch, so it blanks the app. It is shown as plain text, and the language still round-trips.
+  it('shows a code block in an unhighlightable language as plain text, keeping the language', () => {
+    const blocks = [{ id: 'c1', type: 'code', lang: 'mermaid', text: 'graph TD; A-->B;' }];
+    const { blocks: bn, sidecar } = legacyToBlockNote(blocks);
+    expect(bn[0]!.props.language).toBe(FALLBACK_LANGUAGE);
+    expect(blockNoteToLegacy(bn, sidecar)).toEqual(blocks);
+  });
+
+  it('leaves a language the editor knows alone', () => {
+    const blocks = [{ id: 'c1', type: 'code', lang: 'ts', text: 'const x = 1;' }];
+    const { blocks: bn, sidecar } = legacyToBlockNote(blocks);
+    expect(bn[0]!.props.language).toBe('ts');
+    expect(blockNoteToLegacy(bn, sidecar)).toEqual(blocks);
   });
 
   it('does not mutate its input', () => {

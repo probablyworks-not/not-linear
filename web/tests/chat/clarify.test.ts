@@ -6,6 +6,7 @@ import { sendMessage, setRunTurnDepsForTests, stopStreaming } from '../../src/ch
 import {
   CLARIFY_SYSTEM_PROMPT, awaitAnswers, parseQuestions, renderClarifyBlock, resolveClarify, shouldClarify,
 } from '../../src/chat/clarify';
+import { CLARIFY_BRIEF_CHARS, buildClarifyBrief } from '../../src/chat/clarify-brief';
 import type { RunTurnDeps } from '../../src/chat/run-turn';
 import type { ChatProvider, ChatRequest, ProviderEvent } from '../../src/providers/types';
 
@@ -57,6 +58,39 @@ describe('renderClarifyBlock', () => {
     expect(block).toContain('Who is it for? → Beginners');
     expect(block).not.toContain('Skipped?');
     expect(renderClarifyBlock([])).toBe('');
+  });
+});
+
+describe('buildClarifyBrief', () => {
+  const project = { id: 'p1', name: 'Notlinear', rules: 'A canvas for research.', files: [], path: '' };
+  it('is empty with nothing to say', () => {
+    expect(buildClarifyBrief({})).toBe('');
+    expect(buildClarifyBrief({ project: { ...project, rules: '' } })).toContain('Project: Notlinear');
+  });
+  it('carries the name, rules, file excerpts, linked paths and attachment names', () => {
+    const brief = buildClarifyBrief({
+      project: { ...project, files: [{ name: 'prd.md', content: 'The product is a canvas.' }] },
+      folderSources: ['docs/a.md', 'src/b.ts'],
+      fileNames: ['spec.pdf'],
+    });
+    expect(brief).toContain('Project: Notlinear');
+    expect(brief).toContain('A canvas for research.');
+    expect(brief).toContain('- prd.md: The product is a canvas.');
+    expect(brief).toContain('docs/a.md, src/b.ts');
+    expect(brief).toContain('spec.pdf');
+  });
+  it('caps rules, files and the whole brief', () => {
+    const brief = buildClarifyBrief({
+      project: {
+        ...project,
+        rules: 'r'.repeat(5000),
+        files: Array.from({ length: 10 }, (_, i) => ({ name: `f${i}.md`, content: 'c'.repeat(2000) })),
+      },
+      folderSources: Array.from({ length: 50 }, (_, i) => `p${i}.ts`),
+    });
+    expect(brief.length).toBeLessThanOrEqual(CLARIFY_BRIEF_CHARS + '\n[truncated]'.length);
+    expect(brief).toContain('[truncated]');
+    expect(brief).not.toContain('p20.ts');
   });
 });
 
@@ -133,6 +167,29 @@ describe('clarify flow', () => {
       { role: 'user', content: 'Write me an explainer about tides' }, { role: 'assistant', content: 'Here is your tailored answer.' },
     ]);
     expect(Object.values(t.clarifications as Record<string, unknown[]>)[0]).toEqual([{ id: 'q1', question: 'Who is it for?', answer: 'Beginners' }]);
+  });
+
+  it('sends no brief outside a project, and the project brief inside one', async () => {
+    setRunTurnDepsForTests(() => fakeDeps(QUESTIONS));
+    const sending = sendMessage(id, 'Write me an explainer about tides');
+    await untilAsking(id);
+    expect(seen[0]!.messages).toEqual([{ role: 'user', content: 'New message to assess:\nWrite me an explainer about tides' }]);
+    resolveClarify(id, null);
+    await sending;
+
+    const app = useAppStore.getState();
+    const pid = (await app.createProject())!;
+    await useAppStore.getState().setProjectRules(pid, 'The product is Notlinear, a research canvas.');
+    await useAppStore.getState().addChatToProject(pid, id);
+    seen.length = 0;
+    const second = sendMessage(id, 'How should we add agents to this?');
+    await untilAsking(id);
+    const content = seen[0]!.messages[0]!.content as string;
+    expect(content.startsWith('Project context (')).toBe(true);
+    expect(content).toContain('The product is Notlinear, a research canvas.');
+    expect(content).toContain('New message to assess:\nHow should we add agents to this?');
+    resolveClarify(id, null);
+    await second;
   });
 
   it('skip answers straight away with no anchor', async () => {

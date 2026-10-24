@@ -1,10 +1,10 @@
 import { postJson } from './api';
 
-// Saving a reply as a .md file, from most to least native (app.js addDownloadMdAction), because
-// a browser cannot always open a save dialog: (1) the desktop app's WKWebView bridge, (2) the
-// local server's save dialog (/__notlinear_save_file), (3) the File System Access API, and last
-// a plain download. BUGS #021/#022: a programmatic file picker must be triggered from the click
-// itself, so this runs straight from the button's handler.
+// Saving a reply, or a file it produced, from most to least native (app.js addDownloadMdAction),
+// because a browser cannot always open a save dialog: (1) the desktop app's WKWebView bridge,
+// (2) the local server's save dialog (/__notlinear_save_file), (3) the File System Access API,
+// and last a plain download. BUGS #021/#022: a programmatic file picker must be triggered from
+// the click itself, so this runs straight from the button's handler.
 
 interface NativeWindow extends Window {
   webkit?: { messageHandlers?: { notlinear?: { postMessage(msg: unknown): void } } };
@@ -21,7 +21,17 @@ export function slugifyTitle(title: string): string {
   return title.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'response';
 }
 
-export async function saveMarkdownFile(filename: string, content: string): Promise<void> {
+/** The file kinds a reply can hand over. Every one is text, so they all take the same ladder. */
+export type SaveKind = 'md' | 'html' | 'svg';
+
+const KIND: Record<SaveKind, { description: string; mime: string; ext: string }> = {
+  md: { description: 'Markdown', mime: 'text/markdown', ext: '.md' },
+  html: { description: 'HTML page', mime: 'text/html', ext: '.html' },
+  svg: { description: 'SVG image', mime: 'image/svg+xml', ext: '.svg' },
+};
+
+export async function saveTextFile(filename: string, content: string, kind: SaveKind = 'md'): Promise<void> {
+  const { description, mime, ext } = KIND[kind];
   const w = window as NativeWindow;
   const native = w.webkit?.messageHandlers?.notlinear;
   if (native) { native.postMessage({ action: 'saveFile', filename, content }); return; }
@@ -31,7 +41,7 @@ export async function saveMarkdownFile(filename: string, content: string): Promi
   } catch { /* no local server dialog available: fall through */ }
   if (w.showSaveFilePicker) {
     try {
-      const handle = await w.showSaveFilePicker({ suggestedName: filename, types: [{ description: 'Markdown', accept: { 'text/markdown': ['.md'] } }] });
+      const handle = await w.showSaveFilePicker({ suggestedName: filename, types: [{ description, accept: { [mime]: [ext] } }] });
       const writable = await handle.createWritable();
       await writable.write(content);
       await writable.close();
@@ -40,7 +50,7 @@ export async function saveMarkdownFile(filename: string, content: string): Promi
       if ((err as Error).name === 'AbortError') return;
     }
   }
-  const url = URL.createObjectURL(new Blob([content], { type: 'text/markdown' }));
+  const url = URL.createObjectURL(new Blob([content], { type: mime }));
   const a = document.createElement('a');
   a.href = url;
   a.download = filename;
@@ -49,4 +59,9 @@ export async function saveMarkdownFile(filename: string, content: string): Promi
   a.click();
   document.body.removeChild(a);
   setTimeout(() => URL.revokeObjectURL(url), 10_000);
+}
+
+/** Back-compat alias for the reply's Download .md button. */
+export async function saveMarkdownFile(filename: string, content: string): Promise<void> {
+  return saveTextFile(filename, content, 'md');
 }

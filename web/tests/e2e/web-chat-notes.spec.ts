@@ -158,3 +158,24 @@ test('below 900px the pane covers the chat instead of squeezing it', async ({ pa
   await expect(pane).toHaveAttribute('data-beside', 'false');
   expect(Math.round((await pane.boundingBox())!.width)).toBe(800);
 });
+
+// BUGS #: a ```mermaid (or any other language the editor cannot highlight) threw while the code
+// block rendered — outside the try/catch that opening a note is wrapped in — and, with no error
+// boundary above it, blanked the whole app. The block is shown as plain text instead.
+test('a note holding a code block in an unhighlightable language still opens', async ({ page }) => {
+  const errors: string[] = [];
+  page.on('pageerror', e => errors.push(e.message));
+  await seed(page);
+  await scriptClaude(page, [
+    claudeToolUse('create_note', { title: 'Agent plan', content: '## Flow\n\n```mermaid\ngraph TD; A-->B;\n```\n\nThat is the shape.' }),
+    claudeAnswer('Filed the plan.'),
+  ]);
+  await newChat(page);
+  await ask(page, 'diagram the agent flow');
+  await page.locator('[data-chat-stream] .note-ref').click();
+  const pane = page.getByTestId('note-pane');
+  await expect(pane).toBeVisible();
+  await expect(pane.locator('.bn-editor')).toContainText('graph TD; A-->B;');
+  await expect(pane.locator('.bn-editor')).toContainText('That is the shape.');
+  expect(errors).toEqual([]);
+});

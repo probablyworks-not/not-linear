@@ -12,7 +12,7 @@
 import { readApiKeys } from '../lib/api-keys';
 import {
   beginBackendTrace, endBackendTrace, loggedFetch, readLoggedErrorPayload, summarizeMessagesForLog,
-  MODEL_CONNECT_TIMEOUT_MS, MODEL_STREAM_IDLE_TIMEOUT_MS, TOOL_SYNTHESIS_IDLE_TIMEOUT_MS, DEEPSEEK_MAX_TOOL_ROUNDS,
+  MODEL_CONNECT_TIMEOUT_MS, MODEL_STREAM_IDLE_TIMEOUT_MS, TOOL_SYNTHESIS_IDLE_TIMEOUT_MS, DEEPSEEK_MAX_TOOL_ROUNDS, DEEPSEEK_MAX_FOLDER_TOOL_ROUNDS,
 } from '../lib/api-client';
 import { isToolFatal, toolResultFallbackMarkdown, toolStatusLabel, type ToolResultRecord } from '../tools/tool-runners';
 import { toOpenAITools, type ToolSpec } from './tool-specs';
@@ -40,6 +40,11 @@ function plainText(content: ChatMessage['content']): string {
   return content.map(b => (b.type === 'text' ? String(b.text ?? '') : '')).filter(Boolean).join('\n\n');
 }
 
+/** Web research gets 2 rounds (bug #015: it over-searches); browsing a linked folder gets more. */
+export function maxToolRoundsFor(specs: readonly { name: string }[]): number {
+  return specs.some(t => t.name === 'list_project_files' || t.name === 'read_project_file') ? DEEPSEEK_MAX_FOLDER_TOOL_ROUNDS : DEEPSEEK_MAX_TOOL_ROUNDS;
+}
+
 export const deepseekProvider: ChatProvider = {
   id: 'deepseek',
   caps: { thinking: true, nativeToolUse: true, maxToolRounds: DEEPSEEK_MAX_TOOL_ROUNDS },
@@ -53,9 +58,10 @@ export const deepseekProvider: ChatProvider = {
     }
     const runner = req.toolRunner;
     const specs = (runner ? req.tools : []) as readonly ToolSpec[];
+    const maxToolRounds = maxToolRoundsFor(specs);
     const trace = beginBackendTrace('llm', {
       provider: 'deepseek', model, messages: summarizeMessagesForLog(req.messages), tools: specs.map(t => t.name),
-      maxToolRounds: DEEPSEEK_MAX_TOOL_ROUNDS,
+      maxToolRounds,
     });
     const fail = (kind: ErrorKind, message: string, meta: Record<string, unknown> = {}): ProviderEvent => {
       endBackendTrace(trace, kind === 'aborted' ? 'abort' : 'error', { provider: 'deepseek', model, error: message, ...meta });
@@ -99,7 +105,7 @@ export const deepseekProvider: ChatProvider = {
       // Tools are offered only while under the round limit (thinking mode too: its reasoning is sent
       // back with each tool round). Once they are spent, or after a no-tools retry, the model is
       // told to answer from what is already in the conversation.
-      const canUseTools = specs.length > 0 && !retriedNoTools && toolRounds < DEEPSEEK_MAX_TOOL_ROUNDS;
+      const canUseTools = specs.length > 0 && !retriedNoTools && toolRounds < maxToolRounds;
       const synthesizing = !canUseTools && toolRounds > 0;
       if (synthesizing && lastToolResults.length) yield { t: 'status', label: 'Synthesizing answer from retrieved sources…' };
       const requestMessages = retriedNoTools ? noToolsMessages(current) : synthesizing ? synthesisOnlyMessages(current) : current;
@@ -269,7 +275,7 @@ export const deepseekProvider: ChatProvider = {
       toolRounds += 1;
       // Remembered so a stalled or stopped synthesis afterwards still has the results to fall back on.
       lastToolResults = records;
-      yield { t: 'status', label: toolRounds >= DEEPSEEK_MAX_TOOL_ROUNDS ? 'Synthesizing answer from retrieved sources…' : 'Synthesizing tool results…' };
+      yield { t: 'status', label: toolRounds >= maxToolRounds ? 'Synthesizing answer from retrieved sources…' : 'Synthesizing tool results…' };
     }
   },
 };

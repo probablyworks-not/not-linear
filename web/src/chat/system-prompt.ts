@@ -52,6 +52,8 @@ export function buildSystemPrompt({ prefs, project, apiKeys, extraContext = '', 
     'In branches, you already have the full parent conversation as context — use it without re-summarizing it.',
     'Match depth to the question: simple questions get tight answers; complex research gets thorough treatment.',
     'Format answers as clean Markdown. Use blank lines between sections, numbered competitors/items, and compact field labels such as Model, Funding, Focus, Services, Difference, Status, and Challenge. Do not run multiple numbered items or labels together in one paragraph.',
+    // The app turns a fenced html/svg block into a downloadable file card; unfenced markup is just escaped prose.
+    'When the user asks for an HTML page, an HTML file, or a self-contained document, reply with the complete document — doctype through </html> — inside a single ```html fenced code block, and keep every explanation outside that block. Never emit raw HTML tags as prose. The same goes for a standalone SVG: one ```svg block.',
   ];
   if (prefs.name) parts.push(`The user's name is ${prefs.name}.`);
   if (prefs.context) parts.push(`What they are working on: ${prefs.context}`);

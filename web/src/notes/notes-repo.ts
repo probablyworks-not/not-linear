@@ -202,7 +202,7 @@ export function setNoteProject(id: string, pid: string | null): Promise<boolean>
 }
 
 export interface Cover { src: string; posY: number }
-export interface NotePatch { emoji?: string | null; cover?: Cover | null; tags?: string[] }
+export interface NotePatch { emoji?: string | null; cover?: Cover | null; tags?: string[]; pinned?: boolean }
 
 /** Page header fields. `cover: null` removes the cover, as legacy's `delete n.cover`. */
 export function patchNote(id: string, patch: NotePatch): Promise<boolean> {
@@ -210,6 +210,7 @@ export function patchNote(id: string, patch: NotePatch): Promise<boolean> {
     if ('emoji' in patch) n.emoji = patch.emoji ?? null;
     if ('cover' in patch) { if (patch.cover) n.cover = patch.cover; else delete n.cover; }
     if ('tags' in patch) n.tags = patch.tags ?? [];
+    if ('pinned' in patch) { if (patch.pinned) n.pinned = true; else delete n.pinned; }
     return true;
   });
 }

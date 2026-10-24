@@ -199,12 +199,19 @@ export function sourcesLabel(mode: string): { label: string; icon: 'brain' | 'fi
   return mode === 'deepseek' ? { label: 'Sources (DeepSeek):', icon: 'brain' } : { label: 'Sources (keywords):', icon: 'files' };
 }
 
+/** The linked folder of the project `threadId` belongs to, or '' when it has none. */
+export function linkedFolderFor(threadId: string): string {
+  const app = useAppStore.getState();
+  const pid = app.threadState[threadId]?.projectId;
+  return typeof pid === 'string' ? app.projects[pid]?.path ?? '' : '';
+}
+
 /** The folder context for a message in `threadId`, read from the stores (the linked path, the key and the global ranking default). */
 export async function folderContextFor(threadId: string, query: string): Promise<FolderContext> {
   const app = useAppStore.getState();
   const thread = app.threadState[threadId];
   const pid = typeof thread?.projectId === 'string' ? thread.projectId : undefined;
-  const path = pid ? app.projects[pid]?.path ?? '' : '';
+  const path = linkedFolderFor(threadId);
   return buildProjectFolderContext(pid, query, (thread?.rankingMode as RankingMode | undefined) || 'inherit', {
     path, deepseekKey: readApiKeys().deepseek, globalMode: app.prefs.rankingLlm || 'none',
   });

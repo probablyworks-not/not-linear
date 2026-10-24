@@ -1,9 +1,7 @@
-import { useEffect } from 'react';
 import { NotebookText, Plus, Trash2, FilePlus2 } from 'lucide-react';
-import { parseIconToken, renderIconSvg, useMindGarden } from '../lib/mind-garden';
 import { BackupNotice } from './BackupNotice';
-import { bloomFor, shapeFor, timeAgo, tintFor } from './bento';
-import { NoteGlyph } from './NoteGlyph';
+import { shapeFor, timeAgo, tintFor } from './bento';
+import { Bloom } from './Bloom';
 import { deletePage, newPage } from './notes-actions';
 import { kidsOf } from './notes-ops';
 import { useNotesStore } from './notes-store';
@@ -13,27 +11,6 @@ import type { LegacyNote } from './types';
 // The Notes home page: a bento grid, newest-edited first. Each card's colour comes from its icon, its
 // shape from its id, and the faint icon bleeding off its corner is the page's own icon (legacy
 // renderBentoCard). Nothing about the layout is stored.
-
-/** A giant, faint copy of the page's icon. Skipped for uploaded photos: a huge faint raster reads as a bug. */
-function Bloom({ note, shape }: { note: LegacyNote; shape: ReturnType<typeof shapeFor> }) {
-  const entries = useMindGarden(s => s.entries);
-  const load = useMindGarden(s => s.load);
-  useEffect(() => { void load(); }, [load]);
-  const icon = note.emoji;
-  if (typeof icon === 'string' && icon.startsWith('img:')) return null;
-  const { size, rotate } = bloomFor(note.id, shape);
-
-  // An icon the user coloured keeps its colour; otherwise it takes the card's tint (legacy bentoIconHTML).
-  const parsed = typeof icon === 'string' && icon.startsWith('icon:') ? parseIconToken(icon) : null;
-  const svg = parsed ? renderIconSvg(entries, parsed.id, { size, color: parsed.color || 'var(--tfg)' }) : '';
-  return (
-    <span className="nl-bloom" aria-hidden style={{ transform: `rotate(${rotate}deg)` }}>
-      {svg
-        ? <span dangerouslySetInnerHTML={{ __html: svg }} />
-        : <span style={{ fontSize: size, lineHeight: 1 }}><NoteGlyph value={icon} size={size} /></span>}
-    </span>
-  );
-}
 
 function BentoCard({ note, index, notes }: { note: LegacyNote; index: number; notes: readonly LegacyNote[] }) {
   const shape = shapeFor(note.id, index);
@@ -52,7 +29,7 @@ function BentoCard({ note, index, notes }: { note: LegacyNote; index: number; no
       onClick={() => openNote(note.id)}
       onKeyDown={e => { if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); openNote(note.id); } }}
     >
-      <Bloom note={note} shape={shape} />
+      <Bloom id={note.id} icon={note.emoji} shape={shape} />
       <div className={`nl-ix-name${title ? '' : ' placeholder'}`}>{title || 'Untitled'}</div>
       <div className="nl-ix-meta">{meta}</div>
       <div className="nl-ix-acts">

@@ -4,6 +4,7 @@ import {
 import { createReactInlineContentSpec, createReactStyleSpec } from '@blocknote/react';
 import { selectThread } from '../state/actions';
 import { openNote } from './open-note';
+import { CODE_LANGUAGES, FALLBACK_LANGUAGE } from './code-languages';
 import {
   callout, column, columns, columnsChildren, divider, embed, equation, file, inlineEq, media, opaque, pageLink, toc, toggle, bookmark,
 } from './custom-blocks';
@@ -70,14 +71,7 @@ const highlight = createReactStyleSpec(
 const { paragraph, bulletListItem, numberedListItem, checkListItem, quote, table, image } = defaultBlockSpecs;
 
 // The languages legacy's picker offered, under legacy's own ids so `lang` round-trips unchanged.
-const codeBlock = createCodeBlockSpec({
-  defaultLanguage: 'plain',
-  supportedLanguages: {
-    plain: { name: 'Plain text' }, js: { name: 'JavaScript', aliases: ['javascript'] }, ts: { name: 'TypeScript', aliases: ['typescript'] },
-    python: { name: 'Python', aliases: ['py'] }, rust: { name: 'Rust' }, go: { name: 'Go' }, html: { name: 'HTML' },
-    css: { name: 'CSS' }, sql: { name: 'SQL' }, json: { name: 'JSON' }, bash: { name: 'Bash', aliases: ['sh', 'shell'] },
-  },
-});
+const codeBlock = createCodeBlockSpec({ defaultLanguage: FALLBACK_LANGUAGE, supportedLanguages: CODE_LANGUAGES });
 const { text, link } = defaultInlineContentSpecs;
 const { bold, italic, underline, strike, code } = defaultStyleSpecs;
 

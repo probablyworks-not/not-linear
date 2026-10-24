@@ -19,9 +19,12 @@ The checks, in the order they matter:
    loopback, link-local, CGNAT, reserved or unspecified. Any, not the first:
    a name resolving to both a public and a private address is the classic
    bypass.
-3. **Connect to the validated IP**, passing the hostname in the Host header.
-   Re-resolving between check and connect is DNS rebinding, and a check that
-   does not pin the address does not prevent it.
+3. **Connect to the validated IP**, passing the hostname in the Host header
+   and, over TLS, as the SNI and certificate name. Re-resolving between check
+   and connect is DNS rebinding, and a check that does not pin the address
+   does not prevent it — but pinning must not cost certificate validation,
+   which is why the connection is made by hostname and only the socket's
+   destination address is overridden.
 4. Follow at most ``MAX_REDIRECTS`` hops, re-validating every one. Validating
    only the first URL is the most common way this is got wrong.
 5. Reject content types that are not HTML or plain text.
@@ -29,13 +32,15 @@ The checks, in the order they matter:
 
 from __future__ import annotations
 
+import http.client
 import ipaddress
 import socket
+import ssl
 import urllib.error
 import urllib.parse
 import urllib.request
 from dataclasses import dataclass
-from urllib.parse import urlparse, urlunparse
+from urllib.parse import urlparse
 
 MAX_REDIRECTS = 3
 ALLOWED_SCHEMES = ("http", "https")
@@ -116,6 +121,32 @@ def resolve_and_validate(url: str) -> ResolvedTarget:
     return chosen
 
 
+def _connect(target: ResolvedTarget, scheme: str, timeout: float) -> http.client.HTTPConnection:
+    """A connection addressed to the validated IP but named with the hostname.
+
+    ``http.client`` takes the host it was constructed with for the Host header,
+    the TLS SNI and the certificate check, and only uses it as an address in
+    ``_create_connection`` — so overriding that one method pins the destination
+    without turning the request into a request for an IP. Connecting to
+    ``https://<ip>/`` instead (what urlopen on a rewritten URL does) sends the
+    IP as SNI, which CDNs answer with a handshake failure, and would fail
+    certificate validation even if they did not.
+    """
+    pinned_ip, port = target.ip, target.port
+
+    def create_connection(address, conn_timeout, source_address=None):  # type: ignore[no-untyped-def]
+        return socket.create_connection((pinned_ip, address[1]), conn_timeout, source_address)
+
+    if scheme == "https":
+        conn: http.client.HTTPConnection = http.client.HTTPSConnection(
+            target.hostname, port, timeout=timeout, context=ssl.create_default_context(),
+        )
+    else:
+        conn = http.client.HTTPConnection(target.hostname, port, timeout=timeout)
+    conn._create_connection = create_connection  # type: ignore[method-assign]
+    return conn
+
+
 def fetch_text(url: str, *, max_bytes: int, timeout: float, user_agent: str) -> tuple[str, str]:
     """Fetches a URL safely and returns (text, final_url).
 
@@ -128,38 +159,36 @@ def fetch_text(url: str, *, max_bytes: int, timeout: float, user_agent: str) -> 
     for _hop in range(MAX_REDIRECTS + 1):
         target = resolve_and_validate(current)
         parsed = urlparse(current)
+        path = parsed.path or "/"
+        if parsed.query:
+            path = f"{path}?{parsed.query}"
 
-        # Connect to the validated IP, carrying the real hostname in Host, so a
-        # second DNS lookup cannot point us somewhere else between the check
-        # and the connection.
-        netloc_ip = f"[{target.ip}]" if ":" in target.ip else target.ip
-        if target.port not in (80, 443):
-            netloc_ip = f"{netloc_ip}:{target.port}"
-        pinned = urlunparse((parsed.scheme, netloc_ip, parsed.path or "/", parsed.params, parsed.query, ""))
-
-        request = urllib.request.Request(
-            pinned,
-            headers={"User-Agent": user_agent, "Host": target.hostname, "Accept": "text/html,text/plain"},
-        )
-
-        opener = urllib.request.build_opener(_NoRedirect())
+        conn = _connect(target, parsed.scheme, timeout)
         try:
-            response = opener.open(request, timeout=timeout)
-        except urllib.error.HTTPError as exc:
-            if exc.code in (301, 302, 303, 307, 308):
-                location = exc.headers.get("Location")
+            conn.request("GET", path, headers={
+                "User-Agent": user_agent,
+                "Accept": "text/html,application/xhtml+xml,text/plain;q=0.9,*/*;q=0.1",
+                "Accept-Language": "en-US,en;q=0.9",
+            })
+            response = conn.getresponse()
+
+            if response.status in (301, 302, 303, 307, 308):
+                location = response.headers.get("Location")
                 if not location:
-                    raise BlockedURLError("redirect without a Location header") from None
+                    raise BlockedURLError("redirect without a Location header")
                 current = urllib.parse.urljoin(current, location)
                 continue
-            raise
 
-        with response:
+            if response.status >= 400:
+                raise urllib.error.HTTPError(current, response.status, response.reason or "", response.headers, None)
+
             content_type = (response.headers.get_content_type() or "").lower()
             if content_type and content_type not in ALLOWED_CONTENT_TYPES:
                 raise BlockedURLError(f"unsupported content type {content_type!r}")
             raw = response.read(max_bytes)
             charset = response.headers.get_content_charset() or "utf-8"
+        finally:
+            conn.close()
 
         try:
             return raw.decode(charset, errors="replace"), current
@@ -167,11 +196,3 @@ def fetch_text(url: str, *, max_bytes: int, timeout: float, user_agent: str) -> 
             return raw.decode("utf-8", errors="replace"), current
 
     raise BlockedURLError(f"too many redirects (more than {MAX_REDIRECTS})")
-
-
-class _NoRedirect(urllib.request.HTTPRedirectHandler):
-    """Turns redirects into HTTPError so the caller can validate each hop."""
-
-    def redirect_request(self, req, fp, code, msg, headers, newurl):  # type: ignore[no-untyped-def]
-        return None
-

@@ -93,8 +93,14 @@ describe('tool availability', () => {
   });
 
   it('turns on as soon as the key or URL exists', () => {
-    const t = byName({ apiKeys: { serper: FAKE_B, firecrawl: FAKE_A, github: FAKE_A }, searxngUrl: 'http://localhost:8888' });
+    const t = byName({ apiKeys: { serper: FAKE_B, firecrawl: FAKE_A, github: FAKE_A }, searxngUrl: 'http://localhost:8888', folder: true });
     expect(Object.values(t).every(s => s.on)).toBe(true);
+  });
+
+  it('keeps the linked-folder tools off until a project has a folder', () => {
+    const t = byName({ apiKeys: {} });
+    expect(t.list_project_files).toMatchObject({ on: false, needs: 'a linked project folder' });
+    expect(t.read_project_file).toMatchObject({ on: false, needs: 'a linked project folder' });
   });
 
   it('covers every tool in the registry, so adding a tool forces a label here', () => {

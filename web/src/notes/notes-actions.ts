@@ -146,3 +146,7 @@ export async function setCoverPosition(id: string, posY: number): Promise<void> 
 export async function setPageTags(id: string, tags: string[]): Promise<void> {
   await guarded('change the tags', () => patchNote(id, { tags }));
 }
+
+export async function setNotePinned(id: string, pinned: boolean): Promise<void> {
+  await guarded('pin the note', () => patchNote(id, { pinned }));
+}

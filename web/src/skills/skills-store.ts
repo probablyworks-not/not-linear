@@ -15,6 +15,8 @@ interface SkillsState extends SkillsData {
   /** Edits a built-in (stores an override) or replaces a custom skill. Debounced: this is typed text. */
   save(name: string, patch: Partial<Skill>): void;
   create(skill: Partial<Skill>): string;
+  /** Renames a custom skill to a slug of `next`. Built-ins keep their name. Returns the new name, or null if refused (blank, taken, built-in). */
+  rename(name: string, next: string): string | null;
   /** Clears a built-in's override; deletes a custom skill. */
   remove(name: string): void;
   setEnabled(name: string, on: boolean): void;
@@ -63,6 +65,19 @@ export const useSkillsStore = create<SkillsState>((set, get) => ({
     set({ custom: [...get().custom, skill] });
     void saveCustom(get().custom);
     return name;
+  },
+
+  rename(name, next) {
+    const slug = slugify(next);
+    const { custom, meta } = get();
+    if (!slug || slug === name || !custom.some(c => c.name === name)) return null;
+    if ([...BUILTIN_SKILLS, ...custom].some(s => s.name === slug)) return null;
+    const swap = (list: string[]): string[] => list.map(n => (n === name ? slug : n));
+    const nextMeta = { ...meta, disabled: swap(meta.disabled), pinned: swap(meta.pinned) };
+    set({ custom: custom.map(c => (c.name === name ? { ...c, name: slug } : c)), meta: nextMeta });
+    void saveCustom(get().custom);
+    void saveMeta(nextMeta);
+    return slug;
   },
 
   remove(name) {

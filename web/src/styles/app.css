@@ -10,6 +10,8 @@
 
 @layer base {
   html, body, #root { height: 100%; }
+  /* Our own swipe-back handles the gesture; stop the browser leaving the app on it. */
+  html, body { overscroll-behavior-x: none; }
   body { @apply bg-bg text-text font-sans text-base; margin: 0; -webkit-font-smoothing: antialiased; }
   ::selection { background: var(--accent-soft); color: var(--text); }
 }
@@ -92,10 +94,23 @@ html[data-theme='light'] {
   --bn-colors-side-menu: var(--text-3);
   --bn-font-family: inherit;
 }
+/* BlockNote's own stylesheet hardcodes `Inter, SF Pro Display, …` on .bn-default-styles and
+   `monospace` on inline code — not via --bn-font-family, so mapping that variable is not enough
+   and note text came out in a different typeface from the rest of the app. Put the app's tokens
+   back, here rather than per-block, so every block type (including ones added later) matches. */
+.nl-editor .bn-default-styles,
+.nl-editor .bn-block-content,
+.nl-editor .bn-inline-content { font-family: var(--font); }
+.nl-editor .bn-inline-content code,
+.nl-editor pre, .nl-editor code { font-family: var(--mono); }
+
 .nl-editor [data-color='red'] { color: var(--tx-red); }
 .nl-editor [data-color='orange'] { color: var(--tx-orange); }
 .nl-editor [data-color='green'] { color: var(--tx-green); }
 .nl-editor [data-color='blue'] { color: var(--tx-blue); }
+/* A link in a note reads the same as one in a reply: hue, underline, italics. */
+.nl-editor a { color: var(--link); font-style: italic; text-decoration: underline; text-underline-offset: 2px; transition: color 120ms ease; }
+.nl-editor a:hover { color: var(--link-hover); }
 .nl-editor mark { background: var(--hl-yellow); color: inherit; border-radius: 2px; padding: 0 2px; }
 .nl-editor mark[data-c='blue'] { background: var(--hl-blue); }
 .nl-editor mark[data-c='green'] { background: var(--hl-green); }
@@ -200,3 +215,6 @@ html[data-theme='light'] .nl-bento-item:hover { filter: brightness(0.98); }
 }
 .nl-editor [data-content-type='checkListItem'] input[type='checkbox']:checked { background: var(--text); border-color: var(--text); }
 .nl-editor [data-content-type='checkListItem'] input[type='checkbox']:checked::after { content: '\2713'; color: var(--bg); font-size: 12px; line-height: 1; }
+
+/* Project screen: the striped placeholder an artifact shows until it has a real thumbnail. */
+.nl-stripe { background: repeating-linear-gradient(135deg, var(--sec-artifacts-soft) 0 6px, var(--surface-tint) 6px 12px); }

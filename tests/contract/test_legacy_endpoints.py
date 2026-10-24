@@ -26,6 +26,8 @@ TIMEOUT = 10
 ALL_ENDPOINTS = [
     "/__notlinear_pick_folder",
     "/__notlinear_scan_project",
+    "/__notlinear_list_dir",
+    "/__notlinear_read_file",
     "/__notlinear_link_preview",
     "/__notlinear_open_files",
     "/__notlinear_save_file",

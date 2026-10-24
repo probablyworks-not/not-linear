@@ -17,7 +17,9 @@ const LABEL: Record<ToolName, { label: string; needs: string | null }> = {
   github_search_code: { label: 'GitHub code search', needs: 'a GitHub token' },
   github_get_issue: { label: 'GitHub issue reader', needs: 'a GitHub token' },
   github_get_file: { label: 'GitHub file reader', needs: 'a GitHub token' },
-  create_note: { label: 'Save long answers as notes', needs: null },
+  list_project_files: { label: 'List linked project folder', needs: 'a linked project folder' },
+  read_project_file: { label: 'Read linked project files', needs: 'a linked project folder' },
+  create_note: { label: 'Save answers as notes when asked', needs: null },
 };
 
 export interface ToolStatus { name: ToolName; label: string; on: boolean; needs: string | null }

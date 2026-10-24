@@ -1,51 +1,126 @@
 import { test, expect, type Page } from '@playwright/test';
-import { mockClaude } from './helpers';
+import { mockClaude, openSettings } from './helpers';
 
-// P7: the Skills dialog in /web/. Skills live in their own db (notlinear-skills), so the
+// P7: the Skills tab in Settings. Skills live in their own db (notlinear-skills), so the
 // persistence test reloads and re-reads through the UI.
 
-async function openSkills(page: Page): Promise<void> {
-  await page.goto('/web/');
-  await page.getByRole('button', { name: 'Open left pane' }).click();
-  await page.getByRole('button', { name: 'Open settings' }).click();
-  await page.getByRole('button', { name: 'Browse / edit skills' }).click();
-  await expect(page.getByRole('dialog', { name: 'Skills' })).toBeVisible();
-}
-const modal = (page: Page) => page.getByRole('dialog', { name: 'Skills' });
-const row = (page: Page, name: string) => modal(page).locator(`[data-skill="${name}"]`);
+const card = (page: Page, name: string) => page.locator(`[data-skill="${name}"]`);
+const detail = (page: Page, name: string) => page.getByRole('region', { name: `Skill ${name}` });
+const open = async (page: Page, name: string) => { await card(page, name).getByRole('button', { name: `Open ${name}` }).click(); };
 
-test.describe('Skills dialog', () => {
-  test('lists the library and the probe shows which skills would fire', async ({ page }) => {
-    await openSkills(page);
-    await expect(row(page, 'pre-mortem')).toBeVisible();
-    await modal(page).getByLabel('Test a message').fill('Run a pre-mortem on our launch: imagine it failed');
-    await expect(modal(page).getByTestId('skills-preview')).toContainText('pre-mortem');
+test.describe('Skills tab', () => {
+  test('lists the library as cards and the probe shows which skills would fire', async ({ page }) => {
+    await openSettings(page, 'Skills');
+    await expect(card(page, 'pre-mortem')).toBeVisible();
+    await page.getByLabel('Test a message').fill('Run a pre-mortem on our launch: imagine it failed');
+    await expect(page.getByTestId('skills-preview')).toContainText('pre-mortem');
   });
 
-  test('edits, adds and pins persist across a reload', async ({ page }) => {
-    await openSkills(page);
-    await row(page, 'steelman').getByRole('button', { name: /steelman/ }).first().click();
-    await row(page, 'steelman').getByLabel('Keywords: comma-separated trigger terms').fill('zebra, steelman');
-    await modal(page).getByRole('button', { name: 'New skill' }).click();
-    await row(page, 'new-skill').getByLabel('Instructions: sent to the model').fill('Always answer in haiku.');
-    await row(page, 'pre-mortem').getByRole('button', { name: 'Pin pre-mortem' }).click();
+  test('clicking the toggle does not open the detail; clicking the card does; Esc closes the detail first, then Settings', async ({ page }) => {
+    await openSettings(page, 'Skills');
+    await page.getByLabel('Enable steelman').click();
+    await expect(card(page, 'steelman')).toHaveAttribute('data-enabled', 'false');
+    await expect(detail(page, 'steelman')).toHaveCount(0);
+    await open(page, 'steelman');
+    await expect(detail(page, 'steelman')).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(detail(page, 'steelman')).toHaveCount(0);
+    await expect(page.getByRole('dialog', { name: 'Settings' })).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(page.getByRole('dialog', { name: 'Settings' })).toHaveCount(0);
+  });
+
+  test('edits, a new skill and a pin persist across a reload', async ({ page }) => {
+    await openSettings(page, 'Skills');
+    await open(page, 'steelman');
+    const kw = page.getByLabel('Add keyword');
+    await kw.fill('zebra');
+    await kw.press('Enter');
+    await expect(detail(page, 'steelman')).toContainText('zebra');
+    await page.getByRole('button', { name: 'All skills' }).click();
+
+    await page.getByRole('button', { name: 'New skill' }).click();
+    await expect(detail(page, 'new-skill')).toBeVisible();
+    await page.getByLabel('Instructions', { exact: true }).fill('Always answer in haiku.');
+    await page.getByRole('button', { name: 'All skills' }).click();
+
+    await open(page, 'pre-mortem');
+    await page.getByRole('switch', { name: 'Pinned' }).click();
     await page.waitForTimeout(400); // 200ms debounce
-    await page.reload();
-    await page.getByRole('button', { name: 'Open left pane' }).click();
-    await page.getByRole('button', { name: 'Open settings' }).click();
-    await page.getByRole('button', { name: 'Browse / edit skills' }).click();
-    await expect(row(page, 'steelman')).toContainText('Edited');
-    await expect(row(page, 'new-skill')).toContainText('Custom');
-    await expect(row(page, 'pre-mortem').getByRole('button', { name: 'Unpin pre-mortem' })).toBeVisible();
-    await modal(page).getByLabel('Test a message').fill('zebra');
-    await expect(modal(page).getByTestId('skills-preview')).toContainText('steelman');
+    await openSettings(page, 'Skills'); // reloads
+    await expect(card(page, 'steelman')).toContainText('Edited');
+    await expect(card(page, 'new-skill')).toContainText('Custom');
+    await expect(card(page, 'pre-mortem')).toContainText('Always on');
+    await page.getByLabel('Test a message').fill('zebra');
+    await expect(page.getByTestId('skills-preview')).toContainText('steelman');
+  });
+
+  test('a custom skill can be renamed (slug, unique); blank and duplicate names are refused', async ({ page }) => {
+    await openSettings(page, 'Skills');
+    await page.getByRole('button', { name: 'New skill' }).click();
+    const name = page.getByLabel('Skill name');
+    await name.fill('My Cool Skill');
+    await name.press('Enter');
+    await expect(detail(page, 'my-cool-skill')).toBeVisible();
+    await name.fill('pre-mortem'); // taken by a built-in
+    await name.press('Enter');
+    await expect(page.getByText('Skill names must be unique and not empty')).toBeVisible();
+    await expect(name).toHaveValue('my-cool-skill');
+    await name.fill('   ');
+    await name.press('Enter');
+    await expect(name).toHaveValue('my-cool-skill');
+  });
+
+  test('a built-in skill name is read-only and it cannot be deleted', async ({ page }) => {
+    await openSettings(page, 'Skills');
+    await open(page, 'steelman');
+    await expect(page.getByLabel('Skill name')).toHaveAttribute('readonly', '');
+    await expect(page.getByRole('button', { name: 'Delete skill' })).toHaveCount(0);
+  });
+
+  test('the instructions box shows live line and character counts; priority never goes below 0', async ({ page }) => {
+    await openSettings(page, 'Skills');
+    await page.getByRole('button', { name: 'New skill' }).click();
+    await page.getByLabel('Instructions', { exact: true }).fill('a\nbb\nccc');
+    await expect(page.getByTestId('skill-stats')).toHaveText('3 lines · 8 chars');
+    await expect(page.getByRole('button', { name: 'Lower priority' })).toBeDisabled();
+    await page.getByRole('button', { name: 'Raise priority' }).click();
+    await expect(page.getByTestId('skill-priority')).toHaveText('1');
+  });
+
+  test('deleting a custom skill asks first, returns to the list, and the card is gone', async ({ page }) => {
+    await openSettings(page, 'Skills');
+    await page.getByRole('button', { name: 'New skill' }).click();
+    await page.getByRole('button', { name: 'Delete skill' }).click();
+    await expect(page.getByRole('alertdialog').getByRole('heading')).toHaveText('Delete skill?');
+    await page.getByRole('alertdialog').getByRole('button', { name: 'Delete skill' }).click();
+    await expect(detail(page, 'new-skill')).toHaveCount(0);
+    await expect(card(page, 'new-skill')).toHaveCount(0);
+  });
+
+  test('search with no match shows an empty state that can be cleared', async ({ page }) => {
+    await openSettings(page, 'Skills');
+    await page.getByLabel('Search skills').fill('zzzz-no-such-skill');
+    await expect(page.getByTestId('empty-state')).toContainText('No skills match');
+    await page.getByRole('button', { name: 'Clear search' }).click();
+    await expect(card(page, 'pre-mortem')).toBeVisible();
   });
 
   test('a disabled skill never fires', async ({ page }) => {
-    await openSkills(page);
-    await row(page, 'steelman').getByLabel('Enable steelman').uncheck();
-    await modal(page).getByLabel('Test a message').fill('steelman the opposing argument');
-    await expect(modal(page).getByTestId('skills-preview')).not.toContainText('steelman ·');
+    await openSettings(page, 'Skills');
+    await page.getByLabel('Enable steelman').click();
+    await page.getByLabel('Test a message').fill('steelman the opposing argument');
+    await expect(page.getByTestId('skills-preview')).not.toContainText('steelman ·');
+  });
+
+  test('Import rejects a file that is not a SKILL.md and accepts one that is', async ({ page }) => {
+    await openSettings(page, 'Skills');
+    const input = page.getByLabel('Import skill file');
+    await input.setInputFiles({ name: 'bad.md', mimeType: 'text/markdown', buffer: Buffer.from('just text') });
+    await expect(page.getByText('Not a SKILL.md')).toBeVisible();
+    await input.setInputFiles({ name: 'ok.md', mimeType: 'text/markdown', buffer: Buffer.from('---\nname: imported-one\ndescription: From a file.\n---\n# Hi\n') });
+    await expect(page.getByText('Imported "imported-one"')).toBeVisible();
+    await expect(detail(page, 'imported-one')).toBeVisible();
   });
 });
 
@@ -72,6 +147,27 @@ test.describe('/ skill picker in the composer', () => {
     await expect(box).toHaveValue('');
     await box.press('Backspace');
     await expect(page.getByTestId('picked-skills')).toBeHidden();
+  });
+
+  test('the list stays open after a pick, so several skills can be added in one go', async ({ page }) => {
+    await newChat(page);
+    const box = page.getByRole('textbox', { name: 'Message' });
+    await box.fill('/pre-mor');
+    await box.press('Enter');
+    await expect(page.getByTestId('picked-skills')).toContainText('pre-mortem');
+    // Still open, and the picked one is gone from the list.
+    await expect(page.getByRole('listbox', { name: 'Skills' })).toBeVisible();
+    await expect(page.locator('[data-skill-option="pre-mortem"]')).toHaveCount(0);
+    // Typing filters again without retyping "/", and Enter adds a second chip.
+    await box.press('d');
+    await box.press('e');
+    await box.press('v');
+    await expect(page.locator('[data-skill-option]').first()).toBeVisible();
+    await box.press('Enter');
+    await expect(page.getByTestId('picked-skills').locator('span', { has: page.locator('button') })).toHaveCount(2);
+    await expect(box).toHaveValue('');
+    await box.press('Escape');
+    await expect(page.getByRole('listbox', { name: 'Skills' })).toBeHidden();
   });
 
   test('a picked skill reaches the system prompt of that message only', async ({ page }) => {
@@ -126,13 +222,11 @@ test.describe('/ skill picker in the composer', () => {
 });
 
 test('GitHub can be connected in Settings and turns the GitHub tools on', async ({ page }) => {
-  await page.goto('/web/');
-  await page.getByRole('button', { name: 'Open left pane' }).click();
-  await page.getByRole('button', { name: 'Open settings' }).click();
+  await openSettings(page, 'Models');
   await expect(page.getByText('GitHub repo search')).toBeVisible();
   await expect(page.getByText('needs a GitHub token').first()).toBeVisible();
-  await page.getByLabel('Provider').selectOption('github');
-  await page.getByLabel('API key').fill('ghp_TESTONLY_e2e_aaaaaaaaaaaa');
-  await page.getByLabel('API key').press('Enter');
+  await page.locator('[data-provider="github"]').getByRole('button', { name: /settings/ }).click();
+  await page.getByLabel('GitHub API key').fill('ghp_TESTONLY_e2e_aaaaaaaaaaaa');
+  await page.getByLabel('GitHub API key').press('Enter');
   await expect(page.getByText('needs a GitHub token')).toHaveCount(0);
 });

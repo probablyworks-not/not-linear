@@ -7,8 +7,10 @@ import { NoteGlyph } from './NoteGlyph';
 import { MoveToProjectButton } from '../projects/MoveToProjectButton';
 import { useAppStore } from '../state/app-store';
 import { deleteAllPages, deletePage, duplicatePage, moveNoteToProject, movePage, newPage, toggleExpanded } from './notes-actions';
-import { canReparent, kidsOf } from './notes-ops';
+import { canReparent, collectIds, kidsOf } from './notes-ops';
 import { useNotesStore } from './notes-store';
+import { ShowMoreButton } from '../shell/ShowMoreButton';
+import { SIDEBAR_VISIBLE, byRecency } from '../shell/recency';
 import { openNote, openNotesIndex } from './open-note';
 
 const ICON_BTN = 'grid h-5 w-5 flex-none place-items-center rounded text-text-3 hover:bg-bg-3 hover:text-text';
@@ -82,7 +84,16 @@ export function NotesSidebarSection() {
 
   const projects = useAppStore(s => s.projects);
   // A note filed in a project is reached through the project, as chats are.
-  const roots = kidsOf(notes, null).filter(n => !(typeof n.projectId === 'string' && projects[n.projectId]));
+  const [showAll, setShowAll] = useState(false);
+  const byId = new Map(notes.map(n => [n.id, n]));
+  // A top-level page is as recent as the latest edit anywhere in its subtree.
+  const touchedAt = (id: string): number =>
+    Math.max(...collectIds(notes, id).map(i => { const u = byId.get(i)?.updatedAt; return typeof u === 'number' ? u : 0; }));
+  const roots = byRecency(
+    kidsOf(notes, null).filter(n => !(typeof n.projectId === 'string' && projects[n.projectId])),
+    n => touchedAt(n.id),
+  );
+  const shown = showAll ? roots : roots.slice(0, SIDEBAR_VISIBLE);
   return (
     <SidebarSection
       section="notes" label="Notes"
@@ -105,9 +116,12 @@ export function NotesSidebarSection() {
           void movePage(moving, null);
         }}
       >
-        {roots.map(n => <NoteRow key={n.id} id={n.id} depth={0} />)}
+        {shown.map(n => <NoteRow key={n.id} id={n.id} depth={0} />)}
         {roots.length === 0 && <p className="px-2 py-1 text-xs text-text-3">No notes yet.</p>}
       </div>
+      {roots.length > SIDEBAR_VISIBLE && (
+        <ShowMoreButton expanded={showAll} hidden={roots.length - SIDEBAR_VISIBLE} onToggle={() => setShowAll(v => !v)} />
+      )}
     </SidebarSection>
   );
 }

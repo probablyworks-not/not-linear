@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { clsx } from 'clsx';
 import { FileText, MessageSquare, PanelLeftClose, Pencil, Search, Settings, Trash2 } from 'lucide-react';
 import { useAppStore } from '../state/app-store';
@@ -12,6 +12,8 @@ import { ProjectsSidebarSection } from '../projects/ProjectsSidebarSection';
 import { RecentBranches } from '../branch/RecentBranches';
 import { NotesSidebarSection } from '../notes/NotesSidebarSection';
 import { SidebarSection } from './SidebarSection';
+import { ShowMoreButton } from './ShowMoreButton';
+import { SIDEBAR_VISIBLE, byRecency, threadTouchedAt } from './recency';
 import { GlyphButton } from '../ui/GlyphButton';
 import { THREAD_ICON_CYCLE } from '../lib/mind-garden';
 
@@ -29,13 +31,19 @@ export function Sidebar() {
   const name = useAppStore(s => s.prefs.name);
   const projects = useAppStore(s => s.projects);
 
+  const [showAll, setShowAll] = useState(false);
+  // A chat filed in a project is reached through the project, not the flat list (app.js:5348).
   const rows = useMemo(
-    () => visibleThreads({
-      threads: threadState, dynamic, deletedThreads: deleted,
-      current: MAIN_THREAD_ID, chatCount: 1, projects: {}, projectCount: 1, prefs: {},
-    }),
-    [threadState, dynamic, deleted],
+    () => byRecency(
+      visibleThreads({
+        threads: threadState, dynamic, deletedThreads: deleted,
+        current: MAIN_THREAD_ID, chatCount: 1, projects: {}, projectCount: 1, prefs: {},
+      }).filter(r => !(flags.projects && r.projectId && projects[r.projectId])),
+      r => threadTouchedAt(threadState[r.id]),
+    ),
+    [threadState, dynamic, deleted, projects],
   );
+  const shown = showAll ? rows : rows.slice(0, SIDEBAR_VISIBLE);
 
   useEscLayer('sidebar', ESC_PRIORITY.sidebar, open, () => setOpen(false));
   const displayName = name || 'You';
@@ -92,8 +100,7 @@ export function Sidebar() {
 
           <SidebarSection section="threads" label="Threads">
           <div role="list">
-            {/* A chat filed in a project is reached through the project, not the flat list (app.js:5348). */}
-            {rows.filter(r => !(flags.projects && r.projectId && projects[r.projectId])).map((row, rowIndex) => {
+            {shown.map((row, rowIndex) => {
               const active = row.id === activeTabId;
               return (
                 <div
@@ -134,6 +141,9 @@ export function Sidebar() {
               );
             })}
           </div>
+          {rows.length > SIDEBAR_VISIBLE && (
+            <ShowMoreButton expanded={showAll} hidden={rows.length - SIDEBAR_VISIBLE} onToggle={() => setShowAll(v => !v)} />
+          )}
           </SidebarSection>
 
           {flags.notesV2 && <NotesSidebarSection />}

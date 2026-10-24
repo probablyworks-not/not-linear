@@ -2,6 +2,7 @@ import { useAppStore } from '../state/app-store';
 import { backupRecord, createNoteFrom } from '../notes/notes-repo';
 import { useNotesStore } from '../notes/notes-store';
 import { markdownToBlocks } from '../notes/markdown-to-blocks';
+import { saveToArtifacts } from '../projects/extras/save-to-artifacts';
 
 // The create_note tool's runner. A document the model wrote for keeping is filed in Notes (own db,
 // ADR-007), under the chat's project, and the model is told it worked so it answers in a sentence
@@ -32,6 +33,10 @@ export async function runCreateNote(
   try {
     const note = await createNoteFrom({ title, blocks: markdownToBlocks(content), emoji: DEFAULT_ICON, projectId: typeof pid === 'string' ? pid : null });
     await useNotesStore.getState().load();
+    // A document the AI wrote also lands in the project's artifacts. Best effort: the note is already saved.
+    if (typeof pid === 'string' && pid) {
+      await saveToArtifacts({ projectId: pid, title, type: 'MD', content, chatId: ctx.threadId, source: 'ai-note', noteId: note.id, dedupeKey: `note:${note.id}` }, { quiet: true });
+    }
     ctx.onCreated({ id: note.id, title });
     return `Saved as a note titled "${title}". The user can open it from the card shown under your reply. Reply in one to three sentences about what it covers; do not repeat its content.`;
   } catch (e) {

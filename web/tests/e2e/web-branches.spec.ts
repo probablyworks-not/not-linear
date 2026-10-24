@@ -621,7 +621,7 @@ test.describe('model and mode pickers', () => {
     expect(prefs.thinking).toBe(true);
   });
 
-  test('the mode chip changes the system prompt and is saved; "New / manage modes" opens the editor', async ({ page }) => {
+  test('the mode chip changes the system prompt and is saved; "New / manage modes" opens the Modes settings', async ({ page }) => {
     const bodies = await mockReplies(page) as Array<Body & { model?: string; system?: string }>;
     await newChat(page);
     const chip = page.locator('.mode-chip');
@@ -638,7 +638,8 @@ test.describe('model and mode pickers', () => {
 
     await chip.click();
     await page.getByRole('menuitem', { name: /New \/ manage modes/ }).click();
-    await expect(page.getByRole('dialog', { name: 'Modes' })).toBeVisible();
+    await expect(page.getByRole('dialog', { name: 'Settings' })).toBeVisible();
+    await expect(page.getByRole('tab', { name: /^Modes/ })).toHaveAttribute('aria-selected', 'true');
   });
 
   test('a branch has its OWN model: changing it leaves the main chat alone and is what that branch is sent to', async ({ page }) => {

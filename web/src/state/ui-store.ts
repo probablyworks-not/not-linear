@@ -18,11 +18,15 @@ export interface ConfirmRequest {
 
 interface PendingConfirm extends ConfirmRequest { resolve(ok: boolean): void }
 
+export type SettingsTab = 'general' | 'models' | 'skills' | 'integrations' | 'modes' | 'updates' | 'logs';
+
+export type ProjectView = 'overview' | 'notes' | 'files' | 'artifacts';
+
 export interface UiState {
   sidebarOpen: boolean;
   settingsOpen: boolean;
-  modesOpen: boolean;
-  skillsOpen: boolean;
+  /** The Settings page tab showing while it is open. */
+  settingsTab: SettingsTab;
   searchOpen: boolean;
   shortcutsOpen: boolean;
   highlightsOpen: boolean;
@@ -30,13 +34,19 @@ export interface UiState {
   canvasOpen: boolean;
   ctxOpen: boolean;
   imagePreview: { src: string; name: string } | null;
+  /** An html/svg file from a reply, open in the sandboxed preview. */
+  filePreview: { title: string; kind: 'html' | 'svg'; content: string } | null;
   projectsViewOpen: boolean;
   /** The project whose panel is open, if any. */
   activeProjectId: string | null;
+  /** Which part of the project screen is showing: the overview or one of its drill-ins. */
+  projectView: ProjectView;
   /** Set when the panel opens for a just-created project, so its name is selected for typing. */
   selectProjectName: boolean;
   tabs: Tab[];
   activeTabId: string | null;
+  /** Tabs left behind by activating another, newest last. In memory only: a reload starts fresh. */
+  tabHistory: string[];
   confirm: PendingConfirm | null;
   /** The note open beside the chat, if any. */
   notePaneId: string | null;
@@ -47,8 +57,9 @@ export interface UiState {
 export interface UiActions {
   setSidebarOpen(open: boolean): void;
   setSettingsOpen(open: boolean): void;
-  setModesOpen(open: boolean): void;
-  setSkillsOpen(open: boolean): void;
+  setSettingsTab(tab: SettingsTab): void;
+  /** Opens Settings, on `tab` when given (otherwise on the tab it was last left on). */
+  openSettings(tab?: SettingsTab): void;
   setSearchOpen(open: boolean): void;
   setShortcutsOpen(open: boolean): void;
   setHighlightsOpen(open: boolean): void;
@@ -56,13 +67,17 @@ export interface UiActions {
   setCanvasOpen(open: boolean): void;
   setCtxOpen(open: boolean): void;
   setImagePreview(image: { src: string; name: string } | null): void;
+  setFilePreview(file: { title: string; kind: 'html' | 'svg'; content: string } | null): void;
   setProjectsViewOpen(open: boolean): void;
   setActiveProject(pid: string | null, opts?: { selectName?: boolean }): void;
+  setProjectView(view: ProjectView): void;
   /** Reads nl_tabs_v1; call after the app store has hydrated. */
   restoreTabs(deleted: ReadonlySet<string>, fallbackId: string): void;
   /** Opens `id` as a tab (if new) and activates it. */
   activateTab(id: string): void;
   closeTab(id: string): string | null;
+  /** Re-activates the tab last left (skipping closed ones) and returns its id, or null when there is none. */
+  goBackTab(): string | null;
   /** Drops tabs for threads that were deleted, activating a neighbour. */
   dropTabs(ids: string[]): void;
   /** Resolves true on confirm, false on cancel/Esc/outside click. */
@@ -74,6 +89,8 @@ export interface UiActions {
   setNotePaneWidth(width: number, persist?: boolean): void;
 }
 
+const HISTORY_LIMIT = 50;
+
 function persistTabs(tabs: Tab[], active: string | null): void {
   try { localStorage.setItem(TAB_STORAGE_KEY, serializeTabs(tabs, active)); } catch { /* storage may be blocked; tabs are a convenience */ }
 }
@@ -81,8 +98,7 @@ function persistTabs(tabs: Tab[], active: string | null): void {
 export const useUiStore = create<UiState & UiActions>((set, get) => ({
   sidebarOpen: false, // legacy ships the sidebar collapsed
   settingsOpen: false,
-  modesOpen: false,
-  skillsOpen: false,
+  settingsTab: 'general',
   searchOpen: false,
   shortcutsOpen: false,
   highlightsOpen: false,
@@ -90,11 +106,14 @@ export const useUiStore = create<UiState & UiActions>((set, get) => ({
   canvasOpen: false,
   ctxOpen: false,
   imagePreview: null,
+  filePreview: null,
   projectsViewOpen: false,
   activeProjectId: null,
+  projectView: 'overview',
   selectProjectName: false,
   tabs: [],
   activeTabId: null,
+  tabHistory: [],
   confirm: null,
   notePaneId: null,
   notePaneWidth: readPaneWidth(),
@@ -107,8 +126,8 @@ export const useUiStore = create<UiState & UiActions>((set, get) => ({
   },
   setSidebarOpen(open) { set({ sidebarOpen: open }); },
   setSettingsOpen(open) { set({ settingsOpen: open }); },
-  setModesOpen(open) { set({ modesOpen: open }); },
-  setSkillsOpen(open) { set({ skillsOpen: open }); },
+  setSettingsTab(tab) { set({ settingsTab: tab }); },
+  openSettings(tab) { set(tab ? { settingsOpen: true, settingsTab: tab } : { settingsOpen: true }); },
   setSearchOpen(open) { set({ searchOpen: open }); },
   setShortcutsOpen(open) { set({ shortcutsOpen: open }); },
   setHighlightsOpen(open) { set({ highlightsOpen: open }); },
@@ -116,8 +135,10 @@ export const useUiStore = create<UiState & UiActions>((set, get) => ({
   setCanvasOpen(open) { set({ canvasOpen: open }); },
   setCtxOpen(open) { set({ ctxOpen: open }); },
   setImagePreview(image) { set({ imagePreview: image }); },
+  setFilePreview(file) { set({ filePreview: file }); },
   setProjectsViewOpen(open) { set({ projectsViewOpen: open }); },
-  setActiveProject(pid, opts) { set({ activeProjectId: pid, selectProjectName: !!opts?.selectName }); },
+  setActiveProject(pid, opts) { set({ activeProjectId: pid, projectView: 'overview', selectProjectName: !!opts?.selectName }); },
+  setProjectView(view) { set({ projectView: view }); },
 
   restoreTabs(deleted, fallbackId) {
     let raw: string | null = null;
@@ -132,8 +153,23 @@ export const useUiStore = create<UiState & UiActions>((set, get) => ({
   activateTab(id) {
     const { tabs } = get();
     const next = tabs.some(t => t.id === id) ? tabs : [...tabs, { id }];
-    set({ tabs: next, activeTabId: id });
+    const { activeTabId, tabHistory } = get();
+    const history = activeTabId && activeTabId !== id ? [...tabHistory, activeTabId].slice(-HISTORY_LIMIT) : tabHistory;
+    set({ tabs: next, activeTabId: id, tabHistory: history });
     persistTabs(next, id);
+  },
+
+  goBackTab() {
+    const { tabs, tabHistory, activeTabId } = get();
+    const history = [...tabHistory];
+    let target: string | undefined;
+    while ((target = history.pop()) !== undefined) {
+      if (target !== activeTabId && tabs.some(t => t.id === target)) break;
+    }
+    if (target === undefined) { set({ tabHistory: [] }); return null; }
+    set({ activeTabId: target, tabHistory: history });
+    persistTabs(tabs, target);
+    return target;
   },
 
   closeTab(id) {

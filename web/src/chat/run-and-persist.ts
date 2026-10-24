@@ -8,7 +8,7 @@ import { geminiProvider, openaiProvider } from '../providers/openai';
 import type { TurnSnapshot } from '../db/turn-ops';
 import { planModel } from './models';
 import { runTurn, type RunTurnDeps } from './run-turn';
-import { availableTools } from '../providers/tool-specs';
+import { availableTools, FOLDER_TOOL_HINT } from '../providers/tool-specs';
 import { executeTool } from '../tools/tool-runners';
 import { runCreateNote, type NoteRef } from './note-tool';
 import { toolEnv } from '../tools/env';
@@ -17,7 +17,7 @@ import { useAppStore } from '../state/app-store';
 import type { ChatMessage, ProviderId } from '../providers/types';
 import type { Attachment } from '../attachments/read-files';
 import { userBubbleInnerHTML, userContentFor } from './user-content';
-import { sourcesLabel } from './project-context';
+import { linkedFolderFor, sourcesLabel } from './project-context';
 import type { TurnUsage } from './usage';
 import { flags } from '../flags';
 import { selectForTurn } from '../skills/skills-store';
@@ -91,12 +91,16 @@ export interface TurnHost {
   /** The model preference that applies (a branch has its own). */
   modelPref(): string | undefined;
   systemPrompt(extraContext?: string): string;
+  /** A short project digest for the clarify pre-pass, which does not get the system prompt. */
+  clarifyBrief?(turn: Turn): string;
   /** Writes one snapshot of the turn into wherever this host keeps its conversation. */
   write(snap: TurnSnapshot): Promise<void>;
   register(controller: AbortController): void;
   clear(): void;
   /** Set on a main thread: the chat the model may file documents from as notes. Branch panels leave it out. */
   noteThreadId?: string;
+  /** The thread this turn belongs to (a branch's parent thread), used to find its project's linked folder. */
+  threadId?: string;
 }
 
 export function snapshotOf(turn: Turn, content: AiTurnContent | null, assistantText: string | null, usage?: TurnUsage): TurnSnapshot {
@@ -160,9 +164,11 @@ export async function runAndPersist(host: TurnHost, turn: Turn): Promise<void> {
   try {
     const env = toolEnv();
     const canFileNotes = flags.chatNotes && !!host.noteThreadId;
-    const tools = availableTools({ apiKeys: env.apiKeys, searxngUrl: env.searxngUrl, notes: canFileNotes });
+    // The linked folder is fixed here, from the thread's project; the model only names paths inside it.
+    const folderRoot = host.threadId ? linkedFolderFor(host.threadId) : '';
+    const tools = availableTools({ apiKeys: env.apiKeys, searxngUrl: env.searxngUrl, notes: canFileNotes, folder: !!folderRoot });
     const toolRunner = async (name: string, toolInput: Record<string, unknown>, signal: AbortSignal): Promise<string> => {
-      if (name !== 'create_note') return (executeTool as never as (n: string, i: Record<string, unknown>, s: AbortSignal) => Promise<string>)(name, toolInput, signal);
+      if (name !== 'create_note') return (executeTool as never as (n: string, i: Record<string, unknown>, s: AbortSignal, c: { folderRoot: string }) => Promise<string>)(name, toolInput, signal, { folderRoot });
       return runCreateNote(toolInput, {
         threadId: host.noteThreadId ?? key,
         onCreated: ref => { notes.push(ref); useChatStore.getState().patchLive(key, { notes: [...notes] }); },
@@ -175,7 +181,10 @@ export async function runAndPersist(host: TurnHost, turn: Turn): Promise<void> {
     // Questions before answers: ask whether the request is ambiguous, wait for the user, and anchor the reply on what they say.
     if (shouldClarify({ enabled: flags.clarify && getClarifyFirst(), userText: turn.userText, continueCount: turn.continueCount, noRetry: turn.noRetry, alreadyClarified: !!turn.clarified })) {
       useChatStore.getState().patchLive(key, { status: 'Understanding your request…' });
-      const questions = await runClarify({ plan, userText: turn.userText, history: turn.history, signal: controller.signal }, depsFactory());
+      const questions = await runClarify(
+        { plan, userText: turn.userText, history: turn.history, brief: host.clarifyBrief?.(turn), signal: controller.signal },
+        depsFactory(),
+      );
       if (controller.signal.aborted) { await fail('Response stopped before completion.', false, true); return; }
       if (questions.length) {
         useChatStore.getState().patchLive(key, { clarify: questions, status: null });
@@ -190,7 +199,7 @@ export async function runAndPersist(host: TurnHost, turn: Turn): Promise<void> {
       }
       useChatStore.getState().patchLive(key, { status: null });
     }
-    const extra = [turn.extraContext, renderSkillsBlock(picked), renderClarifyBlock(turn.clarified ?? [])].filter(Boolean).join('\n\n') || undefined;
+    const extra = [turn.extraContext, folderRoot ? FOLDER_TOOL_HINT : '', renderSkillsBlock(picked), renderClarifyBlock(turn.clarified ?? [])].filter(Boolean).join('\n\n') || undefined;
     const input = { messagesFor, systemPrompt: host.systemPrompt(extra), plan, signal: controller.signal, tools, toolRunner };
     for await (const { ev, plan: used } of runTurn(input, depsFactory())) {
       if (ev.t === 'delta') {

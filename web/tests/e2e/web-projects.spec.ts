@@ -68,8 +68,13 @@ const showSidebar = async (p: Page) => {
   if (closed) await p.getByRole('button', { name: 'Open left pane' }).click();
   await expect(sidebar(p)).not.toHaveClass(/invisible/);
 };
+/** Delete lives in the "…" menu of a project that has content; only a brand-new one shows it on the page. */
+async function deleteFromMenu(p: Page): Promise<void> {
+  await p.getByRole('button', { name: 'Project menu' }).click();
+  await p.getByRole('menuitem', { name: 'Delete project' }).click();
+}
 const grid = (p: Page) => p.getByRole('dialog', { name: 'Projects' });
-const panel = (p: Page) => p.getByRole('dialog').filter({ has: p.getByLabel('Project name') });
+const panel = (p: Page) => p.getByRole('dialog').filter({ has: p.getByTestId('project-title') });
 const cardNames = async (p: Page) => (await grid(p).locator('[data-pid]').locator('span.truncate').allInnerTexts()).map(s => s.trim());
 const cardMeta = async (p: Page) => (await grid(p).locator('[data-pid]').evaluateAll(els => els.map(e => (e.lastElementChild as HTMLElement).innerText.replace(/\s+/g, ' ').trim())));
 async function openGrid(p: Page): Promise<void> {
@@ -148,7 +153,7 @@ test.describe('project panel', () => {
     await page.keyboard.press('Escape');
     await expect(panel(page)).toHaveCount(0);
     await openPanel(page, 'Alpha lab');
-    await expect(panel(page)).toContainText('No chats yet — create one below.');
+    await expect(panel(page)).toContainText('Plant the first chat');
   });
 
   test('remove from project: persisted and the chat returns to Threads', async ({ page }) => {
@@ -181,7 +186,7 @@ test.describe('project panel', () => {
     await seed(page);
     await openWeb(page);
     await openPanel(page, 'Alpha lab');
-    await panel(page).getByRole('button', { name: 'New chat' }).click();
+    await panel(page).getByRole('button', { name: /^New chat/ }).first().click();
     await expect(page.getByText('New chat in project')).toBeVisible();
     await expect(panel(page)).toHaveCount(0);
     const row = await persisted(page);
@@ -218,7 +223,7 @@ test.describe('project panel', () => {
     await seed(page);
     await openWeb(page);
     await openPanel(page, 'Zeta research');
-    await panel(page).getByRole('button', { name: 'Delete project' }).click();
+    await deleteFromMenu(page);
     const confirm = page.getByRole('alertdialog');
     await expect(confirm.getByRole('heading')).toHaveText('Delete project?');
     await expect(confirm).toContainText('This removes the project "Zeta research". Its chats are kept and moved back to Threads.');
@@ -226,7 +231,7 @@ test.describe('project panel', () => {
     await expect(confirm).toHaveCount(0);
     await expect(panel(page)).toBeVisible();
 
-    await panel(page).getByRole('button', { name: 'Delete project' }).click();
+    await deleteFromMenu(page);
     await page.getByRole('alertdialog').getByRole('button', { name: 'Delete project' }).click();
     await expect(page.getByText('Project deleted')).toBeVisible();
     await expect(panel(page)).toHaveCount(0);

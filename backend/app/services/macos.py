@@ -127,6 +127,8 @@ def open_files(is_folder: bool = False) -> dict[str, Any]:
 # Conservative: no path separators, no NUL, bounded length. A save dialog's
 # default name is a name, not a path.
 SAFE_FILENAME = re.compile(r"^[^/\x00]{1,120}$")
+# What the Save dialog is allowed to write, and what it calls each kind in its prompt.
+SAVABLE_SUFFIXES = {".md": "Markdown", ".html": "HTML", ".svg": "SVG", ".txt": "text", ".json": "JSON"}
 
 
 def save_file(filename: str, content: str) -> dict[str, Any]:
@@ -138,19 +140,25 @@ def save_file(filename: str, content: str) -> dict[str, Any]:
     """
     if not SAFE_FILENAME.match(filename or ""):
         return {"ok": False, "error": "invalid filename"}
+    # The extension comes from what the caller asked to save (a reply is .md; a generated page is
+    # .html or .svg), never assumed — forcing ".md" wrote "page.html.md". Unknown or missing
+    # extension keeps the historical default.
+    suffix = Path(filename).suffix.lower()
+    ext = suffix if suffix in SAVABLE_SUFFIXES else ".md"
+    prompt = f"Save {SAVABLE_SUFFIXES[ext]} file"
     script = (
         "on run argv\n"
         "  return POSIX path of (choose file name "
-        'with prompt "Save Markdown file" default name (item 1 of argv))\n'
+        "with prompt (item 2 of argv) default name (item 1 of argv))\n"
         "end run"
     )
-    result = _run_osascript(script, args=[filename])
+    result = _run_osascript(script, args=[filename, prompt])
     if result.returncode != 0:
         return {"ok": False, "cancelled": True}
     save_path = result.stdout.strip()
     if not save_path:
         return {"ok": False, "cancelled": True}  # never write to an empty (cwd-relative) path
-    if not save_path.endswith(".md"):
-        save_path += ".md"
+    if not save_path.endswith(ext):
+        save_path += ext
     Path(save_path).write_text(content, encoding="utf-8")
     return {"ok": True, "path": save_path}

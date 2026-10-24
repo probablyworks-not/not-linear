@@ -20,7 +20,7 @@
  *     overridden below).
  */
 
-:root{
+:root, [data-preview-theme="dark"]{
   /* ---------- color tokens: default theme ("dark-mono") ---------- */
   /* Background surfaces, layered from base canvas (--bg) to raised
      surfaces (--surface, --surface-2) used for cards/panels/inputs. */
@@ -43,6 +43,10 @@
   --accent:#A0A0A0;
   --accent-2:#C8C8C8;
   --accent-soft:rgba(160,160,160,0.12);
+  /* Link color — the one hue allowed in body copy. Links are also underlined
+     and italic, so they stay recognisable where the hue is hard to see. */
+  --link:#7FB8E0;
+  --link-hover:#AED4EE;
   /* Branch color — identifies branch/thread UI (drawer, connector lines,
      branched-text highlight) distinctly from the general accent color. */
   --branch:#58A6FF;
@@ -120,7 +124,7 @@
    theme. Only tokens that actually change value for this theme are
    listed — anything not redefined here (e.g. --branch, --highlight,
    --font, --sidebar-w) falls through to the :root default. */
-html[data-theme="grey"]{
+html[data-theme="grey"], [data-preview-theme="grey"]{
   --bg:#1C1C1C;
   --bg-2:#232323;
   --bg-3:#2B2B2B;
@@ -134,6 +138,8 @@ html[data-theme="grey"]{
   --accent:#989898;
   --accent-2:#BABABA;
   --accent-soft:rgba(152,152,152,0.12);
+  --link:#7EB4DB;
+  --link-hover:#A6CDE9;
   --user-bub:#282828;
   --shadow-md:0 4px 20px rgba(0,0,0,0.45);
   --shadow-lg:0 12px 48px rgba(0,0,0,0.65);
@@ -155,7 +161,7 @@ html[data-theme="grey"]{
    text, and shadow/tint values re-tuned for a light background so they
    still read correctly (a shadow tuned for a near-black page looks wrong
    on white, hence the different rgba alpha values here vs. :root). */
-html[data-theme="light"]{
+html[data-theme="light"], [data-preview-theme="light"]{
   --bg:#F8F8F8;
   --bg-2:#F0F0F0;
   --bg-3:#E6E6E6;
@@ -169,6 +175,8 @@ html[data-theme="light"]{
   --accent:#555555;
   --accent-2:#333333;
   --accent-soft:rgba(80,80,80,0.08);
+  --link:#1B5E8C;
+  --link-hover:#0F4668;
   --user-bub:#EFEFEF;
   --shadow-md:0 4px 20px rgba(0,0,0,0.08);
   --shadow-lg:0 12px 48px rgba(0,0,0,0.14);
@@ -184,4 +192,18 @@ html[data-theme="light"]{
   --syn-function:#1B5E8C;
   --syn-tag:#B03A63;
   --syn-attr:#8A6D1C;
+}
+
+/* ---- Project screen section accents (Notes / AI artifacts / Files / Memory) ----
+   Each section has an accent plus a soft wash and a hairline of the same hue. Dark default first,
+   then the light and grey themes, where the hues are the design handoff's. */
+:root{
+  --sec-notes:#C9A24E; --sec-notes-soft:rgba(201,162,78,0.10); --sec-notes-line:rgba(201,162,78,0.26);
+  --sec-artifacts:#A58BE0; --sec-artifacts-soft:rgba(165,139,224,0.10); --sec-artifacts-line:rgba(165,139,224,0.26);
+  --sec-files:#5BB58E; --sec-files-soft:rgba(91,181,142,0.10); --sec-files-line:rgba(91,181,142,0.26);
+}
+html[data-theme="light"]{
+  --sec-notes:#B8862E; --sec-notes-soft:#FBF6EC; --sec-notes-line:#F0E4C8;
+  --sec-artifacts:#8161C9; --sec-artifacts-soft:#F7F6FB; --sec-artifacts-line:#C9C4DD;
+  --sec-files:#3E8E6A; --sec-files-soft:rgba(62,142,106,0.08); --sec-files-line:rgba(62,142,106,0.25);
 }

@@ -27,6 +27,8 @@ export interface ToolContext {
   searxngUrl?: string;
   /** The chat can file a long document as a note (main threads only). */
   notes?: boolean;
+  /** The chat's project has a linked folder the model may browse. */
+  folder?: boolean;
 }
 
 export interface ToolSpec {
@@ -123,7 +125,7 @@ export const TOOL_SPECS: readonly ToolSpec[] = [
   {
     name: 'create_note',
     description:
-      'Save a long, standalone document as a note in the user\'s Notes, in the same project as this chat, so they can read it again later in a side pane. Use it when the user asks for something meant to be kept and re-read (a report, plan, spec, research summary, comparison, study guide, checklist) or your answer would run past roughly 400 words of structured material. Do NOT use it for short answers, conversation, or code snippets. Write the whole document in markdown in `content`, without repeating the title as a heading. After the tool succeeds, reply in one to three sentences saying what the note covers; do not repeat its content in the chat.',
+      'Save a document as a note in the user\'s Notes, in the same project as this chat. Use it ONLY when the user explicitly asks for a note — they say "note", "save this as a note", "write it to my notes", "make a note of this", or otherwise ask for this answer to be filed in Notes. Nothing else justifies it: not a long answer, not a report, plan, spec, research summary, comparison or checklist, not structured markdown, not length of any kind. If the user did not ask for a note, write the full answer in the chat reply instead, however long it is. When in doubt, do not call this tool. Write the whole document in markdown in `content`, without repeating the title as a heading. After the tool succeeds, reply in one to three sentences saying what the note covers; do not repeat its content in the chat.',
     jsonSchema: {
       type: 'object',
       properties: {
@@ -134,8 +136,39 @@ export const TOOL_SPECS: readonly ToolSpec[] = [
     },
     available: (ctx) => Boolean(ctx.notes),
   },
+  ...folderSpecs(),
   ...githubSpecs(),
 ];
+
+/** The one line the model always gets when a folder is linked; the tree itself comes only from list_project_files. */
+export const FOLDER_TOOL_HINT = 'A project folder is linked. When the question is about its code or files, explore it with list_project_files and read_project_file instead of guessing; do not use them for unrelated questions.';
+
+// Linked-folder tools. The model sends only a path relative to the folder; the folder itself is fixed by the app.
+function folderSpecs(): ToolSpec[] {
+  const on = (ctx: ToolContext): boolean => Boolean(ctx.folder);
+  return [
+    {
+      name: 'list_project_files',
+      description: 'List the files and folders directly inside a directory of the project\'s linked folder (one level, folders first). Start with the root ("") to see the layout, then open the directories that matter. Secrets and build/vendor folders are not shown.',
+      jsonSchema: {
+        type: 'object',
+        properties: { path: { type: 'string', description: 'Directory relative to the linked folder, e.g. "src/chat" ("" or omitted for the root)' } },
+      },
+      available: on,
+      promptHint: (ctx) => (ctx.folder ? FOLDER_TOOL_HINT : null),
+    },
+    {
+      name: 'read_project_file',
+      description: 'Read a text file from the project\'s linked folder, always as it is on disk right now. Long files are returned one window at a time (~4000 chars) — the result tells you the char range shown and the total length; call again with offset set to that range\'s end to keep reading, or with query set to a term to jump straight to the part that mentions it.',
+      jsonSchema: {
+        type: 'object',
+        properties: { path: { type: 'string', description: 'File path relative to the linked folder, e.g. "src/chat/send.ts"' }, ...PAGE_WINDOW_PARAMS('file') },
+        required: ['path'],
+      },
+      available: on,
+    },
+  ];
+}
 
 // GitHub connector (P7). All five need a token; they call api.github.com directly from the browser.
 function githubSpecs(): ToolSpec[] {

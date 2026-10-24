@@ -10,6 +10,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "e2e": "vite build && playwright test",
+    "shots": "vite build && playwright test -c playwright.shots.config.ts && node scripts/design-palette.mjs",
     "fixtures": "node scripts/backup-to-fixture.mjs",
     "lint": "eslint src",
     "check:licenses": "node scripts/check-licenses.mjs"

@@ -7,6 +7,7 @@ import { deepseekProvider } from '../providers/deepseek';
 import { planModel } from '../chat/models';
 import { ModelChip } from '../chat/ComposerMenus';
 import { friendlyError, highlightCodeIn, renderMarkdown } from '../lib/markdown';
+import { nameLinksIn } from '../lib/name-links';
 import { applySize, branchRail, clamp, resizeBounds, resizeDelta, type ResizeEdge, type ResizeStart } from '../branch/layout';
 import { apiMessages, buildNoteSystemPrompt, titleFromNoteQuote, truncate } from './note-branches';
 import { patchBranch, type BranchGeometry, type BranchMessage, type NoteBranch } from './notes-repo';
@@ -100,7 +101,7 @@ export function NoteBranchPanel({ note, branch, getAnchorTop, initialMessage, on
 
   useEffect(() => () => ctrl.current?.abort(), []);
   useEffect(() => { const b = bodyRef.current; if (b) b.scrollTop = b.scrollHeight; }, [branch.messages.length, live?.text]);
-  useEffect(() => { if (!live && bodyRef.current) void highlightCodeIn(bodyRef.current); }, [branch.messages.length, live]);
+  useEffect(() => { if (!live && bodyRef.current) { void highlightCodeIn(bodyRef.current); void nameLinksIn(bodyRef.current); } }, [branch.messages.length, live]);
 
   const send = async (raw: string): Promise<void> => {
     const text = raw.trim();

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import clsx from 'clsx';
-import { Check, ChevronRight, MessageCircleQuestion } from 'lucide-react';
+import { ArrowLeft, Check, ChevronLeft, ChevronRight, CornerDownLeft, MessageCircleQuestion, Pencil } from 'lucide-react';
 import { ESC_PRIORITY, useEscLayer } from '../lib/keyboard';
 import type { ClarifyAnswer, ClarifyQuestion } from './clarify';
 
@@ -63,59 +63,89 @@ export function ClarifyCard({ questions, onSubmit, onSkip }: {
     if (n >= 1 && n <= q.options.length) { e.preventDefault(); toggle(q.options[n - 1]!.label); }
   };
 
+  const hasPick = !!answerOf(cur);
+  const Mark = q.multi ? 'rounded-sm' : 'rounded-full';
+
   return (
-    <div
-      ref={root} tabIndex={-1} onKeyDown={onKeyDown} data-testid="clarify-card" role="group" aria-label="Clarifying questions"
-      className="animate-[fadein_160ms_ease-out] rounded-xl border border-rule bg-surface p-4 shadow-md outline-none"
-    >
-      <div className="mb-3 flex items-center gap-2 text-text-2">
-        <MessageCircleQuestion size={14} aria-hidden />
-        <span className="flex-1 text-sm">A few quick questions so I get this right</span>
-        <span className="flex gap-1" aria-label={`Question ${step + 1} of ${questions.length}`}>
-          {questions.map((x, i) => (
-            <span key={x.id} className={clsx('h-1.5 w-1.5 rounded-full', i === step ? 'bg-text-2' : i < step ? 'bg-text-3' : 'bg-rule-2')} />
-          ))}
-        </span>
-      </div>
-
-      <p className="mb-2.5 text-base text-text" data-testid="clarify-question">{q.question}</p>
-      <div className="flex flex-col gap-1.5" role={q.multi ? 'group' : 'radiogroup'}>
-        {q.options.map((o, i) => {
-          const on = !!cur?.labels.includes(o.label);
-          return (
-            <button
-              key={o.label} type="button" role={q.multi ? 'checkbox' : 'radio'} aria-checked={on} onClick={() => toggle(o.label)}
-              className={clsx(
-                'flex items-start gap-2.5 rounded-md border px-3 py-2 text-left text-sm transition-colors',
-                on ? 'border-text-2 bg-accent-soft text-text' : 'border-rule-2 bg-bg text-text-2 hover:border-text-3 hover:bg-bg-2 hover:text-text',
-              )}
-            >
-              <kbd className="mt-px rounded-sm border border-rule-2 bg-bg-2 px-1.5 font-mono text-xs text-text-3">{i + 1}</kbd>
-              <span className="flex-1">
-                {o.label}
-                {o.hint && <span className="mt-0.5 block text-xs text-text-3">{o.hint}</span>}
-              </span>
-              {on && <Check size={14} className="mt-0.5 text-text-2" aria-hidden />}
+    <div className="animate-[fadein_160ms_ease-out]">
+      <div
+        ref={root} tabIndex={-1} onKeyDown={onKeyDown} data-testid="clarify-card" role="group" aria-label="Clarifying questions"
+        className="rounded-xl border border-rule-2 bg-bg-2 p-4 shadow-md outline-none"
+      >
+        <div className="mb-3 flex items-center gap-3 text-text-2">
+          <span className="grid h-7 w-7 place-items-center rounded-md bg-bg-3 text-text">
+            <MessageCircleQuestion size={14} aria-hidden />
+          </span>
+          <span className="flex-1 font-mono text-xs uppercase tracking-widest">A few quick questions</span>
+          <span className="flex items-center gap-1.5 font-mono text-xs" aria-label={`Question ${step + 1} of ${questions.length}`}>
+            <button type="button" aria-label="Previous question" disabled={step === 0} onClick={() => setStep(step - 1)} className="grid h-5 w-5 place-items-center rounded-sm hover:text-text disabled:opacity-40">
+              <ChevronLeft size={14} aria-hidden />
             </button>
-          );
-        })}
-        <input
-          type="text" value={cur?.other ?? ''} onChange={e => setOther(e.target.value)} aria-label="Something else"
-          placeholder="Something else…" autoComplete="off"
-          className="rounded-md border border-rule-2 bg-bg px-3 py-2 text-sm text-text outline-none placeholder:text-text-3 focus:border-text-3"
-        />
-      </div>
+            <span>{step + 1} / {questions.length}</span>
+            <button type="button" aria-label="Next question" disabled={last} onClick={() => setStep(step + 1)} className="grid h-5 w-5 place-items-center rounded-sm hover:text-text disabled:opacity-40">
+              <ChevronRight size={14} aria-hidden />
+            </button>
+          </span>
+        </div>
 
-      <div className="mt-3.5 flex items-center justify-between gap-2">
-        <span className="text-xs text-text-3">Esc to skip</span>
-        <div className="flex gap-2">
-          <button type="button" className="err-btn" onClick={onSkip}>Skip</button>
-          <button type="button" className="err-btn primary inline-flex items-center gap-1" onClick={next} data-testid="clarify-next">
-            {last ? 'Continue' : 'Next'}
-            {!last && <ChevronRight size={14} aria-hidden />}
-          </button>
+        <p className="text-base font-semibold text-text" data-testid="clarify-question">{q.question}</p>
+        <p className="mb-3 mt-0.5 text-sm text-text-2">{q.multi ? 'Pick any that apply — or tell me something different.' : 'Pick one — or tell me something different.'}</p>
+        <div className="flex flex-col gap-1.5" role={q.multi ? 'group' : 'radiogroup'}>
+          {q.options.map((o, i) => {
+            const on = !!cur?.labels.includes(o.label);
+            return (
+              <button
+                key={o.label} type="button" role={q.multi ? 'checkbox' : 'radio'} aria-checked={on} onClick={() => toggle(o.label)}
+                className={clsx(
+                  'flex items-center gap-3 rounded-lg border px-3 py-2 text-left transition-colors',
+                  on ? 'border-text-2 bg-accent-soft' : 'border-rule-2 bg-bg hover:border-text-3 hover:bg-surface',
+                )}
+              >
+                <kbd className="grid h-6 w-6 flex-none place-items-center rounded-md border border-rule-2 bg-bg-3 font-mono text-xs text-text-2">{i + 1}</kbd>
+                <span className="flex-1">
+                  <span className="block text-sm text-text">{o.label}</span>
+                  {o.hint && <span className="block text-xs text-text-2">{o.hint}</span>}
+                </span>
+                <span className={clsx('grid h-5 w-5 flex-none place-items-center border transition-colors', Mark, on ? 'border-text bg-text text-bg' : 'border-text-3')}>
+                  {on && <Check size={12} aria-hidden />}
+                </span>
+              </button>
+            );
+          })}
+          <label className="flex items-center gap-3 rounded-lg border border-dashed border-text-3 px-3 py-2 focus-within:border-text-2">
+            <Pencil size={14} className="mx-1 flex-none text-text-2" aria-hidden />
+            <input
+              type="text" value={cur?.other ?? ''} onChange={e => setOther(e.target.value)} aria-label="Something else"
+              placeholder="Something else…" autoComplete="off"
+              className="min-w-0 flex-1 bg-transparent text-sm text-text outline-none placeholder:text-text-2"
+            />
+          </label>
+        </div>
+
+        <div className="mt-3 flex items-center justify-between gap-2">
+          <div className="flex items-center gap-3 text-xs text-text-2">
+            <button type="button" disabled={step === 0} onClick={() => setStep(step - 1)} className="inline-flex items-center gap-1.5 text-sm hover:text-text disabled:opacity-40">
+              <ArrowLeft size={14} aria-hidden /> Back
+            </button>
+            <span className="inline-flex items-center gap-1.5">
+              <kbd className="rounded-sm border border-rule-2 bg-bg-3 px-1.5 py-0.5 font-mono">Esc</kbd> to skip
+            </span>
+          </div>
+          <div className="flex gap-2">
+            <button type="button" className="err-btn px-3 py-1.5 text-sm" onClick={onSkip}>Skip</button>
+            <button
+              type="button" onClick={next} data-testid="clarify-next"
+              className={clsx('err-btn inline-flex items-center gap-2 px-3 py-1.5 text-sm', hasPick && 'primary')}
+            >
+              {last ? 'Done' : 'Next'}
+              <CornerDownLeft size={12} className="opacity-60" aria-hidden />
+            </button>
+          </div>
         </div>
       </div>
+      <p className="mt-2 text-center font-mono text-xs uppercase tracking-widest text-text-2">
+        Keys 1–{q.options.length} select · Enter continues
+      </p>
     </div>
   );
 }

@@ -22,10 +22,15 @@ import { dropAllBranches, crumbTitleOf } from '../branch/actions';
 import { openBranchFromAnchor } from '../branch/open-from';
 import { consumePending } from '../branch/pending';
 import { highlightCodeIn, renderMermaidIn } from '../lib/markdown';
+import { nameLinksIn } from '../lib/name-links';
 import { MAIN_THREAD_ID, STATIC_THREADS } from '../db/thread-ops';
 import { threadAttachKey } from '../attachments/attachments-store';
-import { paneLayout } from '../notes/pane-width';
+import { paneLayout, SIDEBAR_PX } from '../notes/pane-width';
 import { flags } from '../flags';
+import { toast } from 'sonner';
+import { addArtifactButtons, blockPayload, fileNameFor, hashText, CODE_TOGGLE_CLASS, DOWNLOAD_BTN_CLASS, FILE_CARD_CLASS, PREVIEW_BTN_CLASS, SAVE_BTN_CLASS } from './artifact-buttons';
+import { saveTextFile } from '../lib/save-file';
+import { saveToArtifacts } from '../projects/extras/save-to-artifacts';
 
 // The note pane carries the Notes editor, so chat only loads it when a note is opened.
 const NotePane = lazy(() => import('../notes/NotePane').then(m => ({ default: m.NotePane })));
@@ -45,6 +50,29 @@ function useWindowWidth(): number {
   return w;
 }
 
+/**
+ * A generated file is kept, not just shown: every html/svg card is saved to the project's artifacts
+ * as soon as the reply settles, so it survives the chat scrolling away. Quiet — the card says so
+ * itself. Dedupe is by content, so a re-render never makes a second copy.
+ */
+function autoSaveFileCards(root: Element, threadId: string, title: string): void {
+  const pid = useAppStore.getState().threadState[threadId]?.projectId;
+  const inProject = typeof pid === 'string' && !!pid && !!useAppStore.getState().projects[pid];
+  root.querySelectorAll<HTMLElement>(`.${FILE_CARD_CLASS}:not([data-auto-saved])`).forEach(card => {
+    card.setAttribute('data-auto-saved', inProject ? '1' : 'skipped');
+    if (!inProject) return;
+    const payload = blockPayload(card.dataset.kind ?? '', card.dataset.code ?? '', title);
+    if (!payload) return;
+    void saveToArtifacts(
+      { projectId: pid, title: payload.title, type: payload.type, content: payload.content, chatId: threadId, source: 'ai-block', dedupeKey: `block:${threadId}:${payload.kind}:${hashText(payload.content)}` },
+      { quiet: true },
+    ).then(ok => {
+      const meta = card.querySelector('.artifact-card-meta');
+      if (ok && meta && !meta.textContent?.includes('artifacts')) meta.textContent += ' · Saved to artifacts';
+    });
+  });
+}
+
 export function ChatView({ threadId }: { threadId: string }) {
   const thread = useAppStore(s => s.threadState[threadId]);
   const live = useChatStore(s => s.live[threadId]);
@@ -53,6 +81,7 @@ export function ChatView({ threadId }: { threadId: string }) {
   const setSettingsOpen = useUiStore(s => s.setSettingsOpen);
   const notePaneId = useUiStore(s => (flags.chatNotes ? s.notePaneId : null));
   const notePaneWidth = useUiStore(s => s.notePaneWidth);
+  const sidebarOpen = useUiStore(s => s.sidebarOpen);
   const openHere = useBranchStore(s => Object.values(s.open).some(b => b.threadId === threadId));
   const width = useWindowWidth();
   const box = useRef<HTMLDivElement>(null);
@@ -74,7 +103,7 @@ export function ChatView({ threadId }: { threadId: string }) {
   const empty = turns.length === 0 && !live;
   const makeRoom = openHere && width > DRAWER_MIN_WIDTH;
   // The chat column gives up the width the note pane takes (and the branch drawer's, when both are open).
-  const pane = notePaneId ? paneLayout(notePaneWidth, width) : null;
+  const pane = notePaneId ? paneLayout(notePaneWidth, width, sidebarOpen ? SIDEBAR_PX : 0) : null;
   const noteRoom = pane?.beside ? pane.width : 0;
   const drawerRoom = makeRoom ? 'var(--drawer-w) + var(--drawer-gap) * 2' : '0px';
 
@@ -101,9 +130,12 @@ export function ChatView({ threadId }: { threadId: string }) {
   const settled = !live;
   useEffect(() => {
     if (!settled || !box.current) return;
+    addArtifactButtons(box.current); // first: mermaid and highlight.js rewrite the nodes it reads
+    autoSaveFileCards(box.current, threadId, crumbTitleOf(thread, fallbackTitle));
     renderMermaidIn(box.current);
     void highlightCodeIn(box.current);
-  }, [stream, settled]);
+    void nameLinksIn(box.current);
+  }, [stream, settled, threadId, thread, fallbackTitle]);
 
   const onClick = (e: React.MouseEvent<HTMLDivElement>): void => {
     const target = e.target as HTMLElement;
@@ -113,6 +145,32 @@ export function ChatView({ threadId }: { threadId: string }) {
     if (anchor) { openBranchFromAnchor(threadId, anchor, null); return; }
     const pic = target.closest<HTMLImageElement>('.msg-image');
     if (pic) { useUiStore.getState().setImagePreview({ src: pic.src, name: pic.dataset.name ?? '' }); return; }
+    const save = target.closest<HTMLElement>(`.${SAVE_BTN_CLASS}`);
+    if (save) { saveBlock(save); return; }
+    const dl = target.closest<HTMLElement>(`.${DOWNLOAD_BTN_CLASS}`);
+    if (dl) {
+      const kind = dl.dataset.kind === 'svg' ? 'svg' : 'html';
+      const card = dl.closest<HTMLElement>(`.${FILE_CARD_CLASS}`);
+      void saveTextFile(fileNameFor(kind, card?.dataset.fileTitle ?? ''), dl.dataset.code ?? '', kind);
+      return;
+    }
+    const preview = target.closest<HTMLElement>(`.${PREVIEW_BTN_CLASS}`);
+    if (preview) {
+      const card = preview.closest<HTMLElement>(`.${FILE_CARD_CLASS}`);
+      useUiStore.getState().setFilePreview({
+        title: card?.dataset.fileTitle ?? 'Untitled',
+        kind: preview.dataset.kind === 'svg' ? 'svg' : 'html',
+        content: preview.dataset.code ?? '',
+      });
+      return;
+    }
+    const codeToggle = target.closest<HTMLElement>(`.${CODE_TOGGLE_CLASS}`);
+    if (codeToggle) {
+      const card = codeToggle.closest<HTMLElement>(`.${FILE_CARD_CLASS}`);
+      const open = card?.classList.toggle('code-open') ?? false;
+      codeToggle.textContent = open ? 'Hide code' : 'Show code';
+      return;
+    }
     const copy = target.closest<HTMLElement>('.code-copy-btn');
     if (copy) {
       const code = copy.closest('.code-block')?.querySelector('pre code')?.textContent ?? '';
@@ -124,6 +182,14 @@ export function ChatView({ threadId }: { threadId: string }) {
     }
     const toggle = target.closest('.thinking-toggle');
     if (toggle) toggle.closest('.ai-thinking')?.classList.toggle('open');
+  };
+
+  const saveBlock = (btn: HTMLElement): void => {
+    const pid = useAppStore.getState().threadState[threadId]?.projectId;
+    if (typeof pid !== 'string' || !pid || !useAppStore.getState().projects[pid]) { toast('Move this chat into a project to save to its artifacts'); return; }
+    const payload = blockPayload(btn.dataset.kind ?? '', btn.dataset.code ?? '', crumbTitleOf(thread, fallbackTitle));
+    if (!payload) return;
+    void saveToArtifacts({ projectId: pid, title: payload.title, type: payload.type, content: payload.content, chatId: threadId, source: 'ai-block', dedupeKey: `block:${threadId}:${payload.kind}:${hashText(payload.content)}` });
   };
 
   const onKeyDown = (e: React.KeyboardEvent<HTMLDivElement>): void => {

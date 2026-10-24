@@ -49,6 +49,7 @@ export function applyTurnSnapshot(state: PersistedState, threadId: string, snap:
   }
   if (snap.usage) addUsageToBucket(thread, snap.usage);
   if (snap.markUnread) thread.unread = true;
+  thread.updatedAt = Date.now(); // additive: the project screen sorts and dates its chat rows by it
   if (snap.clarified?.length) {
     const saved = (thread.clarifications ?? {}) as Record<string, ClarifyAnswer[]>;
     thread.clarifications = { ...saved, [snap.turnId]: snap.clarified };

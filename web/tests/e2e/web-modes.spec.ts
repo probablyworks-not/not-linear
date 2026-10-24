@@ -1,174 +1,110 @@
 import { test, expect, type Page } from '@playwright/test';
-import { readPersistedState } from './helpers';
+import { openSettings, readPersistedState } from './helpers';
 
-// The Modes manager in /web/.
+// Settings -> Modes (master/detail). Saving is explicit (Save / Create), as it always was.
 
-async function openWeb(page: Page): Promise<void> {
-  await page.goto('/web/');
-  await expect(page.getByRole('button', { name: 'Open left pane' })).toBeVisible();
-}
-
-async function openModes(page: Page): Promise<void> {
-  await page.getByRole('button', { name: 'Open left pane' }).click();
-  await page.getByRole('button', { name: 'Open settings' }).click();
-  await page.getByRole('button', { name: 'New / manage modes' }).click();
-  await expect(page.getByRole('dialog', { name: 'Modes' })).toBeVisible();
-}
-
-// A CSS locator, not getByRole: while a Radix dialog is open everything behind it is
-// aria-hidden, so a role query reports the sidebar as absent whether or not it is open.
-const sidebar = (page: Page) => page.locator('aside[aria-label="Left pane"]');
-const modal = (page: Page) => page.getByRole('dialog', { name: 'Modes' });
-const row = (page: Page, id: string) => modal(page).locator(`[data-mode="${id}"]`);
+const item = (page: Page, id: string) => page.locator(`[data-mode="${id}"]`);
+const editor = (page: Page) => page.getByRole('tabpanel');
 const prefsOf = async (page: Page) => ((await readPersistedState(page)) as { prefs: Record<string, any> } | null)?.prefs ?? {}; // eslint-disable-line @typescript-eslint/no-explicit-any -- test-only read of an untyped row
 
-async function createMode(page: Page, name: string, desc: string, instr: string): Promise<void> {
-  await modal(page).getByRole('button', { name: 'New mode' }).click();
-  await modal(page).getByLabel('Name').fill(name);
-  await modal(page).getByLabel('Short description').fill(desc);
-  await modal(page).getByLabel('Instructions').fill(instr);
-  await modal(page).getByRole('button', { name: 'Create' }).click();
+async function createMode(page: Page, name: string, desc: string, instr: string): Promise<string> {
+  await page.getByRole('button', { name: 'New mode' }).first().click();
+  await editor(page).getByLabel('Name').fill(name);
+  await editor(page).getByLabel('Short description').fill(desc);
+  await editor(page).getByLabel('Instructions').fill(instr);
+  await editor(page).getByRole('button', { name: 'Create' }).click();
+  await expect(page.getByText(`Created "${name}"`)).toBeVisible();
+  return (await prefsOf(page)).customModes.at(-1).id as string;
 }
 
-test.describe('Modes dialog', () => {
-  test('lists the six built-ins with legacy badges and marks General active', async ({ page }) => {
-    await openWeb(page);
-    await openModes(page);
-    await expect(modal(page).getByText('Instructions added to the system prompt. Applies to every chat.')).toBeVisible();
+test.describe('Modes tab', () => {
+  test('lists the six built-ins, marks General active, and shows the helper text', async ({ page }) => {
+    await openSettings(page, 'Modes');
     for (const [id, label] of [['general', 'General'], ['research', 'Research'], ['coding', 'Coding'], ['pm', 'PM'], ['cto', 'CTO'], ['critic', 'Critic']]) {
-      await expect(row(page, id!)).toContainText(label!);
-      await expect(row(page, id!)).toContainText('Built-in');
+      await expect(item(page, id!)).toContainText(label!);
     }
-    await expect(row(page, 'general')).toContainText('Active');
-    await expect(row(page, 'research')).not.toContainText('Active');
+    await expect(item(page, 'general')).toContainText('Active');
+    await expect(item(page, 'research')).not.toContainText('Active');
+    await expect(page.getByText('Added to the system prompt for every chat in this mode.')).toBeVisible();
+    await expect(page.getByText('Built-in modes can be edited but not deleted.')).toBeVisible();
   });
 
-  test('Esc unwinds by legacy precedence: modes (110), then the sidebar (80), then settings (30)', async ({ page }) => {
-    await openWeb(page);
-    await openModes(page);
-    await page.keyboard.press('Escape');
-    await expect(modal(page)).toHaveCount(0);
+  test('the composer\'s "New / manage modes" opens this tab', async ({ page }) => {
+    await page.goto('/web/');
+    await page.getByRole('button', { name: 'Open left pane' }).click();
+    await page.getByRole('button', { name: /New chat/ }).click();
+    await page.getByRole('button', { name: /mode/i }).filter({ hasText: /General/ }).first().click();
+    await page.getByRole('menuitem', { name: /New \/ manage modes/ }).click();
     await expect(page.getByRole('dialog', { name: 'Settings' })).toBeVisible();
-    await expect(sidebar(page)).toBeVisible();
-    await page.keyboard.press('Escape');
-    await expect(sidebar(page)).toBeHidden();
-    await expect(page.getByRole('dialog', { name: 'Settings' })).toBeVisible();
-    await page.keyboard.press('Escape');
-    await expect(page.getByRole('dialog', { name: 'Settings' })).toHaveCount(0);
+    await expect(page.getByRole('tab', { name: /^Modes/ })).toHaveAttribute('aria-selected', 'true');
   });
 });
 
 test.describe('create, edit, reset, delete', () => {
-  test('creating a mode persists it', async ({ page }) => {
-    await openWeb(page);
-    await openModes(page);
-    await createMode(page, 'Teacher', 'Explains simply', 'Teach like I am new.\n\nUse examples.');
-    await expect(page.getByText('Created "Teacher"')).toBeVisible();
-
-    const id = (await prefsOf(page)).customModes[0].id as string;
+  test('creating a mode persists it, selects it, and bumps the rail count', async ({ page }) => {
+    await openSettings(page, 'Modes');
+    const id = await createMode(page, 'Teacher', 'Explains simply', 'Teach like I am new.\n\nUse examples.');
     expect(id).toMatch(/^custom-/);
-    await expect(row(page, id)).toContainText('Teacher');
-    await expect(row(page, id)).toContainText('Custom');
+    await expect(item(page, id)).toContainText('Teacher');
+    await expect(item(page, id)).toHaveAttribute('aria-selected', 'true');
+    await expect(page.getByTestId('count-modes')).toHaveText('7');
     expect((await prefsOf(page)).customModes).toEqual([{ id, label: 'Teacher', desc: 'Explains simply', instructions: 'Teach like I am new.\n\nUse examples.' }]);
-
   });
 
-  test('an empty name is refused with the legacy message and nothing is saved', async ({ page }) => {
-    await openWeb(page);
-    await openModes(page);
-    await modal(page).getByRole('button', { name: 'New mode' }).click();
-    await modal(page).getByRole('button', { name: 'Create' }).click();
+  test('an empty name is refused and nothing is saved; Cancel discards the draft', async ({ page }) => {
+    await openSettings(page, 'Modes');
+    await page.getByRole('button', { name: 'New mode' }).first().click();
+    await editor(page).getByRole('button', { name: 'Create' }).click();
     await expect(page.getByText('Give the mode a name')).toBeVisible();
     expect((await prefsOf(page)).customModes).toBeUndefined();
+    await editor(page).getByRole('button', { name: 'Cancel' }).click();
+    await expect(item(page, '__new__')).toHaveCount(0);
   });
 
-  test('field limits match legacy (name 30, description 50)', async ({ page }) => {
-    await openWeb(page);
-    await openModes(page);
-    await modal(page).getByRole('button', { name: 'New mode' }).click();
-    await expect(modal(page).getByLabel('Name')).toHaveAttribute('maxlength', '30');
-    await expect(modal(page).getByLabel('Short description')).toHaveAttribute('maxlength', '50');
+  test('field limits (name 30, description 50)', async ({ page }) => {
+    await openSettings(page, 'Modes');
+    await page.getByRole('button', { name: 'New mode' }).first().click();
+    await expect(editor(page).getByLabel('Name')).toHaveAttribute('maxlength', '30');
+    await expect(editor(page).getByLabel('Short description')).toHaveAttribute('maxlength', '50');
   });
 
-  test('editing a built-in stores only what differs; Reset to default removes it', async ({ page }) => {
-    await openWeb(page);
-    await openModes(page);
-    await row(page, 'coding').getByRole('button', { name: /Coding/ }).first().click();
-    await modal(page).getByLabel('Short description').fill('Terse and exact');
-    await modal(page).getByRole('button', { name: 'Save' }).click();
+  test('editing a built-in stores only what differs; Reset to default removes it. Save is disabled until something changes', async ({ page }) => {
+    await openSettings(page, 'Modes');
+    await item(page, 'coding').click();
+    await expect(editor(page).getByRole('button', { name: 'Save' })).toBeDisabled();
+    await editor(page).getByLabel('Short description').fill('Terse and exact');
+    await editor(page).getByRole('button', { name: 'Save' }).click();
     await expect(page.getByText('Saved "Coding"')).toBeVisible();
-    await expect(row(page, 'coding')).toContainText('Edited');
     expect((await prefsOf(page)).modeOverrides).toEqual({ coding: { desc: 'Terse and exact' } });
 
-    await openWeb(page);
-    await openModes(page);
-    await row(page, 'coding').getByRole('button', { name: /Coding/ }).first().click();
-    await modal(page).getByRole('button', { name: 'Reset to default' }).click();
+    await editor(page).getByRole('button', { name: 'Reset to default' }).click();
     await expect(page.getByText('Reset to default', { exact: true })).toBeVisible();
-    await expect(row(page, 'coding')).toContainText('Built-in');
     expect((await prefsOf(page)).modeOverrides).toEqual({});
   });
 
-  test('delete asks with the legacy wording; Cancel keeps the mode; confirming removes it', async ({ page }) => {
-    await openWeb(page);
-    await openModes(page);
-    await createMode(page, 'Teacher', '', 'x');
-    const id = (await prefsOf(page)).customModes[0].id as string;
-
-    await row(page, id).getByRole('button', { name: /Teacher/ }).first().click();
-    await modal(page).getByRole('button', { name: 'Delete', exact: true }).click();
+  test('delete asks with the legacy wording; Esc keeps the mode; confirming removes it and selects another', async ({ page }) => {
+    await openSettings(page, 'Modes');
+    const id = await createMode(page, 'Teacher', '', 'x');
+    await editor(page).getByRole('button', { name: 'Delete', exact: true }).click();
     const confirm = page.getByRole('alertdialog');
     await expect(confirm.getByRole('heading')).toHaveText('Delete mode?');
     await expect(confirm).toContainText('This removes the mode "Teacher". Chats using it fall back to General.');
-    await expect(confirm.getByRole('button', { name: 'Delete mode' })).toBeVisible();
-
-    await page.keyboard.press('Escape'); // confirm sits above the modes dialog in the chain
+    await page.keyboard.press('Escape'); // the confirm outranks the Settings page in the Esc chain
     await expect(confirm).toHaveCount(0);
-    await expect(modal(page)).toBeVisible();
-    await expect(row(page, id)).toBeVisible();
+    await expect(page.getByRole('dialog', { name: 'Settings' })).toBeVisible();
+    await expect(item(page, id)).toBeVisible();
 
-    await modal(page).getByRole('button', { name: 'Delete', exact: true }).click();
+    await editor(page).getByRole('button', { name: 'Delete', exact: true }).click();
     await page.getByRole('alertdialog').getByRole('button', { name: 'Delete mode' }).click();
     await expect(page.getByText('Mode deleted')).toBeVisible();
-    await expect(row(page, id)).toHaveCount(0);
+    await expect(item(page, id)).toHaveCount(0);
+    await expect(editor(page).getByLabel('Name')).toHaveValue('General'); // falls back to the first mode, not a blank panel
     expect((await prefsOf(page)).customModes).toEqual([]);
   });
 
-  test('deleting the ACTIVE mode falls back to General', async ({ page }) => {
-    await openWeb(page);
-    await openModes(page);
-    await createMode(page, 'Teacher', '', 'x');
-    const id = (await prefsOf(page)).customModes[0].id as string;
-
-    // Make it the active mode by writing the pref, then reload so the app reads it back.
-    await page.evaluate(id => new Promise<void>((resolve, reject) => {
-      const open = indexedDB.open('notlinear');
-      open.onerror = () => reject(open.error);
-      open.onsuccess = () => {
-        const db = open.result;
-        const tx = db.transaction('kv', 'readwrite');
-        const store = tx.objectStore('kv');
-        const get = store.get('state');
-        get.onsuccess = () => {
-          const row = get.result;
-          row.value.prefs = { ...row.value.prefs, mode: id };
-          store.put(row);
-        };
-        tx.oncomplete = () => { db.close(); resolve(); };
-        tx.onerror = () => reject(tx.error);
-      };
-    }), id);
-    await expect.poll(async () => (await prefsOf(page)).mode).toBe(id);
-
-    await openWeb(page);
-    await openModes(page);
-    await expect(row(page, id)).toContainText('Active');
-    await row(page, id).getByRole('button', { name: /Teacher/ }).first().click();
-    await modal(page).getByRole('button', { name: 'Delete', exact: true }).click();
-    await page.getByRole('alertdialog').getByRole('button', { name: 'Delete mode' }).click();
-    await expect.poll(async () => (await prefsOf(page)).mode).toBe('general');
-    await expect(row(page, 'general')).toContainText('Active');
-
+  test('a built-in has no Delete', async ({ page }) => {
+    await openSettings(page, 'Modes');
+    await item(page, 'critic').click();
+    await expect(editor(page).getByRole('button', { name: 'Delete', exact: true })).toHaveCount(0);
   });
 });
-

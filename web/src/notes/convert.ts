@@ -1,4 +1,5 @@
 import { htmlToInline, inlineToHtml } from './inline';
+import { FALLBACK_LANGUAGE, isSupportedCodeLanguage } from './code-languages';
 import type {
   BNBlock, BNInline, BNProps, BNTableContent, Converted, LegacyBlock, Sidecar, SidecarEntry,
 } from './types';
@@ -141,6 +142,13 @@ function blockToBN(b: unknown, ctx: Ctx): BNBlock {
       if (!has(raw, 'text')) absent.push('text');
       const text = typeof raw.text === 'string' ? raw.text : '';
       content = spec.content === 'html' ? htmlToInline(text) : plainContent(text);
+    }
+    // A code block whose language the editor cannot highlight throws while it renders, which no
+    // try/catch around opening the note can see. Show it as plain text and keep the original
+    // `lang` in the sidecar, so the note still saves back with the language it was written in.
+    if (type === 'code' && has(raw, 'lang') && !isSupportedCodeLanguage(raw.lang)) {
+      props.language = FALLBACK_LANGUAGE;
+      known.delete('lang');
     }
     if (spec.dataBag) {
       const bag: Record<string, unknown> = {};

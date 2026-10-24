@@ -94,6 +94,8 @@ export function makeCompatProvider(cfg: CompatConfig): ChatProvider {
               model, [cfg.tokenParam]: 8192, stream: true, messages: current,
               ...(cfg.streamUsage ? { stream_options: { include_usage: true } } : {}),
               ...(specs.length ? { tools: toOpenAITools(specs), tool_choice: 'auto' } : {}),
+              // GPT-5.6 rejects function tools on /chat/completions unless reasoning is off.
+              ...(cfg.id === 'openai' && specs.length && model.startsWith('gpt-5.6') ? { reasoning_effort: 'none' } : {}),
             }),
           }, { provider: cfg.id, label: `chat:${model}`, timeoutMs: MODEL_CONNECT_TIMEOUT_MS });
         } catch (e) {

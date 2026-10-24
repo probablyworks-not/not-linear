@@ -8,6 +8,7 @@ import { runAndPersist, setRunTurnDepsForTests, type Turn, type TurnHost } from 
 import { makeTurnId, messagesFromStream, turnContext } from './stream-html';
 import { threadAttachKey, useAttachments } from '../attachments/attachments-store';
 import { folderContextFor } from './project-context';
+import { buildClarifyBrief } from './clarify-brief';
 import type { ChatMessage } from '../providers/types';
 
 // The main thread's side of the shared turn flow (run-and-persist.ts): where its turns are
@@ -47,6 +48,15 @@ function mainHost(threadId: string): TurnHost {
       const pid = app.threadState[threadId]?.projectId;
       return buildSystemPrompt({ prefs: app.prefs, project: typeof pid === 'string' ? app.projects[pid] : undefined, apiKeys: readApiKeys(), extraContext });
     },
+    clarifyBrief: turn => {
+      const app = useAppStore.getState();
+      const pid = app.threadState[threadId]?.projectId;
+      return buildClarifyBrief({
+        project: typeof pid === 'string' ? app.projects[pid] : undefined,
+        folderSources: turn.sources?.names,
+        fileNames: turn.files?.map(f => f.name),
+      });
+    },
     write: async snap => {
       const app = useAppStore.getState();
       await app.updateThreads(s => applyTurnSnapshot(s, threadId, { ...snap, markUnread: threadId !== app.currentThreadId }));
@@ -54,6 +64,7 @@ function mainHost(threadId: string): TurnHost {
     register: c => { controllers.set(threadId, c); },
     clear: () => { controllers.delete(threadId); },
     noteThreadId: threadId,
+    threadId,
   };
 }
 

@@ -18,6 +18,7 @@ from __future__ import annotations
 import sys
 import tempfile
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -182,3 +183,49 @@ class TestSaveFileEmptyPath:
         monkeypatch.chdir(tmp_path)
         assert macos.save_file("note.md", "content") == {"ok": False, "cancelled": True}
         assert list(tmp_path.iterdir()) == []
+
+
+class TestSaveFileExtension:
+    """BUGS #062: the dialog hardcoded ".md", so a generated page was written as "page.html.md"."""
+
+    @staticmethod
+    def _dialog(monkeypatch: pytest.MonkeyPatch, chosen: str) -> dict[str, Any]:
+        captured: dict[str, Any] = {}
+
+        class Done:
+            returncode = 0
+            stdout = chosen
+            stderr = ""
+
+        def fake_run(cmd, **kw):  # type: ignore[no-untyped-def]
+            captured["cmd"] = cmd
+            return Done()
+
+        monkeypatch.setattr(macos.subprocess, "run", fake_run)
+        monkeypatch.setattr(macos, "fake_native", lambda: False)
+        monkeypatch.setattr(macos.sys, "platform", "darwin")
+        return captured
+
+    def test_an_html_file_keeps_its_extension_and_is_named_in_the_prompt(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        target = tmp_path / "page.html"
+        captured = self._dialog(monkeypatch, f"{target}\n")
+        assert macos.save_file("page.html", "<h1>hi</h1>") == {"ok": True, "path": str(target)}
+        assert target.read_text(encoding="utf-8") == "<h1>hi</h1>"
+        assert "Save HTML file" in captured["cmd"]
+
+    def test_the_chosen_extension_is_appended_when_the_dialog_drops_it(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        self._dialog(monkeypatch, f"{tmp_path / 'drawing'}\n")
+        assert macos.save_file("drawing.svg", "<svg/>")["path"] == str(tmp_path / "drawing.svg")
+
+    def test_a_reply_still_defaults_to_markdown(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+        captured = self._dialog(monkeypatch, f"{tmp_path / 'response'}\n")
+        assert macos.save_file("response.md", "# hi")["path"] == str(tmp_path / "response.md")
+        assert "Save Markdown file" in captured["cmd"]
+
+    def test_an_unknown_extension_falls_back_to_markdown(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+        self._dialog(monkeypatch, f"{tmp_path / 'thing.exe'}\n")
+        assert macos.save_file("thing.exe", "x")["path"] == str(tmp_path / "thing.exe.md")

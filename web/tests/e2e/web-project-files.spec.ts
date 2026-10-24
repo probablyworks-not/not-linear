@@ -42,7 +42,7 @@ async function showSidebar(p: Page): Promise<void> {
   if (closed) await p.getByRole('button', { name: 'Open left pane' }).click();
   await expect(sidebar(p)).not.toHaveClass(/invisible/);
 }
-const panel = (p: Page) => p.getByRole('dialog').filter({ has: p.getByLabel('Project name') });
+const panel = (p: Page) => p.getByRole('dialog').filter({ has: p.getByTestId('project-title') });
 async function openWebPanel(page: Page, name = 'Web project'): Promise<void> {
   await page.goto('/web/');
   await expect(page.getByRole('button', { name: 'Open left pane' })).toBeVisible();
@@ -67,7 +67,8 @@ test.describe('project files (native picker cancelled -> browser fallback, #022)
     await chooseFiles(page, () => panel(page).getByRole('button', { name: 'Add files' }).click(), [TEXT, CSV, PNG]);
     await expect(page.getByText('Added 3 files to project')).toBeVisible();
 
-    const chips = panel(page).getByTestId('file-chip');
+    await panel(page).getByRole('button', { name: 'Open Files' }).click();
+    const chips = panel(page).getByTestId('file-row');
     await expect(chips).toHaveCount(3);
     await expect(chips.nth(0)).toContainText('notes.md');
     await expect(chips.nth(0)).toContainText(`${TEXT.buffer.length}B`);
@@ -92,10 +93,11 @@ test.describe('project files (native picker cancelled -> browser fallback, #022)
     await seed(page);
     await openWebPanel(page);
     await chooseFiles(page, () => panel(page).getByRole('button', { name: 'Add files' }).click(), [TEXT]);
+    await panel(page).getByRole('button', { name: 'Open Files' }).click();
     await chooseFiles(page, () => panel(page).getByRole('button', { name: 'Add files' }).click(), [CSV]);
-    await expect(panel(page).getByTestId('file-chip')).toHaveCount(2);
+    await expect(panel(page).getByTestId('file-row')).toHaveCount(2);
     await panel(page).getByRole('button', { name: 'Remove notes.md' }).click();
-    await expect(panel(page).getByTestId('file-chip')).toHaveCount(1);
+    await expect(panel(page).getByTestId('file-row')).toHaveCount(1);
     await expect.poll(async () => (await projectsOf(page)).p1!.files.map(f => f.name)).toEqual(['data.csv']);
   });
 });
@@ -104,6 +106,7 @@ test.describe('project rules', () => {
   test('shows the placeholder and persists after the debounce', async ({ page }) => {
     await seed(page);
     await openWebPanel(page);
+    await panel(page).getByRole('button', { name: '+ Add rules' }).click();
     const rules = panel(page).getByLabel('Project rules');
     await expect(rules).toHaveAttribute('placeholder', "Custom instructions the AI follows for every chat in this project, e.g. 'Answer in British English. Always cite sources. Prefer TypeScript examples.'");
     await rules.fill('Answer in British English.\nAlways cite sources.');
@@ -123,7 +126,7 @@ test.describe('linked folder', () => {
     await pick(page, { body: { ok: true, path: '/Users/test/code/app' } });
     await openWebPanel(page);
     await expect(panel(page).getByRole('button', { name: 'Unlink' })).toHaveCount(0);
-    await panel(page).getByRole('button', { name: 'Link folder…' }).click();
+    await panel(page).getByRole('button', { name: 'Link folder', exact: true }).click();
     await expect(page.getByText('Folder linked')).toBeVisible();
     await expect(panel(page).getByTestId('project-folder')).toHaveText('/Users/test/code/app');
     await expect.poll(async () => (await projectsOf(page)).p1!.path).toBe('/Users/test/code/app');
@@ -141,7 +144,7 @@ test.describe('linked folder', () => {
     await seed(page);
     await pick(page, { body: { ok: false, cancelled: true } });
     await openWebPanel(page);
-    await panel(page).getByRole('button', { name: 'Link folder…' }).click();
+    await panel(page).getByRole('button', { name: 'Link folder', exact: true }).click();
     await page.waitForTimeout(400);
     await expect(panel(page).getByTestId('project-folder')).toHaveCount(0);
     expect((await projectsOf(page)).p1!.path).toBe('');
@@ -158,7 +161,7 @@ test.describe('linked folder', () => {
       await seed(page);
       await pick(page, respond);
       await openWebPanel(page);
-      await panel(page).getByRole('button', { name: 'Link folder…' }).click();
+      await panel(page).getByRole('button', { name: 'Link folder', exact: true }).click();
       await expect(page.getByText(toastText)).toBeVisible();
       expect((await projectsOf(page)).p1!.path).toBe('');
     });
@@ -175,6 +178,7 @@ test.describe('persistence safety', () => {
     await chooseFiles(page, () => panel(page).getByRole('button', { name: 'Add files' }).click(), [TEXT]);
     await expect.poll(async () => (await projectsOf(page)).p1!.updatedAt!).toBeGreaterThan(t0);
     const t1 = (await projectsOf(page)).p1!.updatedAt!;
+    await panel(page).getByRole('button', { name: 'Open Files' }).click();
     await panel(page).getByRole('button', { name: 'Remove notes.md' }).click();
     await panel(page).getByRole('button', { name: 'Link folder…' }).click();
     await expect.poll(async () => (await projectsOf(page)).p1!.path).toBe('/x');

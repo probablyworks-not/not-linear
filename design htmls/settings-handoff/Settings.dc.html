@@ -1,0 +1,547 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.0.0/dist/tabler-icons.min.css">
+<style>html,body{margin:0;-webkit-font-smoothing:antialiased}button,input,textarea{font-family:inherit}a{color:#3E7BD6}a:hover{color:#2A5FB0}::-webkit-scrollbar{width:8px}::-webkit-scrollbar-thumb{background:#DDD;border-radius:4px}</style>
+</helmet>
+<div style="width:100%;height:100vh;box-sizing:border-box;background:#FFFFFF;display:flex;font-family:'Space Grotesk',system-ui,sans-serif;color:#1A1A1A;font-size:14px">
+<div style="width:100%;height:100%;background:#FFFFFF;display:flex;overflow:hidden">
+
+  <div style="width:240px;flex:0 0 auto;background:#F8F8F7;border-right:1px solid #ECECEA;padding:22px 12px;display:flex;flex-direction:column;gap:4px">
+    <div style="font-size:15px;font-weight:600;padding:0 10px 14px">Settings</div>
+    <sc-for list="{{ tabs }}" as="t" hint-placeholder-count="5">
+      <button onClick="{{ t.go }}" style="{{ t.style }}"><span style="display:flex;flex:0 0 auto">{{ t.mg }}</span><span style="flex:1;text-align:left">{{ t.label }}</span><span style="font-family:'Space Mono',monospace;font-size:10px;color:#AAAAAA">{{ t.count }}</span></button>
+    </sc-for>
+    <div style="flex:1"></div>
+    <div style="display:flex;align-items:center;gap:9px;padding:8px 10px"><span style="width:24px;height:24px;border-radius:50%;background:#E8E8E6;display:grid;place-items:center;font-size:11px;font-weight:600">Y</span><span style="font-size:13px;color:#666">Yash</span></div>
+  </div>
+
+  <div style="flex:1;min-width:0;display:flex;flex-direction:column">
+    <div style="display:flex;align-items:center;padding:24px 36px 18px;gap:10px">
+      <div style="flex:1;min-width:0">
+        <div style="font-size:20px;font-weight:600;letter-spacing:-0.02em">{{ head.title }}</div>
+        <div style="font-size:13px;color:#8A8A8A;margin-top:2px;line-height:1.5">{{ head.sub }}</div>
+      </div>
+      <sc-if value="{{ isSkills }}" hint-placeholder-val="{{ false }}">
+        <button style="display:flex;align-items:center;gap:6px;height:34px;padding:0 12px;border:1px solid #E0E0DE;border-radius:9px;background:#fff;font-size:13px;color:#555;cursor:pointer;white-space:nowrap;flex:0 0 auto" style-hover="background:#F6F6F5"><i class="ti ti-upload"></i>Import</button>
+        <button onClick="{{ addSkill }}" style="display:flex;align-items:center;gap:6px;height:34px;padding:0 13px;border:none;border-radius:9px;background:#1A1A1A;color:#fff;font-size:13px;cursor:pointer;white-space:nowrap;flex:0 0 auto"><i class="ti ti-plus"></i>New skill</button>
+      </sc-if>
+      <sc-if value="{{ isModes }}" hint-placeholder-val="{{ false }}">
+        <button onClick="{{ addMode }}" style="display:flex;align-items:center;gap:6px;height:34px;padding:0 13px;border:none;border-radius:9px;background:#1A1A1A;color:#fff;font-size:13px;cursor:pointer;white-space:nowrap;flex:0 0 auto"><i class="ti ti-plus"></i>New mode</button>
+      </sc-if>
+      <button style="width:32px;height:32px;border:none;background:none;border-radius:8px;color:#888;cursor:pointer;display:grid;place-items:center" style-hover="background:#F2F2F0"><i class="ti ti-arrow-left" style="font-size:17px"></i></button>
+    </div>
+    <div style="height:1px;background:#ECECEA"></div>
+
+    <div style="flex:1;min-height:0;position:relative;overflow-y:auto">
+
+      <sc-if value="{{ isAppearance }}" hint-placeholder-val="{{ false }}">
+        <div style="max-width:1000px;margin:0 auto;padding:28px 36px 40px;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px">
+          <sc-for list="{{ themes }}" as="th" hint-placeholder-count="3">
+            <button onClick="{{ th.pick }}" style="{{ th.style }}">
+              <div style="{{ th.prevStyle }}">
+                <div style="width:30%;{{ th.sideStyle }}"></div>
+                <div style="flex:1;padding:12px 10px;display:flex;flex-direction:column;gap:6px">
+                  <div style="{{ th.lineStyle }};width:60%"></div><div style="{{ th.lineStyle }};width:85%"></div><div style="{{ th.lineStyle }};width:40%"></div>
+                  <div style="flex:1"></div><div style="{{ th.barStyle }}"></div>
+                </div>
+              </div>
+              <div style="display:flex;align-items:center;gap:8px;padding:12px 4px 2px;width:100%;box-sizing:border-box">
+                <div style="flex:1;text-align:left"><div style="font-size:14px;font-weight:600">{{ th.name }}</div><div style="font-size:12px;color:#999">{{ th.desc }}</div></div>
+                <i class="{{ th.check }}" style="font-size:18px;color:#1A1A1A"></i>
+              </div>
+            </button>
+          </sc-for>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ isModels }}" hint-placeholder-val="{{ false }}">
+        <div style="max-width:1000px;margin:0 auto;padding:28px 36px 40px">
+        <sc-for list="{{ groups }}" as="g" hint-placeholder-count="2">
+          <div style="margin-bottom:26px">
+            <div style="font-family:'Space Mono',monospace;font-size:10px;letter-spacing:0.12em;text-transform:uppercase;color:#AAAAAA;margin-bottom:10px">{{ g.title }}</div>
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(270px,1fr));gap:12px;align-items:start">
+              <sc-for list="{{ g.items }}" as="p" hint-placeholder-count="4">
+                <div style="{{ p.cardStyle }}">
+                  <div style="display:flex;align-items:center;gap:12px;cursor:pointer" onClick="{{ p.toggle }}">
+                    <span style="{{ p.logoStyle }}">{{ p.initial }}</span>
+                    <div style="flex:1;min-width:0">
+                      <div style="font-size:14px;font-weight:600">{{ p.name }}</div>
+                      <div style="font-size:12px;color:#999;line-height:1.4">{{ p.sub }}</div>
+                    </div>
+                    <span style="{{ p.pillStyle }}"><span style="{{ p.dotStyle }}"></span>{{ p.status }}</span>
+                  </div>
+                  <sc-if value="{{ p.open }}" hint-placeholder-val="{{ false }}">
+                    <div style="margin-top:14px;padding-top:14px;border-top:1px solid #F0F0EE">
+                      <sc-if value="{{ p.connected }}" hint-placeholder-val="{{ false }}">
+                        <div style="display:flex;align-items:center;gap:8px">
+                          <div style="flex:1;height:36px;border-radius:9px;background:#F6F6F5;display:flex;align-items:center;padding:0 12px;font-family:'Space Mono',monospace;font-size:12px;color:#777;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0">{{ p.masked }}</div>
+                          <button onClick="{{ p.remove }}" style="height:36px;padding:0 12px;border:1px solid #F0D4D0;background:#fff;color:#C0453A;border-radius:9px;font-size:13px;cursor:pointer">Remove</button>
+                        </div>
+                      </sc-if>
+                      <sc-if value="{{ p.disconnected }}" hint-placeholder-val="{{ true }}">
+                        <div style="display:flex;align-items:center;gap:8px">
+                          <input type="password" value="{{ draft }}" onChange="{{ setDraft }}" placeholder="Paste API key…" style="flex:1;min-width:0;height:36px;box-sizing:border-box;border:1px solid #E0E0DE;border-radius:9px;padding:0 12px;font-size:13px;outline:none;background:#fff" style-focus="border-color:#1A1A1A">
+                          <button onClick="{{ p.connect }}" style="height:36px;padding:0 16px;border:none;background:#1A1A1A;color:#fff;border-radius:9px;font-size:13px;cursor:pointer">Connect</button>
+                        </div>
+                        <div style="font-size:11.5px;color:#AAA;margin-top:8px;display:flex;align-items:center;gap:5px"><i class="ti ti-lock" style="font-size:12px"></i>Stored locally. Never leaves your device except to {{ p.name }}.</div>
+                      </sc-if>
+                    </div>
+                  </sc-if>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+        </sc-for>
+        </div>
+      </sc-if>
+
+      <!-- SKILLS: master / detail -->
+      <sc-if value="{{ isSkills }}" hint-placeholder-val="{{ false }}">
+        <div style="position:absolute;inset:0;display:flex;min-height:0">
+          <div style="flex:1;min-width:0;overflow-y:auto">
+            <div style="max-width:1100px;margin:0 auto;padding:24px 36px 40px">
+              <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:20px">
+                <div style="flex:1"></div>
+                <div style="display:flex;align-items:center;gap:9px;font-size:13px;color:#444"><button onClick="{{ toggleAuto }}" style="{{ autoTrack }}"><span style="{{ autoKnob }}"></span></button>Pick automatically</div>
+              </div>
+              <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px">
+                <sc-for list="{{ cards }}" as="k" hint-placeholder-count="6">
+                  <div onClick="{{ k.select }}" style="{{ k.cardStyle }}">
+                    <div style="display:flex;align-items:center;gap:10px">
+                      <span style="width:34px;height:34px;border-radius:10px;background:#F3F3F2;display:grid;place-items:center;flex:0 0 auto"><i class="{{ k.icon }}" style="font-size:17px;color:#444"></i></span>
+                      <div style="flex:1;min-width:0;font-size:14.5px;font-weight:600;letter-spacing:-0.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ k.name }}</div>
+                      <button onClick="{{ k.flip }}" style="{{ k.trackStyle }}"><span style="{{ k.knobStyle }}"></span></button>
+                    </div>
+                    <div style="font-size:13px;line-height:1.55;color:#666;margin:12px 0 14px;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;min-height:60px">{{ k.desc }}</div>
+                    <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+                      <span style="font-family:'Space Mono',monospace;font-size:10px;color:#888;background:#F3F3F2;border-radius:6px;padding:3px 8px">{{ k.tag }}</span>
+                      <span style="{{ k.alwaysStyle }}"><i class="ti ti-pin-filled" style="font-size:11px"></i>Always on</span>
+                      <div style="flex:1"></div>
+                      <i class="ti ti-arrow-up-right" style="color:#BBB;font-size:15px"></i>
+                    </div>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+          </div>
+          <sc-if value="{{ drawer }}" hint-placeholder-val="{{ false }}">
+                    <div style="position:absolute;inset:0;z-index:5;background:#fff;display:flex;flex-direction:column;min-height:0">
+            <div style="display:flex;align-items:center;padding:14px 28px;border-bottom:1px solid #ECECEA;gap:10px"><button onClick="{{ closeDrawer }}" style="display:flex;align-items:center;gap:8px;height:34px;padding:0 12px;border:1px solid #E0E0DE;background:#fff;border-radius:9px;cursor:pointer;color:#444;font-size:13px;white-space:nowrap" style-hover="background:#F6F6F5"><i class="ti ti-arrow-left"></i>All skills</button><span style="font-size:13px;color:#999">Skills / {{ cs.name }}</span></div>
+          <div style="flex:1;min-height:0;min-width:0;width:100%;max-width:920px;margin:0 auto;box-sizing:border-box;overflow-y:auto;overflow-x:hidden;padding:32px 36px 40px;display:flex;flex-direction:column;gap:24px">
+            <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+              <input value="{{ cs.name }}" onChange="{{ setSName }}" style="flex:1;min-width:220px;border:none;outline:none;font-size:21px;font-weight:600;letter-spacing:-0.02em;background:none;padding:0">
+              <span style="font-family:'Space Mono',monospace;font-size:10px;color:#999;border:1px solid #E4E4E2;border-radius:6px;padding:3px 8px">{{ cs.tag }}</span>
+              <button style="display:flex;align-items:center;gap:6px;height:32px;padding:0 11px;border:1px solid #E0E0DE;border-radius:8px;background:#fff;font-size:12.5px;color:#555;cursor:pointer"><i class="ti ti-download"></i>Export</button>
+              <sc-if value="{{ cs.custom }}" hint-placeholder-val="{{ false }}">
+                <button onClick="{{ delSkill }}" style="width:32px;height:32px;border:1px solid #F0D4D0;border-radius:8px;background:#fff;color:#C0453A;cursor:pointer;display:grid;place-items:center"><i class="ti ti-trash"></i></button>
+              </sc-if>
+            </div>
+
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:16px">
+              <div>
+                <div style="font-size:13px;font-weight:600;margin-bottom:2px">What it does</div>
+                <div style="font-size:12px;color:#999;margin-bottom:8px">Shown in lists. Also used for matching.</div>
+                <textarea rows="4" value="{{ cs.desc }}" onChange="{{ setSDesc }}" style="width:100%;box-sizing:border-box;border:1px solid #E0E0DE;border-radius:10px;padding:11px 12px;font-size:13.5px;line-height:1.6;outline:none;resize:none" style-focus="border-color:#1A1A1A"></textarea>
+              </div>
+              <div>
+                <div style="font-size:13px;font-weight:600;margin-bottom:2px">When to use it</div>
+                <div style="font-size:12px;color:#999;margin-bottom:8px">A trigger sentence the router reads.</div>
+                <textarea rows="4" value="{{ cs.when }}" onChange="{{ setSWhen }}" style="width:100%;box-sizing:border-box;border:1px solid #E0E0DE;border-radius:10px;padding:11px 12px;font-size:13.5px;line-height:1.6;outline:none;resize:none" style-focus="border-color:#1A1A1A"></textarea>
+              </div>
+            </div>
+
+            <div>
+              <div style="font-size:13px;font-weight:600;margin-bottom:8px">Keywords</div>
+              <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;border:1px solid #E0E0DE;border-radius:10px;padding:8px 10px">
+                <sc-for list="{{ keywords }}" as="k" hint-placeholder-count="4">
+                  <span style="display:flex;align-items:center;gap:5px;background:#F1F1EF;border-radius:999px;padding:3px 6px 3px 11px;font-size:12.5px">{{ k.word }}<i onClick="{{ k.remove }}" class="ti ti-x" style="font-size:12px;color:#999;cursor:pointer"></i></span>
+                </sc-for>
+                <input value="{{ kwDraft }}" onChange="{{ setKw }}" onKeyDown="{{ kwKey }}" placeholder="Add keyword, press Enter" style="flex:1;min-width:140px;border:none;outline:none;font-size:13px;background:none;height:26px">
+              </div>
+            </div>
+
+            <div style="display:flex;flex-direction:column;min-height:300px">
+              <div style="display:flex;align-items:baseline;margin-bottom:8px">
+                <div style="flex:1;min-width:0"><span style="font-size:13px;font-weight:600">Instructions</span><span style="font-size:12px;color:#999;margin-left:8px">Markdown, sent to the model</span></div>
+                <span style="font-family:'Space Mono',monospace;font-size:11px;color:#AAA;white-space:nowrap;flex:0 0 auto;margin-left:12px">{{ cs.stats }}</span>
+              </div>
+              <textarea value="{{ cs.body }}" onChange="{{ setSBody }}" spellcheck="false" style="flex:1;min-height:300px;box-sizing:border-box;width:100%;border:1px solid #E0E0DE;border-radius:12px;padding:16px 18px;font-family:'Space Mono',monospace;font-size:13px;line-height:1.75;color:#2A2A2A;outline:none;resize:vertical;background:#FCFCFB;tab-size:2" style-focus="border-color:#1A1A1A;background:#fff"></textarea>
+            </div>
+
+            <div style="display:flex;align-items:center;gap:22px;flex-wrap:wrap;padding:14px 16px;border:1px solid #E9E9E7;border-radius:12px;background:#FAFAF9">
+              <div style="display:flex;align-items:center;gap:10px"><button onClick="{{ flipAlways }}" style="{{ alwaysTrack }}"><span style="{{ alwaysKnob }}"></span></button><span><span style="display:block;font-size:13px;font-weight:500">Always on</span><span style="display:block;font-size:11.5px;color:#999">Added to every message</span></span></div>
+              <div style="display:flex;align-items:center;gap:10px"><button onClick="{{ flipAuto }}" style="{{ autoSelTrack }}"><span style="{{ autoSelKnob }}"></span></button><span><span style="display:block;font-size:13px;font-weight:500">Auto-select</span><span style="display:block;font-size:11.5px;color:#999">Router may pick it</span></span></div>
+              <div style="flex:1"></div>
+              <div style="display:flex;align-items:center;gap:10px"><span style="font-size:13px;font-weight:500">Priority</span>
+                <div style="display:flex;align-items:center;border:1px solid #E0E0DE;border-radius:9px;background:#fff;height:34px">
+                  <button onClick="{{ prioDown }}" style="width:32px;height:100%;border:none;background:none;cursor:pointer;color:#666"><i class="ti ti-minus"></i></button>
+                  <span style="min-width:28px;text-align:center;font-family:'Space Mono',monospace;font-size:13px">{{ cs.priority }}</span>
+                  <button onClick="{{ prioUp }}" style="width:32px;height:100%;border:none;background:none;cursor:pointer;color:#666"><i class="ti ti-plus"></i></button>
+                </div>
+              </div>
+            </div>
+          </div>
+          </div>
+          </sc-if>
+        </div>
+      </sc-if>
+
+      <!-- UPDATES -->
+      <sc-if value="{{ isUpdates }}" hint-placeholder-val="{{ false }}">
+        <div style="max-width:760px;margin:0 auto;padding:28px 36px 48px;display:flex;flex-direction:column;gap:18px">
+          <sc-for list="{{ releases }}" as="r" hint-placeholder-count="2">
+            <div style="border:1px solid {{ r.border }};border-radius:16px;overflow:hidden;background:#fff">
+              <div style="display:flex;align-items:center;gap:14px;padding:18px 22px;background:{{ r.headBg }}">
+                <span style="width:44px;height:44px;border-radius:12px;background:#fff;display:grid;place-items:center;flex:0 0 auto;color:{{ r.verColor }};box-shadow:0 0 0 1px {{ r.border }}">{{ r.mg }}</span>
+                <div style="flex:1;min-width:0">
+                  <div style="display:flex;align-items:center;gap:10px"><span style="font-size:20px;font-weight:600;letter-spacing:-0.02em;color:{{ r.verColor }}">{{ r.version }}</span><span style="{{ r.latestStyle }}">Latest</span></div>
+                  <div style="font-family:'Space Mono',monospace;font-size:11px;color:#8A8A8A;margin-top:2px">{{ r.date }}</div>
+                </div>
+              </div>
+              <div style="padding:18px 22px 6px;font-size:14.5px;line-height:1.65;color:#444;text-wrap:pretty">{{ r.summary }}</div>
+              <div style="padding:8px 22px 20px;display:flex;flex-direction:column">
+                <sc-for list="{{ r.groups }}" as="g" hint-placeholder-count="2">
+                  <div style="display:grid;grid-template-columns:92px minmax(0,1fr);gap:16px;padding:14px 0;border-top:1px solid #F0F0EE">
+                    <div><span style="{{ g.chip }}"><span style="{{ g.dot }}"></span>{{ g.label }}</span></div>
+                    <div style="display:flex;flex-direction:column;gap:8px">
+                      <sc-for list="{{ g.items }}" as="it" hint-placeholder-count="2">
+                        <div style="font-size:14px;line-height:1.6;color:#555;text-wrap:pretty"><span style="font-weight:600;color:#1A1A1A">{{ it.title }}</span> {{ it.text }}</div>
+                      </sc-for>
+                    </div>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+          </sc-for>
+          <div style="display:flex;align-items:center;gap:8px;font-size:12px;color:#AAA;padding:4px 4px 0"><i class="ti ti-file-text" style="font-size:14px"></i>Reads from CHANGELOG.md when the app can access the local file.</div>
+        </div>
+      </sc-if>
+
+      <!-- LOGS -->
+      <sc-if value="{{ isLogs }}" hint-placeholder-val="{{ false }}">
+        <div style="max-width:1000px;margin:0 auto;padding:24px 36px 40px">
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap">
+            <div style="display:flex;gap:4px;padding:4px;background:#F3F3F1;border-radius:11px">
+              <sc-for list="{{ logTabs }}" as="lt" hint-placeholder-count="4"><button onClick="{{ lt.pick }}" style="{{ lt.style }}">{{ lt.label }}<span style="font-family:'Space Mono',monospace;font-size:10.5px;opacity:0.55;margin-left:7px">{{ lt.n }}</span></button></sc-for>
+            </div>
+            <div style="flex:1"></div>
+            <span style="display:flex;align-items:center;gap:6px;font-family:'Space Mono',monospace;font-size:11px;color:#2F7A55"><span style="width:6px;height:6px;border-radius:50%;background:#3BA676"></span>logs.md synced</span>
+            <button style="width:32px;height:32px;border:1px solid #E0E0DE;background:#fff;border-radius:8px;color:#666;cursor:pointer" style-hover="background:#F6F6F5"><i class="ti ti-refresh"></i></button>
+            <button style="width:32px;height:32px;border:1px solid #E0E0DE;background:#fff;border-radius:8px;color:#666;cursor:pointer" style-hover="background:#F6F6F5"><i class="ti ti-copy"></i></button>
+            <button onClick="{{ clearLogs }}" style="width:32px;height:32px;border:1px solid #F0D4D0;background:#fff;border-radius:8px;color:#C0453A;cursor:pointer"><i class="ti ti-trash"></i></button>
+          </div>
+          <div style="border:1px solid #E9E9E7;border-radius:14px;overflow:hidden">
+            <sc-for list="{{ logs }}" as="l" hint-placeholder-count="5">
+              <div style="border-top:{{ l.border }}">
+                <div onClick="{{ l.toggle }}" style="display:flex;align-items:center;gap:12px;padding:12px 16px;cursor:pointer;background:{{ l.bg }}">
+                  <i class="{{ l.chev }}" style="font-size:14px;color:#AAA"></i>
+                  <span style="font-family:'Space Mono',monospace;font-size:11px;color:#999;width:64px;flex:0 0 auto">{{ l.time }}</span>
+                  <span style="{{ l.kindStyle }}">{{ l.mg }}{{ l.kind }}</span>
+                  <span style="flex:1;min-width:0;font-size:13.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ l.title }}</span>
+                  <span style="font-family:'Space Mono',monospace;font-size:11px;color:#999;white-space:nowrap">{{ l.meta }}</span>
+                </div>
+                <sc-if value="{{ l.open }}" hint-placeholder-val="{{ false }}">
+                  <pre style="margin:0;padding:14px 18px 16px 46px;background:#FCFCFB;border-top:1px solid #F0F0EE;font-family:'Space Mono',monospace;font-size:12px;line-height:1.7;color:#2A2A2A;overflow-x:auto">{{ l.json }}</pre>
+                </sc-if>
+              </div>
+            </sc-for>
+            <sc-if value="{{ noLogs }}" hint-placeholder-val="{{ false }}"><div style="padding:40px;text-align:center;font-size:13px;color:#AAA">No events.</div></sc-if>
+          </div>
+        </div>
+      </sc-if>
+
+      <!-- INTEGRATIONS -->
+      <sc-if value="{{ isInteg }}" hint-placeholder-val="{{ false }}">
+        <div style="max-width:1000px;margin:0 auto;padding:24px 36px 40px">
+          <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px">
+            <div style="display:flex;gap:4px;padding:4px;background:#F3F3F1;border-radius:11px">
+              <sc-for list="{{ integTabs }}" as="it" hint-placeholder-count="3"><button onClick="{{ it.pick }}" style="{{ it.style }}">{{ it.label }}<span style="font-family:'Space Mono',monospace;font-size:10.5px;opacity:0.55;margin-left:7px">{{ it.n }}</span></button></sc-for>
+            </div>
+            <div style="flex:1"></div>
+            <sc-if value="{{ isMcp }}" hint-placeholder-val="{{ false }}">
+              <button onClick="{{ toggleAddMcp }}" style="display:flex;align-items:center;gap:6px;height:34px;padding:0 13px;border:none;border-radius:9px;background:#1A1A1A;color:#fff;font-size:13px;cursor:pointer;white-space:nowrap"><i class="ti ti-plus"></i>Add server</button>
+            </sc-if>
+          </div>
+
+          <sc-if value="{{ isApps }}" hint-placeholder-val="{{ false }}">
+            <div style="border:1px solid #E9E9E7;border-radius:14px;overflow:hidden">
+              <sc-for list="{{ apps }}" as="a" hint-placeholder-count="5">
+                <div style="display:flex;align-items:center;gap:16px;padding:16px 18px;border-top:{{ a.border }}">
+                  <span style="width:42px;height:42px;border-radius:11px;background:#F3F3F2;display:grid;place-items:center;flex:0 0 auto"><i class="{{ a.icon }}" style="font-size:22px;color:#1A1A1A"></i></span>
+                  <div style="flex:1;min-width:0">
+                    <div style="display:flex;align-items:center;gap:10px"><span style="font-size:14.5px;font-weight:600">{{ a.name }}</span><span style="{{ a.pillStyle }}"><span style="{{ a.dotStyle }}"></span>{{ a.status }}</span></div>
+                    <div style="font-size:13px;color:#777;margin-top:2px">{{ a.sub }}</div>
+                    <div style="font-size:12px;color:#AAA;margin-top:4px">{{ a.scopeText }}</div>
+                  </div>
+                  <button onClick="{{ a.flip }}" style="{{ a.btnStyle }}">{{ a.btn }}</button>
+                </div>
+              </sc-for>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{ isMcp }}" hint-placeholder-val="{{ false }}">
+            <sc-if value="{{ addMcp }}" hint-placeholder-val="{{ false }}">
+              <div style="border:1px dashed #BDBDBA;border-radius:12px;padding:14px;margin-bottom:14px;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,2fr) auto;gap:8px;align-items:center">
+                <input value="{{ mcpName }}" onChange="{{ setMcpName }}" placeholder="Name" style="height:36px;box-sizing:border-box;border:1px solid #E0E0DE;border-radius:9px;padding:0 12px;font-size:13px;outline:none;min-width:0" style-focus="border-color:#1A1A1A">
+                <input value="{{ mcpCmd }}" onChange="{{ setMcpCmd }}" placeholder="URL or command, e.g. npx -y @modelcontextprotocol/server-fetch" style="height:36px;box-sizing:border-box;border:1px solid #E0E0DE;border-radius:9px;padding:0 12px;font-size:13px;font-family:'Space Mono',monospace;outline:none;min-width:0" style-focus="border-color:#1A1A1A">
+                <button onClick="{{ saveMcp }}" style="height:36px;padding:0 16px;border:none;background:#1A1A1A;color:#fff;border-radius:9px;font-size:13px;cursor:pointer">Add</button>
+              </div>
+            </sc-if>
+            <div style="border:1px solid #E9E9E7;border-radius:14px;overflow:hidden">
+              <sc-for list="{{ mcps }}" as="m" hint-placeholder-count="3">
+                <div style="display:flex;align-items:center;gap:14px;padding:16px 18px;border-top:{{ m.border }}">
+                  <span style="width:42px;height:42px;border-radius:11px;background:#F3F3F2;display:grid;place-items:center;flex:0 0 auto"><i class="ti ti-server-2" style="font-size:20px;color:#444"></i></span>
+                  <div style="flex:1;min-width:0">
+                    <div style="display:flex;align-items:center;gap:10px"><span style="font-size:14.5px;font-weight:600">{{ m.name }}</span><span style="{{ m.pillStyle }}"><span style="{{ m.dot }}"></span>{{ m.status }}</span></div>
+                    <div style="font-family:'Space Mono',monospace;font-size:12px;color:#999;margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ m.cmd }}</div>
+                  </div>
+                  <span style="font-size:12.5px;color:#888;white-space:nowrap">{{ m.toolsLabel }}</span>
+                  <button onClick="{{ m.flip }}" style="{{ m.trackStyle }}"><span style="{{ m.knobStyle }}"></span></button>
+                  <button onClick="{{ m.remove }}" style="width:30px;height:30px;border:none;background:none;border-radius:8px;color:#BBB;cursor:pointer" style-hover="background:#F2F2F0;color:#C0453A"><i class="ti ti-trash"></i></button>
+                </div>
+              </sc-for>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{ isPlugins }}" hint-placeholder-val="{{ false }}">
+            <div style="border:1px solid #E9E9E7;border-radius:14px;overflow:hidden">
+              <sc-for list="{{ plugins }}" as="pl" hint-placeholder-count="4">
+                <div style="display:flex;align-items:center;gap:16px;padding:16px 18px;border-top:{{ pl.border }}">
+                  <span style="width:42px;height:42px;border-radius:11px;background:#F3F3F2;display:grid;place-items:center;flex:0 0 auto"><i class="{{ pl.icon }}" style="font-size:20px;color:#444"></i></span>
+                  <div style="flex:1;min-width:0"><div style="font-size:14.5px;font-weight:600">{{ pl.name }}</div><div style="font-size:13px;color:#777;margin-top:2px">{{ pl.desc }}</div></div>
+                  <button onClick="{{ pl.flip }}" style="{{ pl.trackStyle }}"><span style="{{ pl.knobStyle }}"></span></button>
+                </div>
+              </sc-for>
+            </div>
+          </sc-if>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ isModes }}" hint-placeholder-val="{{ false }}">
+        <div style="max-width:1000px;margin:0 auto;padding:28px 36px 40px;display:flex;gap:18px;align-items:flex-start">
+          <div style="width:230px;flex:0 0 auto;display:flex;flex-direction:column;gap:6px">
+            <sc-for list="{{ modes }}" as="m" hint-placeholder-count="4">
+              <button onClick="{{ m.pick }}" style="{{ m.style }}">
+                <i class="{{ m.icon }}" style="font-size:17px"></i>
+                <span style="flex:1;text-align:left"><span style="display:block;font-size:13.5px;font-weight:600">{{ m.name }}</span><span style="display:block;font-size:11.5px;color:#999">{{ m.sub }}</span></span>
+              </button>
+            </sc-for>
+          </div>
+          <div style="flex:1;min-width:0;border:1px solid #E9E9E7;border-radius:14px;padding:18px">
+            <div style="font-family:'Space Mono',monospace;font-size:10px;letter-spacing:0.12em;text-transform:uppercase;color:#AAA;margin-bottom:8px">Name</div>
+            <input value="{{ cur.name }}" onChange="{{ setModeName }}" style="width:100%;box-sizing:border-box;height:38px;border:1px solid #E0E0DE;border-radius:9px;padding:0 12px;font-size:14px;outline:none" style-focus="border-color:#1A1A1A">
+            <div style="font-family:'Space Mono',monospace;font-size:10px;letter-spacing:0.12em;text-transform:uppercase;color:#AAA;margin:18px 0 8px">System prompt</div>
+            <textarea rows="10" value="{{ cur.prompt }}" onChange="{{ setModePrompt }}" placeholder="How should the assistant think, respond and push back in this mode?" style="width:100%;box-sizing:border-box;border:1px solid #E0E0DE;border-radius:9px;padding:12px;font-size:13.5px;line-height:1.7;outline:none;resize:vertical" style-focus="border-color:#1A1A1A"></textarea>
+            <div style="font-size:12px;color:#AAA;margin-top:8px;line-height:1.5">Added to the system prompt for every chat in this mode. Switch the active mode from the composer.</div>
+            <div style="margin-top:16px"><button onClick="{{ delMode }}" style="height:34px;padding:0 12px;border:1px solid #F0D4D0;background:#fff;color:#C0453A;border-radius:9px;font-size:13px;cursor:pointer;display:flex;align-items:center;gap:6px"><i class="ti ti-trash"></i>Delete</button></div>
+          </div>
+        </div>
+      </sc-if>
+    </div>
+  </div>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  state = {
+    tab: 'skills', theme: 'light', open: 'anthropic', draft: '', q: '', auto: true, sel: 'citation-discipline', mode: 'm1', testMsg: '', kwDraft: '', drawer: false, cat: 'All', itab: 'apps',
+    keys: { serper: 'f0f8••••••••8a8a', deepseek: 'sk-f••••••••d3f4', openai: 'sk-p••••••••1xkA', anthropic: 'sk-a••••••••qwAA' },
+    skills: [
+      { id: 'citation-discipline', group: 'Foundation', desc: 'Grounding rules for any answer that draws on sources: cite inline, prefer primary over commentary.', when: 'Any answer drawing on external sources.', kw: ['citation', 'grounding', 'sources', 'cite'], body: '# Citation Discipline\n\nActive whenever an answer draws on external sources: search results, fetched pages, GitHub, Reddit, or any tool output.\n\n## Rules\n\n- Cite inline next to the claim it supports, not bundled into a single list at the end.\n- Prefer primary sources over commentary about them.\n- Flag claims you could not verify instead of stating them as fact.\n- Never fill gaps with confident guesses. Say what is missing.\n\n## Format\n\nUse short bracketed references, e.g. [1], and list sources once at the bottom with title and URL.', on: true, always: false, auto: true, priority: 0 },
+      { id: 'output-format', group: 'Foundation', desc: 'Formatting and tone discipline applied to every response: match depth to the question.', when: 'Every response.', kw: ['format', 'tone', 'length'], body: '# Output Format\n\nShort questions get short answers. Use structure only when it helps.', on: true, always: true, auto: true, priority: 1 },
+      { id: 'thinking-contract', group: 'Foundation', desc: 'The reasoning standard prepended to every request: separate known from assumed.', when: 'Every request.', kw: ['reasoning', 'assumptions'], body: '# Thinking Contract\n\nSeparate what is known from what is assumed. Name the uncertainty.', on: true, always: true, auto: true, priority: 2 },
+      { id: 'critique-loop', group: 'Meta', desc: 'Draft, then critique your own draft to find hedges and unstated assumptions.', when: 'High-stakes or ambiguous questions.', kw: ['critique', 'review', 'draft'], body: '# Critique Loop\n\nDraft. Critique. Revise once.', on: true, always: false, auto: true, priority: 0 },
+      { id: 'debate-orchestration', group: 'Meta', desc: 'Two models argue opposing sides; a third pass synthesizes and names the crux.', when: 'Decisions with real trade-offs.', kw: ['debate', 'trade-off', 'decide'], body: '# Debate\n\nAssign sides, run rounds, synthesize.', on: true, always: false, auto: true, priority: 0 },
+      { id: 'self-check', group: 'Meta', desc: 'A verification pass: does the answer follow, are the numbers right.', when: 'Answers with math or multi-step logic.', kw: ['verify', 'math', 'check'], body: '# Self-check\n\nRe-derive numbers. Look for contradictions.', on: true, always: false, auto: true, priority: 0 },
+      { id: 'pre-mortem', group: 'Custom', custom: true, desc: 'Assume the plan failed a year from now and work backwards to why.', when: 'Planning, launches, risky decisions.', kw: ['plan', 'risk', 'launch', 'failure'], body: '# Pre-mortem\n\nImagine failure. List causes. Rank by likelihood.', on: true, always: false, auto: true, priority: 0 }
+    ],
+    conn: { github: true, reddit: false, notion: false, drive: false, slack: false },
+    mcps: [
+      { id: 'a1', name: 'Filesystem', cmd: 'npx -y @modelcontextprotocol/server-filesystem ~/notes', tools: 11, on: true },
+      { id: 'a2', name: 'Fetch', cmd: 'uvx mcp-server-fetch', tools: 1, on: true },
+      { id: 'a3', name: 'Postgres', cmd: 'postgresql://localhost:5432/notlinear', tools: 4, on: false }
+    ],
+    plugins: [
+      { id: 'p1', icon: 'ti ti-brand-wikipedia', name: 'Wikipedia search', desc: 'Look up facts and summaries.', on: true },
+      { id: 'p2', icon: 'ti ti-world-search', name: 'Web search', desc: 'Uses your Serper key.', on: true },
+      { id: 'p3', icon: 'ti ti-file-download', name: 'Fetch a web page', desc: 'Read the text of any URL.', on: true },
+      { id: 'p4', icon: 'ti ti-note', name: 'Save answers as notes', desc: 'Long replies become notes.', on: false }
+    ],
+    lf: 'all', logOpen: 'llm-2',
+    logs: [
+      { id: 'llm-2', ts: '2026-10-21T19:45:08.726Z', kind: 'llm', title: 'deepseek-v4-flash · stop', meta: '19.6s · 8.5k tok', data: { timestamp: '2026-10-21T19:45:08.726Z', id: 'llm-2', kind: 'llm', phase: 'end', durationMs: 19625, provider: 'deepseek', model: 'deepseek-v4-flash', inputTokens: 7507, outputTokens: 984, requestCount: 3, toolRounds: 2, finishReason: 'stop', outputChars: 3351 } },
+      { id: 'tool-5', ts: '2026-10-21T19:45:01.210Z', kind: 'tool', title: 'web_search · "non-linear chat"', meta: '1.2s', data: { id: 'tool-5', kind: 'tool', name: 'web_search', provider: 'serper', durationMs: 1204, ok: true, results: 8 } },
+      { id: 'tool-4', ts: '2026-10-21T19:44:57.480Z', kind: 'tool', title: 'fetch · notlinear.app', meta: '640ms', data: { id: 'tool-4', kind: 'tool', name: 'fetch', durationMs: 640, ok: true, bytes: 18234 } },
+      { id: 'err-1', ts: '2026-10-21T19:31:12.002Z', kind: 'error', title: 'openai · 429 rate limited', meta: '310ms', data: { id: 'err-1', kind: 'llm', phase: 'error', provider: 'openai', model: 'gpt-5', status: 429, message: 'Rate limit reached', retryInMs: 2000 } },
+      { id: 'llm-1', ts: '2026-10-21T19:30:40.118Z', kind: 'llm', title: 'anthropic · end_turn', meta: '8.1s · 3.2k tok', data: { id: 'llm-1', kind: 'llm', phase: 'end', durationMs: 8120, provider: 'anthropic', inputTokens: 2410, outputTokens: 802, finishReason: 'end_turn' } }
+    ],
+    addMcp: false, mcpName: '', mcpCmd: '',
+    modes: [
+      { id: 'm1', name: 'General', sub: 'Balanced default', icon: 'ti ti-sparkles', prompt: 'Be helpful and direct. Match depth to the question. State assumptions when they matter.' },
+      { id: 'm2', name: 'Critic', sub: 'Finds what is wrong', icon: 'ti ti-target', prompt: 'Find what is wrong, not what is helpful. Attack the weakest assumption first, then steelman the opposing view.' },
+      { id: 'm3', name: 'Engineer', sub: 'Precision over breadth', icon: 'ti ti-code', prompt: 'State assumptions about the stack. Prefer minimal, working code. Flag trade-offs and failure modes.' },
+      { id: 'm4', name: 'CTO', sub: 'Decide under constraints', icon: 'ti ti-compass', prompt: 'Distinguish one-way from two-way doors. Optimise for reversibility, cost and time to ship.' }
+    ]
+  };
+  providers = [
+    { g: 'Models', id: 'anthropic', name: 'Anthropic', sub: 'Claude Opus, Sonnet, Haiku', c: '#C97B50' },
+    { g: 'Models', id: 'openai', name: 'OpenAI', sub: 'GPT and o-series', c: '#2F8F6F' },
+    { g: 'Models', id: 'deepseek', name: 'DeepSeek', sub: 'V3 and R1 reasoning', c: '#3E7BD6' },
+    { g: 'Models', id: 'google', name: 'Google', sub: 'Gemini models', c: '#7A6AD8' },
+    { g: 'Search & tools', id: 'serper', name: 'Serper', sub: 'Web search', c: '#3E7BD6' },
+    { g: 'Search & tools', id: 'firecrawl', name: 'Firecrawl', sub: 'Web scrape', c: '#D9822B' },
+    { g: 'Search & tools', id: 'searxng', name: 'SearXNG', sub: 'Self-hosted search URL', c: '#555555' }
+  ];
+  appsDef = [
+    { id: 'github', icon: 'ti ti-brand-github', name: 'GitHub', sub: 'yash-dev', off: 'Repos, issues and pull requests', scopes: ['Read repos', 'Issues', 'Pull requests', 'Code search'] },
+    { id: 'reddit', icon: 'ti ti-brand-reddit', name: 'Reddit', off: 'Threads and community research', scopes: ['Read posts', 'Comments', 'Subreddit search'] },
+    { id: 'notion', icon: 'ti ti-brand-notion', name: 'Notion', off: 'Pages and databases', scopes: ['Read pages', 'Create pages'] },
+    { id: 'drive', icon: 'ti ti-brand-google-drive', name: 'Google Drive', off: 'Docs, sheets and files', scopes: ['Read files', 'Search'] },
+    { id: 'slack', icon: 'ti ti-brand-slack', name: 'Slack', off: 'Channels and messages', scopes: ['Read channels', 'Post messages'] }
+  ];
+  themesDef = [
+    { id: 'dark', name: 'Dark', desc: 'Black mono.', bg: '#121212', side: '#1C1C1C', line: '#2E2E2E', bar: '#2A2A2A' },
+    { id: 'grey', name: 'Grey', desc: 'Softer dark.', bg: '#2B2B2D', side: '#353537', line: '#444446', bar: '#3C3C3E' },
+    { id: 'light', name: 'Light', desc: 'Bright and clean.', bg: '#FFFFFF', side: '#F3F3F2', line: '#E6E6E4', bar: '#EDEDEB' }
+  ];
+  relDef = [
+    { v: '0.1.1', d: '2026-10-22', sum: 'Settings overhaul and sturdier logging.', items: [['Feature', 'Skills drawer.', 'Edit keywords, priority and instructions in a full-page editor.'], ['Improved', 'Models & keys.', 'Providers are grouped and keys are masked on screen.'], ['Fix', 'Branch scroll.', 'Branches no longer jump when a reply finishes streaming.']] },
+    { v: '0.1.0', d: '2026-10-21', sum: 'First public release. notlinear is a local-first, non-linear chat workspace: a conversation is a document you can branch from any highlighted passage, and every branch keeps the full context of where it came from.', items: [['Feature', 'Branching from highlights.', 'Select a phrase in a reply, press Cmd/Ctrl+Shift+B and ask a follow-up.'], ['Feature', 'Projects.', 'Group chats and notes under a project with its own rules and knowledge files.'], ['Feature', 'Local-first.', 'Everything is stored on your device.']] }
+  ];
+  mgBodies = {};
+  componentDidMount() {
+    fetch('uploads/mind-garden-icons.html').then(r => r.text()).then(t => {
+      const d = new DOMParser().parseFromString(t, 'text/html'), o = {};
+      d.querySelectorAll('figure').forEach(fig => { const c = fig.querySelector('code'), g = fig.querySelector('svg > g'); if (c && g) o[c.textContent.trim().replace(/Icon$/, '')] = g.innerHTML; });
+      this.mgBodies = o; this.forceUpdate();
+    }).catch(() => {});
+  }
+  mg(id, size, color) {
+    return React.createElement('svg', { viewBox: '0 0 64 64', width: size, height: size, fill: 'none', stroke: color || 'currentColor', strokeWidth: 2.6, strokeLinecap: 'round', strokeLinejoin: 'round', style: { display: 'block', flex: '0 0 auto' }, dangerouslySetInnerHTML: { __html: '<g>' + (this.mgBodies[id] || '') + '</g>' } });
+  }
+  toggle(on, sm) { return `position:relative;width:34px;height:20px;border-radius:999px;border:none;padding:0;cursor:pointer;flex:0 0 auto;background:${on ? '#1A1A1A' : '#DADAD8'};transition:background 140ms`; }
+  knob(on) { return `position:absolute;top:2px;left:${on ? 16 : 2}px;width:16px;height:16px;border-radius:50%;background:#fff;transition:left 140ms;display:block`; }
+  fires(sk, msg) { const m = msg.toLowerCase(); return !!m.trim() && sk.on && (sk.kw.some(k => m.includes(k.toLowerCase())) || sk.always); }
+  renderVals() {
+    const s = this.state, set = (o) => this.setState(o), self = this;
+    const connected = Object.values(s.conn).filter(Boolean).length;
+    const tabDef = [['appearance', 'Sun', 'Appearance', ''], ['models', 'Key', 'Models & keys', Object.keys(s.keys).length], ['skills', 'Sprout', 'Skills', s.skills.length], ['integ', 'Bridge', 'Integrations', connected + s.mcps.filter(m => m.on).length], ['modes', 'Thought', 'Modes', s.modes.length], ['updates', 'SpringBud', 'Product updates', ''], ['logs', 'Lantern', 'Runtime logs', s.logs.length]];
+    const tabs = tabDef.map(t => ({ label: t[2], mg: this.mg(t[1], 20), count: t[3], go: () => set({ tab: t[0] }),
+      style: `display:flex;align-items:center;gap:10px;height:38px;padding:0 10px;border:none;border-radius:9px;cursor:pointer;font-size:13.5px;font-weight:${s.tab === t[0] ? 600 : 500};background:${s.tab === t[0] ? '#fff' : 'transparent'};color:${s.tab === t[0] ? '#1A1A1A' : '#666'};box-shadow:${s.tab === t[0] ? '0 1px 3px rgba(0,0,0,0.08), 0 0 0 1px #ECECEA' : 'none'}` }));
+    const heads = {
+      appearance: ['Appearance', 'How notlinear looks on this device.'],
+      models: ['Models & keys', 'Connect a provider to use its models. Keys stay on your device.'],
+      skills: ['Skills', 'Reusable methods added to the system prompt, picked per message.'],
+      integ: ['Integrations', 'Connect apps, MCP servers and plugins the assistant can use.'],
+      modes: ['Modes', 'System prompts that shape how the assistant reacts to you.'],
+      updates: ['Product updates', 'What changed in each notlinear release.'],
+      logs: ['Runtime logs', 'Every model and tool request, newest first.']
+    };
+    const themes = this.themesDef.map(t => { const on = s.theme === t.id; return { name: t.name, desc: t.desc, pick: () => set({ theme: t.id }), check: on ? 'ti ti-circle-check-filled' : 'ti ti-circle',
+      style: `border:1.5px solid ${on ? '#1A1A1A' : '#E4E4E2'};background:#fff;border-radius:14px;padding:8px;cursor:pointer;box-shadow:${on ? '0 0 0 3px rgba(26,26,26,0.07)' : 'none'};display:flex;flex-direction:column;align-items:stretch`,
+      prevStyle: `height:110px;border-radius:9px;overflow:hidden;display:flex;background:${t.bg};border:1px solid rgba(128,128,128,0.15)`, sideStyle: `background:${t.side}`, lineStyle: `height:6px;border-radius:3px;background:${t.line}`, barStyle: `height:16px;border-radius:6px;background:${t.bar}` }; });
+    const groups = ['Models', 'Search & tools'].map(title => ({ title, items: this.providers.filter(p => p.g === title).map(p => {
+      const key = s.keys[p.id], open = s.open === p.id;
+      return { name: p.name, sub: p.sub, initial: p.name[0], open, connected: !!key, disconnected: !key, masked: key, status: key ? 'Connected' : 'Not set',
+        cardStyle: `border:1px solid ${open ? '#1A1A1A' : '#E9E9E7'};border-radius:14px;padding:14px;background:#fff;transition:border-color 140ms`,
+        logoStyle: `width:38px;height:38px;border-radius:10px;display:grid;place-items:center;font-weight:700;font-size:16px;color:#fff;background:${p.c};flex:0 0 auto`,
+        pillStyle: `display:flex;align-items:center;gap:6px;font-size:11.5px;padding:3px 9px;border-radius:999px;background:${key ? '#EAF6EF' : '#F3F3F2'};color:${key ? '#2F7A55' : '#999'}`,
+        dotStyle: `width:6px;height:6px;border-radius:50%;background:${key ? '#3BA676' : '#BBB'}`,
+        toggle: () => set({ open: open ? null : p.id, draft: '' }),
+        connect: () => { if (!s.draft.trim()) return; const d = s.draft.trim(); set({ keys: { ...s.keys, [p.id]: d.slice(0, 4) + '••••••••' + d.slice(-4) }, draft: '' }); },
+        remove: () => { const k = { ...s.keys }; delete k[p.id]; set({ keys: k }); } };
+    }) }));
+
+    // skills
+    const q = s.q.toLowerCase();
+    const patchSkill = (o) => set({ skills: s.skills.map(k => k.id === s.sel ? { ...k, ...o } : k) });
+    const skillGroups = ['Foundation', 'Meta', 'Custom'].map(title => ({ title, items: s.skills.filter(k => k.group === title && (k.id + k.desc).toLowerCase().includes(q)).map(k => {
+      const fire = this.fires(k, s.testMsg), act = s.sel === k.id;
+      return { name: k.id, select: () => set({ sel: k.id }), flip: (e) => { e.stopPropagation(); set({ skills: s.skills.map(x => x.id === k.id ? { ...x, on: !x.on } : x) }); },
+        trackStyle: this.toggle(k.on), knobStyle: this.knob(k.on), pin: k.always ? 'ti ti-pin-filled' : '',
+        fireStyle: fire ? 'width:8px;height:8px;border-radius:50%;background:#3BA676;flex:0 0 auto' : 'display:none',
+        rowStyle: `display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:9px;cursor:pointer;background:${act ? '#F1F1EF' : 'transparent'};opacity:${k.on ? 1 : 0.55}` };
+    }) })).filter(g => g.items.length);
+    const sk = s.skills.find(k => k.id === s.sel) || s.skills[0];
+    const cs = { ...sk, name: sk.id, tag: sk.custom ? 'Custom' : 'Built-in', stats: `${sk.body.split('\n').length} lines · ${sk.body.length} chars` };
+    const catList = ['All','Foundation','Meta','Custom'];
+    const cats = catList.map(c => ({ label: c, n: c === 'All' ? s.skills.length : s.skills.filter(k => k.group === c).length, pick: () => set({ cat: c }),
+      style: `height:34px;padding:0 14px;border-radius:999px;cursor:pointer;font-size:13px;font-weight:500;border:1px solid ${s.cat === c ? '#1A1A1A' : '#E0E0DE'};background:${s.cat === c ? '#1A1A1A' : '#fff'};color:${s.cat === c ? '#fff' : '#555'}` }));
+    const icons = { Foundation: 'ti ti-layers-intersect', Meta: 'ti ti-arrows-shuffle', Custom: 'ti ti-sparkles' };
+    const cards = s.skills.filter(k => (s.cat === 'All' || k.group === s.cat) && (k.id + k.desc).toLowerCase().includes(q)).map(k => ({ name: k.id, desc: k.desc || 'No description yet.', icon: icons[k.group], tag: k.custom ? 'Custom' : 'Built-in',
+      alwaysStyle: k.always ? "display:flex;align-items:center;gap:4px;font-size:11.5px;color:#666" : 'display:none',
+      select: () => set({ sel: k.id, drawer: true }), flip: (e) => { e.stopPropagation(); set({ skills: s.skills.map(x => x.id === k.id ? { ...x, on: !x.on } : x) }); },
+      trackStyle: this.toggle(k.on), knobStyle: this.knob(k.on),
+      cardStyle: `border:1px solid #E9E9E7;border-radius:16px;padding:16px;background:#fff;cursor:pointer;opacity:${k.on ? 1 : 0.55};transition:box-shadow 140ms,border-color 140ms` }));
+    const firing = s.skills.filter(k => this.fires(k, s.testMsg)).length;
+    const keywords = sk.kw.map(w => ({ word: w, remove: () => patchSkill({ kw: sk.kw.filter(x => x !== w) }) }));
+
+    // integrations
+    const apps = this.appsDef.map((a, i) => { const on = s.conn[a.id]; return { name: a.name, icon: a.icon, sub: on ? (a.sub ? 'Connected as ' + a.sub : 'Connected') : a.off, scopes: a.scopes,
+      scopeText: a.scopes.join(' · '), status: on ? 'Connected' : 'Not connected', border: i ? '1px solid #F0F0EE' : 'none',
+      pillStyle: `display:flex;align-items:center;gap:6px;font-size:11.5px;padding:2px 9px;border-radius:999px;background:${on ? '#EAF6EF' : '#F3F3F2'};color:${on ? '#2F7A55' : '#999'}`, dotStyle: `width:6px;height:6px;border-radius:50%;background:${on ? '#3BA676' : '#BBB'}`, btn: on ? 'Disconnect' : 'Connect',
+      btnStyle: on ? 'height:32px;padding:0 12px;border:1px solid #E0E0DE;background:#fff;color:#555;border-radius:9px;font-size:12.5px;cursor:pointer' : 'height:32px;padding:0 14px;border:none;background:#1A1A1A;color:#fff;border-radius:9px;font-size:12.5px;cursor:pointer',
+      cardStyle: `border:1px solid ${on ? '#CFE6D9' : '#E9E9E7'};border-radius:14px;padding:14px;background:${on ? '#FAFDFB' : '#fff'}`,
+      flip: () => set({ conn: { ...s.conn, [a.id]: !on } }) }; });
+    const mcps = s.mcps.map((m, i) => ({ status: m.on ? 'Running' : 'Off', toolsLabel: m.tools + (m.tools === 1 ? ' tool' : ' tools'), pillStyle: `display:flex;align-items:center;gap:6px;font-size:11.5px;padding:2px 9px;border-radius:999px;background:${m.on ? '#EAF6EF' : '#F3F3F2'};color:${m.on ? '#2F7A55' : '#999'}`, name: m.name, cmd: m.cmd, tools: m.tools, border: i ? '1px solid #F0F0EE' : 'none',
+      dot: `width:8px;height:8px;border-radius:50%;flex:0 0 auto;background:${m.on ? '#3BA676' : '#CCC'}`, trackStyle: this.toggle(m.on), knobStyle: this.knob(m.on),
+      flip: () => set({ mcps: s.mcps.map(x => x.id === m.id ? { ...x, on: !x.on } : x) }), remove: () => set({ mcps: s.mcps.filter(x => x.id !== m.id) }) }));
+    const plugins = s.plugins.map((p, i) => ({ ...p, border: i ? '1px solid #F0F0EE' : 'none', trackStyle: this.toggle(p.on), knobStyle: this.knob(p.on), flip: () => set({ plugins: s.plugins.map(x => x.id === p.id ? { ...x, on: !x.on } : x) }) }));
+
+    const tagC = { Feature: ['#CDEBDA', '#1F6B48'], Improved: ['#CFE0F7', '#2F5FA8'], Fix: ['#F7DDB8', '#9A5A12'] };
+    const labels = { Feature: 'New', Improved: 'Improved', Fix: 'Fixed' };
+    const gi = { Feature: 'Bud', Improved: 'Sapling', Fix: 'Ladybug' }, ki = { llm: 'Brain', tool: 'Trowel', error: 'Thorn' };
+    const releases = this.relDef.map((r, i) => ({ mg: this.mg(i ? 'Seed' : 'Sunflower', 24), version: r.v, date: r.d, summary: r.sum, latestStyle: i ? 'display:none' : "font-size:11px;padding:2px 9px;border-radius:999px;background:#E3EDFB;color:#2F5FA8;align-self:center",
+      dotStyle: `width:14px;height:14px;border-radius:50%;box-sizing:border-box;margin-top:8px;border:2px solid ${i ? '#CFCFCC' : '#3E7BD6'};background:${i ? '#fff' : '#3E7BD6'};box-shadow:${i ? 'none' : '0 0 0 4px #E3EDFB'}`, verColor: i ? '#1A1A1A' : '#2F5FA8', border: i ? '#E9E9E7' : '#BFD3F2', headBg: i ? '#FAFAF9' : '#EEF4FD', railColor: i === this.relDef.length - 1 ? 'transparent' : (i ? '#E6E6E4' : '#BFD3F2'),
+      groups: ['Feature', 'Improved', 'Fix'].map(t => ({ label: labels[t], mg: this.mg(gi[t], 15), dot: `width:6px;height:6px;border-radius:50%;background:${tagC[t][1]}`, chip: `display:inline-flex;align-items:center;gap:7px;font-family:'Space Mono',monospace;font-size:10.5px;letter-spacing:0.1em;text-transform:uppercase;padding:3px 10px;border-radius:999px;background:${tagC[t][0]};color:${tagC[t][1]}`, line: tagC[t][0], items: r.items.filter(x => x[0] === t).map(x => ({ title: x[1], text: x[2] })) })).filter(g => g.items.length) }));
+    const kC = { llm: ['#EAF0FB', '#2F5FA8'], tool: ['#F1EEFB', '#5B4BB5'], error: ['#FBEAE8', '#C0453A'] };
+    const lf = s.lf || 'all';
+    const logTabs = ['all', 'llm', 'tool', 'error'].map(k => ({ label: k === 'all' ? 'All' : k.toUpperCase() === 'LLM' ? 'LLM' : k[0].toUpperCase() + k.slice(1), n: k === 'all' ? s.logs.length : s.logs.filter(x => x.kind === k).length, pick: () => set({ lf: k }),
+      style: `height:32px;padding:0 14px;border:none;border-radius:8px;cursor:pointer;font-size:13px;font-weight:500;background:${lf === k ? '#fff' : 'transparent'};color:${lf === k ? '#1A1A1A' : '#777'};box-shadow:${lf === k ? '0 1px 2px rgba(0,0,0,0.1)' : 'none'}` }));
+    const logs = s.logs.filter(x => lf === 'all' || x.kind === lf).map((x, i) => { const o = s.logOpen === x.id; return { mg: this.mg(ki[x.kind], 14), time: x.ts.slice(11, 19), kind: x.kind, title: x.title, meta: x.meta, open: o, json: JSON.stringify(x.data, null, 2), border: i ? '1px solid #F0F0EE' : 'none', bg: o ? '#FAFAF9' : '#fff', chev: o ? 'ti ti-chevron-down' : 'ti ti-chevron-right',
+      kindStyle: `font-family:'Space Mono',monospace;font-size:10px;text-transform:uppercase;letter-spacing:0.06em;display:inline-flex;align-items:center;justify-content:center;gap:5px;width:64px;flex:0 0 auto;padding:3px 0;border-radius:6px;background:${kC[x.kind][0]};color:${kC[x.kind][1]}`, toggle: () => set({ logOpen: o ? null : x.id }) }; });
+
+    // modes
+    const modes = s.modes.map(m => ({ name: m.name, sub: m.sub, icon: m.icon, pick: () => set({ mode: m.id }),
+      style: `display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:11px;cursor:pointer;border:1px solid ${s.mode === m.id ? '#1A1A1A' : '#E9E9E7'};background:${s.mode === m.id ? '#F6F6F5' : '#fff'};color:#1A1A1A` }));
+    const cur = s.modes.find(m => m.id === s.mode) || s.modes[0] || { name: '', prompt: '' };
+    const patch = (o) => set({ modes: s.modes.map(m => m.id === cur.id ? { ...m, ...o } : m) });
+
+    return { tabs, head: { title: heads[s.tab][0], sub: heads[s.tab][1] }, isAppearance: s.tab === 'appearance', isModels: s.tab === 'models', isSkills: s.tab === 'skills', isInteg: s.tab === 'integ', isModes: s.tab === 'modes', isUpdates: s.tab === 'updates', isLogs: s.tab === 'logs', releases, logs, noLogs: !logs.length, logTabs, clearLogs: () => set({ logs: [] }),
+      integTabs: [['apps','Apps',this.appsDef.length],['mcp','MCP servers',s.mcps.length],['plugins','Plugins',s.plugins.length]].map(x => ({ label: x[1], n: x[2], pick: () => set({ itab: x[0] }), style: `height:32px;padding:0 14px;border:none;border-radius:8px;cursor:pointer;font-size:13px;font-weight:500;background:${s.itab === x[0] ? '#fff' : 'transparent'};color:${s.itab === x[0] ? '#1A1A1A' : '#777'};box-shadow:${s.itab === x[0] ? '0 1px 2px rgba(0,0,0,0.1)' : 'none'}` })),
+      isApps: s.itab === 'apps', isMcp: s.itab === 'mcp', isPlugins: s.itab === 'plugins', themes, groups, skillGroups, cats, cards, drawer: s.drawer, closeDrawer: () => set({ drawer: false }), cs, keywords, modes, cur, apps, mcps, plugins, q: s.q, draft: s.draft, testMsg: s.testMsg, kwDraft: s.kwDraft,
+      testNote: s.testMsg.trim() ? (firing ? firing + ' skill' + (firing > 1 ? 's' : '') + ' would fire (green dots)' : 'No skills would fire') : '', testNoteStyle: s.testMsg.trim() ? 'font-size:12px;color:#777;padding:0 2px' : 'display:none',
+      setDraft: e => set({ draft: e.target.value }), setQ: e => set({ q: e.target.value }), setTest: e => set({ testMsg: e.target.value }),
+      toggleAuto: () => set({ auto: !s.auto }), autoTrack: this.toggle(s.auto), autoKnob: this.knob(s.auto),
+      setSName: e => { const v = e.target.value.trim().toLowerCase().replace(/\s+/g, '-'); if (v && !s.skills.some(k => k.id === v)) set({ skills: s.skills.map(k => k.id === s.sel ? { ...k, id: v } : k), sel: v }); },
+      setSDesc: e => patchSkill({ desc: e.target.value }), setSWhen: e => patchSkill({ when: e.target.value }), setSBody: e => patchSkill({ body: e.target.value }),
+      setKw: e => set({ kwDraft: e.target.value }),
+      kwKey: e => { if (e.key === 'Enter' && s.kwDraft.trim()) { patchSkill({ kw: [...sk.kw, s.kwDraft.trim()] }); set({ kwDraft: '' }); } },
+      flipAlways: () => patchSkill({ always: !sk.always }), alwaysTrack: this.toggle(sk.always), alwaysKnob: this.knob(sk.always),
+      flipAuto: () => patchSkill({ auto: !sk.auto }), autoSelTrack: this.toggle(sk.auto), autoSelKnob: this.knob(sk.auto),
+      prioUp: () => patchSkill({ priority: sk.priority + 1 }), prioDown: () => patchSkill({ priority: Math.max(0, sk.priority - 1) }),
+      addSkill: () => { const id = 'new-skill-' + (s.skills.length + 1); set({ skills: [...s.skills, { id, group: 'Custom', custom: true, desc: '', when: '', kw: [], body: '# New skill\n\n', on: true, always: false, auto: true, priority: 0 }], sel: id }); },
+      delSkill: () => { const r = s.skills.filter(k => k.id !== sk.id); set({ skills: r, sel: r[0].id, drawer: false }); },
+      addMcp: s.addMcp, mcpName: s.mcpName, mcpCmd: s.mcpCmd, toggleAddMcp: () => set({ addMcp: !s.addMcp }),
+      setMcpName: e => set({ mcpName: e.target.value }), setMcpCmd: e => set({ mcpCmd: e.target.value }),
+      saveMcp: () => { if (!s.mcpName.trim()) return; set({ mcps: [...s.mcps, { id: 'm' + Date.now(), name: s.mcpName.trim(), cmd: s.mcpCmd.trim() || 'not configured', tools: 0, on: true }], mcpName: '', mcpCmd: '', addMcp: false }); },
+      setModeName: e => patch({ name: e.target.value }), setModePrompt: e => patch({ prompt: e.target.value }),
+      addMode: () => { const id = 'm' + Date.now(); set({ modes: [...s.modes, { id, name: 'New mode', sub: 'Custom', icon: 'ti ti-wand', prompt: '' }], mode: id }); },
+      delMode: () => { const r = s.modes.filter(m => m.id !== cur.id); set({ modes: r, mode: r[0] ? r[0].id : null }); } };
+  }
+}
+</script>
+</body>
+</html>

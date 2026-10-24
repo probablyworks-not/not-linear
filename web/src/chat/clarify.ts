@@ -6,6 +6,11 @@ import { runTurn, type RunTurnDeps, type SupportedPlan } from './run-turn';
 // prompt of the real request (see clarify-prompt.ts). It goes through runTurn with no tools and
 // asks for plain JSON, so it works on every provider with no provider edits. Anything that goes
 // wrong (bad JSON, an error, a timeout) means "no questions": the user's message is never blocked.
+//
+// This pass replaces the app's system prompt with its own, so it is blind to everything the real
+// reply knows. `input.brief` (clarify-brief.ts) hands it a short digest of the project, and the
+// rules below tell it never to ask what that digest already answers — without it, a message sent
+// inside a well-described project still drew generic "what kind of product is this?" questions.
 
 export interface ClarifyOption { label: string; hint?: string }
 export interface ClarifyQuestion {
@@ -31,6 +36,8 @@ Reply with ONE JSON object and nothing else (no prose, no code fences):
 
 Rules:
 - If the message is clear, specific, simple, or a follow-up whose intent is obvious from the conversation, reply {"questions":[]}.
+- A project context block may come first. It is settled fact. Never ask about anything it already states or strongly implies — the product, its users, the platform, the stack, the goal. Assume it.
+- Count only the decisions the project context and the conversation leave genuinely open. If there are none, reply {"questions":[]} — that is the common case for a message sent inside a well-described project.
 - Otherwise ask at most ${MAX_QUESTIONS} questions that would genuinely change the answer: goal, audience, scope, constraints, format, or depth. Never ask what you could reasonably assume.
 - Each question has 2 to ${MAX_OPTIONS} short, mutually distinct options (labels under 8 words; "hint" is optional and under 12 words). Do not add an "Other" option; the interface adds one.
 - Set "multi" to true only when several options can apply together.
@@ -97,6 +104,8 @@ export interface RunClarifyInput {
   plan: SupportedPlan;
   userText: string;
   history: readonly ChatMessage[];
+  /** A short project digest (clarify-brief.ts), prefixed to the request. Absent outside a project. */
+  brief?: string;
   signal: AbortSignal;
 }
 
@@ -107,7 +116,9 @@ export async function runClarify(input: RunClarifyInput, deps: RunTurnDeps): Pro
   const onAbort = (): void => timeout.abort();
   input.signal.addEventListener('abort', onAbort);
   try {
-    const content = `${recentContext(input.history)}New message to assess:\n${input.userText}`;
+    const content = [input.brief, recentContext(input.history).trim(), `New message to assess:\n${input.userText}`]
+      .filter(Boolean)
+      .join('\n\n');
     const messages: ChatMessage[] = [{ role: 'user', content }];
     const turn = runTurn(
       { messagesFor: () => messages, systemPrompt: CLARIFY_SYSTEM_PROMPT, plan: { ...input.plan, thinking: false }, signal: timeout.signal },

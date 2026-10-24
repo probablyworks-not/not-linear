@@ -18,6 +18,7 @@ const CLAUDE_IDS: Record<string, string> = {
 };
 const CLAUDE_THINKING = new Set(['opus', 'sonnet', 'opus-4-8', 'sonnet-4-6']);
 const OPENAI_IDS: Record<string, string> = {
+  'gpt-5.6-sol': 'gpt-5.6-sol',
   'gpt-4o': 'gpt-5.6-terra',
   'gpt-4o-mini': 'gpt-5.6-luna',
   'gpt-5': 'gpt-5-2025-08-07',
