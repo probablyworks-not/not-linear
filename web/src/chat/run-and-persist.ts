@@ -1,0 +1,235 @@
+import { useChatStore } from './chat-store';
+import { createDebouncedWriter } from '../lib/debounced-writer';
+import { readApiKeys } from '../lib/api-keys';
+import { friendlyError } from '../lib/markdown';
+import { claudeProvider } from '../providers/claude';
+import { deepseekProvider } from '../providers/deepseek';
+import { geminiProvider, openaiProvider } from '../providers/openai';
+import type { TurnSnapshot } from '../db/turn-ops';
+import { planModel } from './models';
+import { runTurn, type RunTurnDeps } from './run-turn';
+import { availableTools, FOLDER_TOOL_HINT } from '../providers/tool-specs';
+import { executeTool } from '../tools/tool-runners';
+import { runCreateNote, type NoteRef } from './note-tool';
+import { toolEnv } from '../tools/env';
+import { aiTurnHTML, userTurnHTML, type AiTurnContent } from './stream-html';
+import { useAppStore } from '../state/app-store';
+import type { ChatMessage, ProviderId } from '../providers/types';
+import type { Attachment } from '../attachments/read-files';
+import { userBubbleInnerHTML, userContentFor } from './user-content';
+import { linkedFolderFor, sourcesLabel } from './project-context';
+import type { TurnUsage } from './usage';
+import { flags } from '../flags';
+import { selectForTurn } from '../skills/skills-store';
+import { renderSkillsBlock } from '../skills/skills-prompt';
+import { awaitAnswers, renderClarifyBlock, runClarify, shouldClarify, type ClarifyAnswer } from './clarify';
+import { getClarifyFirst } from './clarify-pref';
+
+function lastAssistantText(history: ChatMessage[]): string {
+  const m = [...history].reverse().find(h => h.role === 'assistant');
+  return typeof m?.content === 'string' ? m.content : '';
+}
+
+// One reply, start to finish, saved as it goes. The main thread and every branch panel run
+// this same flow; they differ only in WHERE a turn is written and which model and system
+// prompt apply, which is what a TurnHost supplies. A turn is saved three ways (CLAUDE.md
+// "debounce, don't blast"): the first write, and the final one, are immediate; text arriving
+// in between coalesces to one write per 350ms per host, as legacy's
+// scheduleSaveMainTurnProgress does.
+
+const SAVE_DEBOUNCE_MS = 350;
+const saveWriter = createDebouncedWriter<string>(SAVE_DEBOUNCE_MS);
+
+const defaultDeps = (): RunTurnDeps => ({
+  providers: { claude: claudeProvider, deepseek: deepseekProvider, openai: openaiProvider, gemini: geminiProvider },
+  canFallBackToDeepSeek: !!readApiKeys().deepseek,
+});
+
+/** Swapped by tests; production always uses the real providers. */
+let depsFactory: () => RunTurnDeps = defaultDeps;
+export function setRunTurnDepsForTests(factory: (() => RunTurnDeps) | null): void {
+  depsFactory = factory ?? defaultDeps;
+}
+
+export interface Turn {
+  turnId: string;
+  /** What is sent to the model and saved in the message list. */
+  userText: string;
+  /** What the user's bubble shows, when it differs from `userText` (the popover's Ask). */
+  bubbleHTML?: string;
+  history: ChatMessage[];
+  /**
+   * The exact messages to send, when they are not simply `history` plus the question: a branch
+   * sends the whole ancestor chain, while `history` stays the branch's OWN messages (what it saves).
+   */
+  messagesFor?: (provider: ProviderId) => ChatMessage[];
+  /** Files attached to this message: shown as chips in the bubble, and given to the model. */
+  files?: readonly Attachment[];
+  titleSeed?: string;
+  /** What the user's bubble says when that is not what is sent ("Continue"). */
+  displayText?: string;
+  /** How many times this reply has already been continued. */
+  continueCount?: number;
+  /** Skills the user picked for this message with /skills (P7). */
+  skills?: string[];
+  /** Relevant files from a project's linked folder, appended to the system prompt. */
+  extraContext?: string;
+  /** Their names and how they were chosen, shown under the reply. */
+  sources?: { names: string[]; mode: string };
+  /** No "Try again" for a failure (the popover's Ask has none in legacy). */
+  noRetry?: boolean;
+  /**
+   * The answers to this turn's clarifying questions, once decided (an empty list means skipped or
+   * none were needed). A retry replays them rather than asking again.
+   */
+  clarified?: ClarifyAnswer[];
+}
+
+export interface TurnHost {
+  /** Key into the chat store's `live` and `failed` maps. */
+  key: string;
+  /** The model preference that applies (a branch has its own). */
+  modelPref(): string | undefined;
+  systemPrompt(extraContext?: string): string;
+  /** A short project digest for the clarify pre-pass, which does not get the system prompt. */
+  clarifyBrief?(turn: Turn): string;
+  /** Writes one snapshot of the turn into wherever this host keeps its conversation. */
+  write(snap: TurnSnapshot): Promise<void>;
+  register(controller: AbortController): void;
+  clear(): void;
+  /** Set on a main thread: the chat the model may file documents from as notes. Branch panels leave it out. */
+  noteThreadId?: string;
+  /** The thread this turn belongs to (a branch's parent thread), used to find its project's linked folder. */
+  threadId?: string;
+}
+
+export function snapshotOf(turn: Turn, content: AiTurnContent | null, assistantText: string | null, usage?: TurnUsage): TurnSnapshot {
+  return {
+    turnId: turn.turnId,
+    userHTML: userTurnHTML(turn.turnId, turn.displayText ?? turn.userText, turn.bubbleHTML ?? (turn.files?.length ? userBubbleInnerHTML(turn.displayText ?? turn.userText, turn.files) : undefined)),
+    aiHTML: content ? aiTurnHTML(turn.turnId, content) : null,
+    history: turn.history,
+    userText: turn.userText,
+    assistantText,
+    titleSeed: turn.titleSeed,
+    usage,
+    clarified: turn.clarified,
+  };
+}
+
+export async function runAndPersist(host: TurnHost, turn: Turn): Promise<void> {
+  const key = host.key;
+  const app = useAppStore.getState();
+  const controller = new AbortController();
+  host.register(controller);
+  const chat = useChatStore.getState();
+  chat.setFailed(key, undefined);
+  chat.setContinue(key, undefined);
+  chat.setLive(key, { turnId: turn.turnId, userText: turn.displayText ?? turn.userText, bubbleHTML: turn.bubbleHTML ?? (turn.files?.length ? userBubbleInnerHTML(turn.displayText ?? turn.userText, turn.files) : undefined), text: '', thinking: '', status: null, clarified: turn.clarified?.length ? turn.clarified : undefined });
+
+  let text = '';
+  let thinking = '';
+  const notes: NoteRef[] = [];
+  // Immediate: the user's bubble must survive a reload even if the reply never arrives.
+  await host.write(snapshotOf(turn, { text: '', thinking: '' }, ''));
+
+  const finish = async (content: AiTurnContent | null, assistantText: string | null, usage?: TurnUsage): Promise<void> => {
+    saveWriter.cancel(key);
+    // A note that was saved keeps its card even if the reply around it was stopped or failed.
+    const withNotes = notes.length ? { ...(content ?? { text: '', thinking: '' }), notes: [...notes] } : content;
+    await host.write(snapshotOf(turn, withNotes, assistantText, usage));
+    host.clear();
+    useChatStore.getState().setLive(key, undefined);
+  };
+  const fail = async (message: string, config: boolean, aborted: boolean): Promise<void> => {
+    if (text.trim()) {
+      // Cut short with something to show: offer to carry on from where it stopped (legacy's showPartialStop).
+      useChatStore.getState().setContinue(key, { turnId: turn.turnId, count: turn.continueCount ?? 0 });
+      await finish({ text, thinking, stopNote: aborted ? 'Response stopped before completion.' : message }, text);
+    } else if (aborted) {
+      await finish(null, null);
+    } else {
+      if (!turn.noRetry) useChatStore.getState().setFailed(key, { turnId: turn.turnId, config, turn });
+      await finish({ text: '', thinking, error: friendlyError(message) }, null);
+    }
+  };
+
+  const plan = planModel(host.modelPref(), !!app.prefs.thinking);
+  if (!plan.supported) {
+    await fail(plan.reason, true, false);
+    return;
+  }
+
+  const messagesFor = turn.messagesFor ?? ((p: ProviderId): ChatMessage[] => [...turn.history, { role: 'user', content: userContentFor(p, turn.userText, turn.files) }]);
+  try {
+    const env = toolEnv();
+    const canFileNotes = flags.chatNotes && !!host.noteThreadId;
+    // The linked folder is fixed here, from the thread's project; the model only names paths inside it.
+    const folderRoot = host.threadId ? linkedFolderFor(host.threadId) : '';
+    const tools = availableTools({ apiKeys: env.apiKeys, searxngUrl: env.searxngUrl, notes: canFileNotes, folder: !!folderRoot });
+    const toolRunner = async (name: string, toolInput: Record<string, unknown>, signal: AbortSignal): Promise<string> => {
+      if (name !== 'create_note') return (executeTool as never as (n: string, i: Record<string, unknown>, s: AbortSignal, c: { folderRoot: string }) => Promise<string>)(name, toolInput, signal, { folderRoot });
+      return runCreateNote(toolInput, {
+        threadId: host.noteThreadId ?? key,
+        onCreated: ref => { notes.push(ref); useChatStore.getState().patchLive(key, { notes: [...notes] }); },
+      });
+    };
+    // P7 skills: appended to extraContext so both hosts (main + branch) and every provider get it with no provider edits.
+    const picked = flags.skills ? await selectForTurn(turn.userText, lastAssistantText(turn.history), turn.skills) : [];
+    if (flags.skills) useChatStore.getState().setSkillsUsed(key, picked.map(p => ({ name: p.skill.name, reason: p.reason, score: p.score })));
+    if (picked.length) useChatStore.getState().patchLive(key, { skills: picked.map(p => p.skill.name) });
+    // Questions before answers: ask whether the request is ambiguous, wait for the user, and anchor the reply on what they say.
+    if (shouldClarify({ enabled: flags.clarify && getClarifyFirst(), userText: turn.userText, continueCount: turn.continueCount, noRetry: turn.noRetry, alreadyClarified: !!turn.clarified })) {
+      useChatStore.getState().patchLive(key, { status: 'Understanding your request…' });
+      const questions = await runClarify(
+        { plan, userText: turn.userText, history: turn.history, brief: host.clarifyBrief?.(turn), signal: controller.signal },
+        depsFactory(),
+      );
+      if (controller.signal.aborted) { await fail('Response stopped before completion.', false, true); return; }
+      if (questions.length) {
+        useChatStore.getState().patchLive(key, { clarify: questions, status: null });
+        const answers = await awaitAnswers(key, controller.signal);
+        if (controller.signal.aborted) { await fail('Response stopped before completion.', false, true); return; }
+        turn.clarified = answers ?? [];
+        // Written now so the summary survives a reload even if the reply never arrives.
+        await host.write(snapshotOf(turn, { text: '', thinking: '' }, ''));
+        useChatStore.getState().patchLive(key, { clarify: undefined, clarified: turn.clarified });
+      } else {
+        turn.clarified = [];
+      }
+      useChatStore.getState().patchLive(key, { status: null });
+    }
+    const extra = [turn.extraContext, folderRoot ? FOLDER_TOOL_HINT : '', renderSkillsBlock(picked), renderClarifyBlock(turn.clarified ?? [])].filter(Boolean).join('\n\n') || undefined;
+    const input = { messagesFor, systemPrompt: host.systemPrompt(extra), plan, signal: controller.signal, tools, toolRunner };
+    for await (const { ev, plan: used } of runTurn(input, depsFactory())) {
+      if (ev.t === 'delta') {
+        text += ev.text;
+        useChatStore.getState().patchLive(key, { text, status: null });
+        saveWriter.schedule(key, () => host.write(snapshotOf(turn, { text, thinking, notes: notes.length ? [...notes] : undefined }, text)));
+      } else if (ev.t === 'thinking') {
+        thinking += ev.text;
+        useChatStore.getState().patchLive(key, { thinking });
+      } else if (ev.t === 'status') {
+        // An empty label clears the status line (legacy's onStatus(null)).
+        useChatStore.getState().patchLive(key, { status: ev.label || null });
+      } else if (ev.t === 'done') {
+        const usage: TurnUsage | undefined = ev.usage && {
+          inputTokens: ev.usage.inputTokens, outputTokens: ev.usage.outputTokens,
+          cacheHitTokens: ev.usage.cacheHitTokens, provider: used.usageProvider, model: used.modelId,
+        };
+        const meta = ev.usage ? { usage: ev.usage, provider: used.usageProvider, model: used.modelId, thinking: used.thinking } : undefined;
+        if (ev.usage?.stopReason === 'max_tokens') useChatStore.getState().setContinue(key, { turnId: turn.turnId, count: turn.continueCount ?? 0 });
+        const sources = turn.sources?.names.length ? { names: turn.sources.names, ...sourcesLabel(turn.sources.mode) } : undefined;
+        await finish({ text: ev.text, thinking, meta, sources }, ev.text, usage);
+        return;
+      } else if (ev.t === 'error') {
+        await fail(ev.message, ev.kind === 'config', ev.kind === 'aborted');
+        return;
+      }
+    }
+    // A provider that ends without done or error is a bug in the provider; say so rather than hang.
+    await fail('The response ended unexpectedly. You can retry to get a fresh answer.', false, false);
+  } catch (e) {
+    await fail(e instanceof Error ? e.message : String(e), false, false);
+  }
+}

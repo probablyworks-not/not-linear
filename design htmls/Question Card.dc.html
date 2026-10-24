@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="design_doc_mode" content="canvas">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css">
+<style>html,body{margin:0;-webkit-font-smoothing:antialiased}button,input{font-family:inherit}a{color:#1A1A1A}a:hover{color:#555555}@keyframes qIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}</style>
+</helmet>
+<div style="min-height:100vh;background:#F8F8F8;font-family:'Space Grotesk',system-ui,sans-serif;color:#1A1A1A;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:48px 24px;box-sizing:border-box;gap:20px">
+  <div style="width:100%;max-width:720px;display:flex;justify-content:flex-end">
+    <div style="background:#EFEFEF;border-radius:18px;padding:12px 18px;font-size:15px;color:#333333;max-width:520px">What are the advantages of open-sourcing this and how should we go about it?</div>
+  </div>
+  <div style="width:100%;max-width:720px;background:#FFFFFF;border:1px solid #E6E6E6;border-radius:18px;box-shadow:0 1px 2px rgba(0,0,0,0.04),0 18px 48px -12px rgba(0,0,0,0.10);overflow:hidden;animation:qIn 280ms ease both">
+    <div style="display:flex;align-items:center;gap:10px;padding:16px 22px 0">
+      <span style="width:24px;height:24px;border-radius:7px;background:oklch(95% 0.03 290);color:oklch(48% 0.12 290);display:grid;place-items:center"><i class="ti ti-help-hexagon" style="font-size:14px"></i></span>
+      <span style="font-family:'Space Mono',monospace;font-size:10.5px;letter-spacing:0.12em;text-transform:uppercase;color:#999999;flex:1">A few quick questions</span>
+      <div style="display:flex;align-items:center;gap:2px">
+        <button onClick="{{ back }}" title="Previous" style="width:26px;height:26px;border-radius:7px;border:none;background:transparent;color:{{ prevColor }};cursor:{{ prevCursor }};display:grid;place-items:center" style-hover="background:#F1F1F1"><i class="ti ti-chevron-left" style="font-size:16px"></i></button>
+        <span style="font-family:'Space Mono',monospace;font-size:11px;color:#777777;min-width:34px;text-align:center">{{ stepNum }} / 4</span>
+        <button onClick="{{ fwd }}" title="Next" style="width:26px;height:26px;border-radius:7px;border:none;background:transparent;color:{{ nextColor }};cursor:{{ nextCursor }};display:grid;place-items:center" style-hover="background:#F1F1F1"><i class="ti ti-chevron-right" style="font-size:16px"></i></button>
+      </div>
+    </div>
+    <div style="padding:18px 22px 6px">
+      <h2 style="margin:0;font-size:21px;font-weight:600;letter-spacing:-0.02em;line-height:1.3">{{ qTitle }}</h2>
+      <p style="margin:6px 0 0;font-size:13px;color:#888888">Pick one — or tell me something different.</p>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:8px;padding:14px 22px 6px">
+      <sc-for list="{{ options }}" as="o" hint-placeholder-count="3">
+        <button onClick="{{ o.pick }}" style="display:flex;align-items:center;gap:14px;text-align:left;width:100%;padding:13px 16px;border-radius:12px;cursor:pointer;color:#1A1A1A;border:1px solid {{ o.border }};background:{{ o.bg }};box-shadow:{{ o.shadow }};transition:all 140ms" style-hover="border-color:#1A1A1A">
+          <span style="flex:0 0 auto;width:26px;height:26px;border-radius:7px;display:grid;place-items:center;font-family:'Space Mono',monospace;font-size:12px;font-weight:700;border:1px solid {{ o.keyBorder }};background:{{ o.keyBg }};color:{{ o.keyColor }};transition:all 140ms">{{ o.n }}</span>
+          <span style="flex:1;display:flex;flex-direction:column;gap:1px">
+            <span style="font-size:15px;font-weight:500">{{ o.title }}</span>
+            <span style="font-size:13px;color:#888888">{{ o.hint }}</span>
+          </span>
+          <span style="flex:0 0 auto;width:20px;height:20px;border-radius:50%;display:grid;place-items:center;background:{{ o.dotBg }};border:1.5px solid {{ o.dotBorder }};color:#fff;transition:all 140ms"><i class="ti ti-check" style="font-size:12px;opacity:{{ o.check }}"></i></span>
+        </button>
+      </sc-for>
+      <label style="display:flex;align-items:center;gap:12px;padding:0 16px;height:48px;border-radius:12px;border:1px dashed {{ otherBorder }};background:#FFFFFF;cursor:text">
+        <i class="ti ti-pencil" style="font-size:16px;color:#AAAAAA"></i>
+        <input value="{{ other }}" onInput="{{ setOther }}" placeholder="Something else…" style="flex:1;border:none;outline:none;background:transparent;font-size:14.5px;color:#1A1A1A">
+      </label>
+    </div>
+    <div style="display:flex;align-items:center;gap:10px;padding:14px 22px 18px">
+      <button onClick="{{ back }}" style="display:{{ backDisplay }};align-items:center;gap:6px;height:38px;padding:0 6px;border:none;background:transparent;color:#555555;font-size:14px;cursor:pointer"><i class="ti ti-arrow-left" style="font-size:15px"></i>Back</button>
+      <span style="flex:1;display:flex;align-items:center;gap:8px;font-size:12.5px;color:#999999"><span style="font-family:'Space Mono',monospace;font-size:10.5px;padding:2px 6px;border:1px solid #E2E2E2;border-radius:5px;background:#FAFAFA;color:#777777">Esc</span>to skip</span>
+      <button onClick="{{ skip }}" style="height:38px;padding:0 16px;border-radius:10px;background:transparent;border:1px solid #E2E2E2;color:#555555;font-size:14px;cursor:pointer" style-hover="background:#F4F4F4">Skip</button>
+      <button onClick="{{ next }}" style="height:38px;padding:0 10px 0 16px;border-radius:10px;border:none;display:flex;align-items:center;gap:10px;font-size:14px;font-weight:500;cursor:{{ cursor }};background:{{ ctaBg }};color:{{ ctaColor }};transition:all 140ms">{{ ctaLabel }}<span style="font-family:'Space Mono',monospace;font-size:11px;padding:2px 6px;border-radius:5px;background:rgba(255,255,255,0.16)">↵</span></button>
+    </div>
+  </div>
+  <div style="font-family:'Space Mono',monospace;font-size:10.5px;color:#AAAAAA;letter-spacing:0.08em">KEYS 1–3 SELECT · ENTER CONTINUES</div>
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  state = { step: 3, sel: [-1,-1,-1,-1], other: ['','','',''] };
+  qs = [
+    { t: 'What are you hoping to get out of open-sourcing?', o: [['Community contributions','Outside PRs and fixes'],['Credibility & adoption','Trust through transparency'],['Hiring & visibility','Attract engineers']] },
+    { t: 'How permissive do you want the license to be?', o: [['Very permissive','MIT / Apache 2.0'],['Copyleft','GPL / AGPL'],['Not sure yet','Walk me through tradeoffs']] },
+    { t: 'Who will maintain it after release?', o: [['Core team','Dedicated owners'],['Shared with community','Open governance'],['Nobody yet','Need a plan']] },
+    { t: 'Do you already have a repo and contributors lined up?', o: [['Repo ready to publish','Just need license choice'],['Early stage','Need full process guidance'],['Already public','Need license/governance fix']] }
+  ];
+  upd(k, v) { this.setState(s => { const a = s[k].slice(); a[s.step] = v; return { [k]: a }; }); }
+  go(n) { this.setState({ step: Math.max(0, Math.min(3, n)) }); }
+  componentDidMount() {
+    this.k = (e) => {
+      if (e.target.tagName === 'INPUT' && e.key !== 'Escape' && e.key !== 'Enter') return;
+      if (['1','2','3'].includes(e.key)) { this.upd('sel', +e.key - 1); this.upd('other', ''); }
+      if (e.key === 'Enter') this.go(this.state.step + 1);
+      if (e.key === 'ArrowLeft' && e.target.tagName !== 'INPUT') this.go(this.state.step - 1);
+      if (e.key === 'Escape') { this.upd('sel', -1); this.upd('other', ''); }
+    };
+    window.addEventListener('keydown', this.k);
+  }
+  componentWillUnmount() { window.removeEventListener('keydown', this.k); }
+  renderVals() {
+    const { step, sel, other } = this.state;
+    const q = this.qs[step], cs = sel[step], co = other[step];
+    const ready = cs >= 0 || co.trim().length > 0;
+    const options = q.o.map((d, i) => {
+      const on = cs === i;
+      return {
+        n: i + 1, title: d[0], hint: d[1],
+        pick: () => { this.upd('sel', i); this.upd('other', ''); },
+        border: on ? '#1A1A1A' : '#E6E6E6', bg: on ? '#F5F4FA' : '#FFFFFF',
+        shadow: on ? '0 0 0 3px rgba(26,26,26,0.06)' : 'none',
+        keyBg: on ? '#1A1A1A' : '#F6F6F6', keyBorder: on ? '#1A1A1A' : '#E2E2E2', keyColor: on ? '#FFFFFF' : '#777777',
+        dotBg: on ? 'oklch(55% 0.11 290)' : 'transparent', dotBorder: on ? 'oklch(55% 0.11 290)' : '#D4D4D4', check: on ? 1 : 0
+      };
+    });
+    const segs = [0,1,2,3].map(i => ({
+      go: () => this.go(i), title: 'Question ' + (i + 1),
+      bg: i === step ? 'oklch(55% 0.11 290)' : (sel[i] >= 0 || other[i] ? '#1A1A1A' : '#DDDDDD')
+    }));
+    return {
+      options, segs, qTitle: q.t, other: co,
+      stepNum: step + 1, fwd: () => this.go(step + 1), prevColor: step > 0 ? '#555555' : '#CCCCCC', prevCursor: step > 0 ? 'pointer' : 'default', nextColor: step < 3 ? '#555555' : '#CCCCCC', nextCursor: step < 3 ? 'pointer' : 'default',
+      otherBorder: co ? '#1A1A1A' : '#D9D9D9',
+      setOther: (e) => { this.upd('other', e.target.value); this.upd('sel', -1); },
+      skip: () => this.go(step + 1),
+      back: () => this.go(step - 1),
+      backDisplay: step > 0 ? 'flex' : 'none',
+      next: () => ready && this.go(step + 1),
+      ctaLabel: step === 3 ? 'Done' : 'Continue',
+      ctaBg: ready ? '#1A1A1A' : '#EDEDED', ctaColor: ready ? '#FFFFFF' : '#AAAAAA',
+      cursor: ready ? 'pointer' : 'not-allowed'
+    };
+  }
+}
+</script>
+</body>
+</html>
