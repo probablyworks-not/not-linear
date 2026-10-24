@@ -28,7 +28,7 @@ async function open(page: Page): Promise<void> {
   }));
   await page.goto('/web/');
   await page.getByRole('button', { name: 'Open left pane' }).click();
-  await page.locator('aside[aria-label="Left pane"] [data-note="a"]').click();
+  await page.locator('aside[aria-label="Left pane"] [data-note="a"] button').nth(1).click();
   await page.locator('.bn-block-content').first().click();
 }
 

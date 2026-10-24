@@ -1,5 +1,8 @@
 import { test, expect, type Page, type Route } from '@playwright/test';
 import { readPersistedState } from './helpers';
+// Pinned to the source list rather than a literal, so adding a model does not fail this spec
+// (it has now gone stale twice: 14 -> 15 -> 16).
+import { MODELS } from '../../src/settings/options';
 
 // P5b: highlights and branches in /web/. The handoff calls this the hard gate and says manual
 // checking is not acceptable, because the repo's own ADRs record manual checks missing this
@@ -588,7 +591,7 @@ test.describe('model and mode pickers', () => {
     await expect(chip).toContainText('Sonnet 5');
     await chip.click();
     const menu = page.getByRole('menu', { name: 'Select model' });
-    await expect(menu.getByRole('menuitem')).toHaveCount(15);
+    await expect(menu.getByRole('menuitem')).toHaveCount(MODELS.length);
     await expect(menu.getByRole('menuitem', { name: /Sonnet 5/ })).toContainText('Best balance');
     await menu.getByRole('menuitem', { name: /Haiku 4.5/ }).click();
     await expect(chip).toContainText('Haiku 4.5');

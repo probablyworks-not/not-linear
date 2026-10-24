@@ -48,7 +48,7 @@ async function open(page: Page, claude: 'ok' | 'error' | 'hang' = 'ok'): Promise
   });
   await page.goto('/web/');
   await page.getByRole('button', { name: 'Open left pane' }).click();
-  await page.locator('aside[aria-label="Left pane"] [data-note="a"]').click();
+  await page.locator('aside[aria-label="Left pane"] [data-note="a"] button').nth(1).click();
   await expect(page.locator('.bn-editor')).toBeVisible();
   return requests;
 }

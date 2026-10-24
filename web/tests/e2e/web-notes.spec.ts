@@ -64,7 +64,9 @@ async function mockBackup(page: Page, reply: object = { ok: true, path: '/Users/
 async function openNote1(page: Page): Promise<void> {
   await page.goto('/web/');
   await page.getByRole('button', { name: 'Open left pane' }).click();
-  await page.locator('aside[aria-label="Left pane"] [data-note="n1"]').click();
+  // The row itself has no click handler (drag only), so clicking it only works when the click
+  // point happens to land on the name button. Buttons in a row are [0] expand, [1] the name.
+  await page.locator('aside[aria-label="Left pane"] [data-note="n1"] button').nth(1).click();
   await expect(page.getByTestId('note-page')).toBeVisible();
 }
 
@@ -177,7 +179,7 @@ test('the editor follows the app theme, not the OS colour scheme', async ({ page
     await seed(p);
     await p.goto('/web/');
     await p.getByRole('button', { name: 'Open left pane' }).click();
-    await p.locator('aside[aria-label="Left pane"] [data-note="n1"]').click();
+    await p.locator('aside[aria-label="Left pane"] [data-note="n1"] button').nth(1).click();
     await expect(p.locator('.bn-container')).toHaveClass(dark ? /\bdark\b/ : /\blight\b/);
     // No painted box behind the text: the editor is transparent on the page background.
     await expect(p.locator('.bn-editor')).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');

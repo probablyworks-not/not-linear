@@ -75,8 +75,8 @@ async function deleteFromMenu(p: Page): Promise<void> {
 }
 const grid = (p: Page) => p.getByRole('dialog', { name: 'Projects' });
 const panel = (p: Page) => p.getByRole('dialog').filter({ has: p.getByTestId('project-title') });
-const cardNames = async (p: Page) => (await grid(p).locator('[data-pid]').locator('span.truncate').allInnerTexts()).map(s => s.trim());
-const cardMeta = async (p: Page) => (await grid(p).locator('[data-pid]').evaluateAll(els => els.map(e => (e.lastElementChild as HTMLElement).innerText.replace(/\s+/g, ' ').trim())));
+const cardNames = async (p: Page) => (await grid(p).locator('[data-pid]').locator('.nl-ix-name').allInnerTexts()).map(s => s.trim());
+const cardMeta = async (p: Page) => (await grid(p).locator('[data-pid]').locator('.nl-ix-meta').allInnerTexts()).map(s => s.replace(/\s+/g, ' ').trim());
 async function openGrid(p: Page): Promise<void> {
   await showSidebar(p);
   await p.getByRole('button', { name: 'View all projects' }).click();
@@ -84,13 +84,15 @@ async function openGrid(p: Page): Promise<void> {
 }
 
 test.describe('sidebar', () => {
-  test('lists projects in storage order and hides project chats from Threads', async ({ page }) => {
+  test('lists projects most-recent-first and hides project chats from Threads', async ({ page }) => {
     await seed(page);
     await openWeb(page);
     await showSidebar(page);
     const projects = page.getByRole('list', { name: 'Projects' }).locator('[data-project]');
     await expect(projects).toHaveCount(3);
-    expect(await projects.allInnerTexts()).toEqual(['Zeta research', 'Alpha lab', 'Mid project']);
+    // Recency order, same rule as the grid: a project is as recent as its own edits or its most
+    // recently active chat. 'Mid project' leads because its chat was touched 31m ago.
+    expect(await projects.allInnerTexts()).toEqual(['Mid project', 'Zeta research', 'Alpha lab']);
     const threads = sidebar(page).locator('[data-thread]');
     const titles = await threads.allInnerTexts();
     expect(titles.map(t => t.trim())).toContain('Gamma chat');
