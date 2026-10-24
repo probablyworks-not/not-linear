@@ -2,10 +2,11 @@
 
 Version 1.0 · 24 October 2026 · Target branch `feature-canvas` (from `refactor/p0-repo-hygiene`)
 
-**Status: C0 done (24 Oct 2026). Everything from C1 on is unbuilt.** No Canvas application code
-exists. `@xyflow/react@12.12.0` is installed but imported nowhere. The only measured numbers in this
-document are the C0 spike's, in §7 C0 and ADR-067; every other performance figure, capability and
-acceptance criterion is still a target, not a result.
+**Status: C0 and C1 done (24 Oct 2026). Everything from C2 on is unbuilt.** The data layer exists
+and is tested (56 tests); there is no Canvas UI, no `flags.canvas`, and no model call.
+`@xyflow/react@12.12.0` is installed but imported nowhere — its first import is C3. The only
+measured numbers in this document are the C0 spike's, in §7 C0 and ADR-067; every other performance
+figure, capability and acceptance criterion is still a target, not a result.
 
 This document reconciles the four `feature-canvas/` specs against the actual repository and turns
 them into phases an agent can build one session at a time. It is the operating document for the
@@ -384,6 +385,17 @@ New files only; mirrors the designs-pipeline P0 precedent.
 conflict, schema fixture validation, import/export with ID remapping, and the AC-16 consumer test
 that resolves context and output versions without importing React Flow.
 **Closes:** FR-01 identity contracts, AC-12, AC-13, AC-16.
+
+> **Result — done ([ADR-068](../docs/project-notes/DECISIONS.md)), 56 tests.** The document is five
+> row families in one `kv` store, not one row and not thirteen tables: drafts and viewport are
+> separate rows so a keystroke or a pan never re-serialises a canvas full of replies. The domain
+> layer is pure and the AC-16 boundary is asserted over the import graph, not assumed. Revision
+> checks are opt-in per write and hand back the document that was actually found. Idempotency is by
+> submission id, so a double-click or a replayed send cannot duplicate accepted work, and a retry
+> preserves the earlier attempt's partial text. Two defects surfaced during the phase: version
+> dedupe was comparing freshly-minted part ids rather than content, and an anchor fixture confirmed
+> the resolver refuses to relink a quote that moved. **Deliberately deferred:** `flags.canvas` (C2,
+> when there is a surface to put behind it), project-context resolution (C4), assets (C5).
 
 ### C2 — Tokens, Canvas library, canvas tabs *(first visible surface — blocked on C-PRE)* → [`TASK-C2`](../docs/project-notes/TASKS.md)
 
