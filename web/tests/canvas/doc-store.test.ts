@@ -11,7 +11,7 @@ const freshStore = (): void => {
   // A pending debounce from the previous test would fire against the next test's database.
   const prev = useCanvasDoc.getState().canvasId;
   if (prev) cancelCanvasWritesForTests(prev);
-  useCanvasDoc.setState({ canvasId: null, doc: null, view: null, status: 'idle', error: '', undo: [], saving: false });
+  useCanvasDoc.setState({ canvasId: null, doc: null, view: null, status: 'idle', error: '', undo: [], pendingWrites: 0, geometryPending: false, saving: false });
 };
 
 async function openCanvas(): Promise<string> {
@@ -107,6 +107,68 @@ describe('geometry undo', () => {
     await openCanvas();
     expect(() => useCanvasDoc.getState().undoGeometry()).not.toThrow();
     expect(useCanvasDoc.getState().undo).toHaveLength(0);
+  });
+});
+
+describe('the saving indicator', () => {
+  beforeEach(() => { resetCanvasDbForTests(`canvas-${Math.random()}`); freshStore(); });
+
+  it('clears once the writes land, and never claims work that is not happening', async () => {
+    await openCanvas();
+    await useCanvasDoc.getState().apply(d => createRootThread(d, 'q', { now: 1 }));
+    const threadId = useCanvasDoc.getState().doc!.threads[0]!.id;
+
+    useCanvasDoc.getState().applyGeometry(d => setGeometry(d, threadId, { x: 5 }));
+    expect(useCanvasDoc.getState().saving).toBe(true);
+
+    await flushCanvasWrites();
+    expect(useCanvasDoc.getState().saving).toBe(false);
+    expect(useCanvasDoc.getState().pendingWrites).toBe(0);
+  });
+
+  it('stays settled when many geometry frames coalesce into one write', async () => {
+    // `schedule()` replaces the pending callback, so N frames produce one write. Counting the
+    // frames instead of flagging the write is what left the header stuck on "Saving…".
+    await openCanvas();
+    await useCanvasDoc.getState().apply(d => createRootThread(d, 'q', { now: 1 }));
+    const threadId = useCanvasDoc.getState().doc!.threads[0]!.id;
+
+    for (let x = 0; x < 30; x++) {
+      useCanvasDoc.getState().applyGeometry(d => setGeometry(d, threadId, { x }));
+    }
+    expect(useCanvasDoc.getState().saving).toBe(true);
+    await flushCanvasWrites();
+    expect(useCanvasDoc.getState().saving).toBe(false);
+    expect(useCanvasDoc.getState().geometryPending).toBe(false);
+  });
+
+  it('survives overlapping writes without getting stuck', async () => {
+    await openCanvas();
+    await useCanvasDoc.getState().apply(d => createRootThread(d, 'q', { now: 1 }));
+    const threadId = useCanvasDoc.getState().doc!.threads[0]!.id;
+
+    // a content write and a geometry write in flight at once
+    const content = useCanvasDoc.getState().apply(d => { d.summary.title = 'renamed'; });
+    useCanvasDoc.getState().applyGeometry(d => setGeometry(d, threadId, { x: 9 }));
+    await content;
+    await flushCanvasWrites();
+
+    expect(useCanvasDoc.getState().pendingWrites).toBe(0);
+    expect(useCanvasDoc.getState().saving).toBe(false);
+  });
+
+  it('clears even when the scheduled write finds the canvas closed', async () => {
+    await openCanvas();
+    await useCanvasDoc.getState().apply(d => createRootThread(d, 'q', { now: 1 }));
+    const threadId = useCanvasDoc.getState().doc!.threads[0]!.id;
+    useCanvasDoc.getState().applyGeometry(d => setGeometry(d, threadId, { x: 5 }));
+
+    // the tab closes before the debounce fires — the early-return path
+    useCanvasDoc.setState({ canvasId: 'cv_somewhere_else' });
+    await flushCanvasWrites();
+
+    expect(useCanvasDoc.getState().pendingWrites).toBe(0);
+    expect(useCanvasDoc.getState().saving).toBe(false);
   });
 });
 

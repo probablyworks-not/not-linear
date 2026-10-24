@@ -27,7 +27,18 @@ interface DocState {
   error: string;
   /** Geometry history only. Content undo is a separate, later problem. */
   undo: Snapshot[];
-  /** True between a change and its write landing; the header shows it. */
+  /**
+   * Immediate writes in flight. A counter, because several can overlap.
+   */
+  pendingWrites: number;
+  /**
+   * Whether a coalesced geometry write is waiting. A flag, not a counter, and that distinction is
+   * the bug this file already had: `schedule()` *replaces* the pending callback, so N calls to
+   * `applyGeometry` produce N increments but only one callback — and the header claimed "Saving…"
+   * forever over work that had been cancelled.
+   */
+  geometryPending: boolean;
+  /** Derived from `pendingWrites`; the header shows it. */
   saving: boolean;
 
   load(canvasId: string): Promise<void>;
@@ -43,11 +54,25 @@ interface DocState {
 
 const UNDO_LIMIT = 50;
 
+type SetState = (partial: Partial<DocState> | ((s: DocState) => Partial<DocState>)) => void;
+const busy = (pendingWrites: number, geometryPending: boolean): boolean => pendingWrites > 0 || geometryPending;
+
+const beginWrite = (set: SetState): void =>
+  set(s => ({ pendingWrites: s.pendingWrites + 1, saving: true }));
+const endWrite = (set: SetState): void => set(s => {
+  const pendingWrites = Math.max(0, s.pendingWrites - 1);
+  return { pendingWrites, saving: busy(pendingWrites, s.geometryPending) };
+});
+const beginGeometryWrite = (set: SetState): void => set({ geometryPending: true, saving: true });
+const endGeometryWrite = (set: SetState): void =>
+  set(s => ({ geometryPending: false, saving: busy(s.pendingWrites, false) }));
+
 export const useCanvasDoc = create<DocState>((set, get) => ({
-  canvasId: null, doc: null, view: null, status: 'idle', error: '', undo: [], saving: false,
+  canvasId: null, doc: null, view: null, status: 'idle', error: '', undo: [],
+  pendingWrites: 0, geometryPending: false, saving: false,
 
   async load(canvasId) {
-    set({ canvasId, status: 'loading', doc: null, view: null, undo: [], error: '' });
+    set({ canvasId, status: 'loading', doc: null, view: null, undo: [], error: '', pendingWrites: 0, geometryPending: false, saving: false });
     try {
       const [doc, view] = await Promise.all([getCanvas(canvasId), getViewState(canvasId)]);
       // A different canvas may have been opened while this was in flight.
@@ -63,13 +88,15 @@ export const useCanvasDoc = create<DocState>((set, get) => ({
     const { canvasId, doc } = get();
     if (!canvasId || !doc) return null;
     let out: unknown;
-    set({ saving: true });
+    beginWrite(set);
     try {
       const { doc: saved } = await updateCanvas(canvasId, d => { out = fn(d); });
-      if (get().canvasId === canvasId) set({ doc: saved, saving: false });
+      if (get().canvasId === canvasId) set({ doc: saved });
     } catch (err) {
-      set({ saving: false, error: err instanceof Error ? err.message : String(err) });
+      set({ error: err instanceof Error ? err.message : String(err) });
       throw err;
+    } finally {
+      endWrite(set);
     }
     return out as never;
   },
@@ -80,13 +107,20 @@ export const useCanvasDoc = create<DocState>((set, get) => ({
     // Apply to a copy so React sees a new reference, then coalesce the write.
     const next: CanvasDoc = { ...doc, layouts: doc.layouts.map(l => ({ ...l, entries: { ...l.entries } })) };
     fn(next);
-    set({ doc: next, saving: true });
-    geometryWriter.schedule(canvasId, () => {
-      const latest = get().doc;
-      if (!latest || get().canvasId !== canvasId) return;
-      void updateCanvas(canvasId, d => { d.layouts = latest.layouts; })
-        .then(() => { if (get().canvasId === canvasId) set({ saving: false }); })
-        .catch((e: unknown) => set({ saving: false, error: e instanceof Error ? e.message : String(e) }));
+    set({ doc: next });
+    beginGeometryWrite(set);
+    geometryWriter.schedule(canvasId, async () => {
+      try {
+        const latest = get().doc;
+        if (!latest || get().canvasId !== canvasId) return;
+        await updateCanvas(canvasId, d => { d.layouts = latest.layouts; });
+      } catch (e) {
+        set({ error: e instanceof Error ? e.message : String(e) });
+      } finally {
+        // Every exit clears it, including the early return: no path may leave the header
+        // claiming work that is not happening.
+        endGeometryWrite(set);
+      }
     });
   },
 
@@ -101,11 +135,16 @@ export const useCanvasDoc = create<DocState>((set, get) => ({
     const { undo, canvasId, doc } = get();
     const last = undo[undo.length - 1];
     if (!last || !doc || !canvasId) return;
-    set({ doc: { ...doc, layouts: last.layouts }, undo: undo.slice(0, -1), saving: true });
-    geometryWriter.schedule(canvasId, () => {
-      void updateCanvas(canvasId, d => { d.layouts = last.layouts; })
-        .then(() => set({ saving: false }))
-        .catch(() => set({ saving: false }));
+    set({ doc: { ...doc, layouts: last.layouts }, undo: undo.slice(0, -1) });
+    beginGeometryWrite(set);
+    geometryWriter.schedule(canvasId, async () => {
+      try {
+        await updateCanvas(canvasId, d => { d.layouts = last.layouts; });
+      } catch (e) {
+        set({ error: e instanceof Error ? e.message : String(e) });
+      } finally {
+        endGeometryWrite(set);
+      }
     });
   },
 

@@ -182,3 +182,39 @@ describe('a canvas turn', () => {
     expect(manifest!.snapshotIds).toEqual([]);
   });
 });
+
+describe('the canvas uses the same execution path as chat', () => {
+  beforeEach(() => { resetCanvasDbForTests(`canvas-${Math.random()}`); });
+  afterEach(() => { setCanvasDepsForTests(null); });
+
+  it('plans the model exactly as the chat composer does', async () => {
+    // Regression guard for "canvas does not answer while chat does". Both call planModel with the
+    // same pref, so a model that works in a chat must work on a canvas.
+    const seen: string[] = [];
+    useProvider({
+      id: 'openai',
+      async *stream(req: ChatRequest) {
+        seen.push(req.model ?? '(none)');
+        yield { t: 'done', text: 'ok', usage: { inputTokens: 1, outputTokens: 1 } } as ProviderEvent;
+      },
+    } as unknown as ChatProvider);
+    const { canvasId, threadId } = await seedCanvas();
+
+    const res = await runCanvasTurn(
+      { threadId, submissionId: 'sub-1', modelPref: 'gpt-5.6-sol', prefs },
+      hooksFor(canvasId),
+    );
+    expect(res.status).toBe('completed');
+    expect(seen).toEqual(['gpt-5.6-sol']);
+    const doc = (await getCanvas(canvasId))!;
+    expect(doc.runs[0]).toMatchObject({ provider: 'openai', model: 'gpt-5.6-sol' });
+  });
+
+  it('falls back to the default model when no preference is set, like chat', async () => {
+    useProvider(fakeProvider([{ t: 'done', text: 'ok', usage: { inputTokens: 1, outputTokens: 1 } }] as ProviderEvent[]));
+    const { canvasId, threadId } = await seedCanvas();
+    const res = await runCanvasTurn({ threadId, submissionId: 's', modelPref: undefined, prefs: {} as typeof prefs }, hooksFor(canvasId));
+    expect(res.status).toBe('completed');
+    expect((await getCanvas(canvasId))!.runs[0]!.provider).toBe('claude');
+  });
+});

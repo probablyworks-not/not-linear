@@ -151,8 +151,22 @@ function Workspace({ canvasId }: { canvasId: string }) {
     if (ends) setGestureActive(false);
 
     const next = applyNodeChanges(changes, nodes);
+
+    // Only write when something actually moved. React Flow re-measures its nodes whenever they
+    // change identity, so writing unconditionally here makes a loop: write → new document → new
+    // nodes array → re-measure → write. The debounced writer then re-schedules forever, the write
+    // never lands, and the header sits on "Saving…" over work that is not happening.
+    const current = useCanvasDoc.getState().doc?.layouts.find(l => l.id === DEFAULT_LAYOUT_ID)?.entries ?? {};
+    const moved = next.filter(n => {
+      const was = current[n.id];
+      return !was
+        || was.x !== n.position.x || was.y !== n.position.y
+        || was.w !== (n.width ?? NODE_W) || was.h !== (n.height ?? NODE_H);
+    });
+    if (moved.length === 0) return;
+
     applyGeometry(d => {
-      for (const n of next) {
+      for (const n of moved) {
         setGeometry(d, n.id, { x: n.position.x, y: n.position.y, w: n.width ?? NODE_W, h: n.height ?? NODE_H });
       }
     });
