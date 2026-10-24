@@ -79,7 +79,7 @@ Notes:
 - internmap 2.0.3 — Mike Bostock
 - lucide-react 1.52.0 — Eric Fennis
 
-## MIT (164)
+## MIT (168)
 
 - @antfu/install-pkg 2.1.0 — Anthony Fu
 - @ariakit/components 0.1.13 — Diego Haz
@@ -174,7 +174,10 @@ Notes:
 - @types/use-sync-external-store 0.0.6
 - @types/use-sync-external-store 1.5.0
 - @upsetjs/venn.js 2.0.0 — Ben Frederickson
+- @xyflow/react 12.12.0
+- @xyflow/system 0.0.83
 - aria-hidden 1.2.6 — Anton Korzunov
+- classcat 5.0.5 — Jorge Bucaran
 - clsx 2.1.1 — Luke Edwards
 - commander 7.2.0 — TJ Holowaychuk
 - commander 8.3.0 — TJ Holowaychuk
@@ -244,6 +247,7 @@ Notes:
 - use-sync-external-store 1.6.0
 - uuid 14.0.2
 - w3c-keyname 2.2.8 — Marijn Haverbeke
+- zustand 4.5.7 — Paul Henschel
 - zustand 5.0.15 — Paul Henschel
 
 ## MPL-2.0 (3)

@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Canvas C0 spike</title>
+    <style>
+      /* Throwaway spike styling. Lives in the HTML, not in src, so the no-literal-colours
+         ESLint rule and its test are untouched. Colours come from tokens.css where they can. */
+      html, body, #spike { height: 100%; margin: 0; }
+      body { font-family: var(--font); color: var(--text); background: var(--bg); }
+      .sp-node {
+        background: var(--surface); border: 1px solid var(--rule); border-radius: 12px;
+        box-shadow: var(--shadow-md); display: flex; flex-direction: column; overflow: hidden;
+        width: 100%; height: 100%;
+      }
+      .sp-node:focus-visible { outline: 2px solid var(--branch); outline-offset: 2px; }
+      .sp-head {
+        display: flex; align-items: center; gap: 8px; padding: 8px 12px;
+        border-bottom: 1px solid var(--rule); font-family: var(--mono);
+        font-size: 9px; letter-spacing: .1em; text-transform: uppercase; color: var(--text-3);
+        flex: 0 0 auto;
+      }
+      .sp-body { padding: 12px 14px; overflow: auto; flex: 1 1 auto; font-size: 15px; line-height: 1.7;
+        /* React Flow's stylesheet sets user-select:none on .react-flow__node. Undo it or
+           selection — the whole branching gesture — is impossible. */
+        user-select: text; -webkit-user-select: text; cursor: text; }
+      .sp-body p { margin: 0 0 12px; }
+      .sp-mark { background: var(--highlight-soft); border-radius: 4px; }
+      .sp-inner {
+        margin: 12px 0; max-height: 120px; overflow: auto;
+        border: 1px solid var(--rule); border-radius: 8px; padding: 8px 10px;
+        background: var(--bg-2); font-size: 13px;
+      }
+      .sp-hud, .sp-composer {
+        position: fixed; z-index: 10; background: var(--surface);
+        border: 1px solid var(--rule-2); border-radius: 10px; box-shadow: var(--shadow-lg);
+        font-size: 12px;
+      }
+      .sp-hud { top: 12px; left: 12px; padding: 10px 12px; min-width: 300px; pointer-events: none; }
+      .sp-hud table { border-collapse: collapse; }
+      .sp-hud td { padding: 1px 8px 1px 0; }
+      .sp-hud td:last-child { font-family: var(--mono); text-align: right; }
+      .sp-bar { position: fixed; top: 12px; right: 12px; z-index: 10; display: flex; gap: 6px; }
+      .sp-bar button, .sp-hud button {
+        font: inherit; padding: 5px 9px; border-radius: 8px; cursor: pointer;
+        background: var(--surface); color: var(--text); border: 1px solid var(--rule-2);
+      }
+      .sp-composer { padding: 8px 11px; border-radius: 16px; width: 360px; }
+      .sp-composer input {
+        font: inherit; font-size: 13px; width: 100%; height: 36px; box-sizing: border-box;
+        background: var(--bg-2); color: var(--text);
+        border: 1px solid var(--rule); border-radius: 10px; padding: 0 10px;
+      }
+      .sp-chip {
+        display: inline-block; max-width: 100%; margin-bottom: 6px; padding: 2px 7px;
+        border-radius: 5px; background: var(--highlight-soft); font-size: 11px;
+        overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+      }
+      .sp-warn { color: var(--danger); }
+      .sp-ok { color: var(--success); }
+    </style>
+  </head>
+  <body>
+    <div id="spike"></div>
+    <script type="module" src="/src/canvas/__spike__/main.tsx"></script>
+  </body>
+</html>

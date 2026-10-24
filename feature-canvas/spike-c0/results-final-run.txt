@@ -1,0 +1,40 @@
+C0 spike — final measured run, 2026-10-24
+Chromium 1600x1000, Vite dev server, @xyflow/react 12.12.0, React 18.3.1, 60 nodes / 59 edges.
+
+page load -> first node visible (ms)           574
+nodes rendered                                 60
+edges rendered                                 59
+HUD first paint (ms since nav)                 65 ms
+1a selected text length                        32
+1b viewport unchanged during text drag         PASS
+4a inner panel scrollTop                       300
+4b viewport unchanged on nested wheel          PASS
+4c background wheel pans the world             PASS
+2 resize @50%: logical dw/dh                   200/120  expected ~200/120
+2 resize @50%: undo entries added              1 (want exactly 1)
+2 resize @50%: undo restores                   PASS
+2 resize @100%: logical dw/dh                  100/60  expected ~100/60
+2 resize @100%: undo entries added             1 (want exactly 1)
+2 resize @100%: undo restores                  PASS
+2 resize @200%: logical dw/dh                  50/30  expected ~50/30
+2 resize @200%: undo entries added             1 (want exactly 1)
+2 resize @200%: undo restores                  PASS
+3a streamTail renders during stream            1 -> 91
+3b scene renders during stream                 68 -> 68 PASS (unchanged)
+3c node renders n0/n7 during stream            50 / 3 -> 50 / 3
+3d streamed text length                        559
+5a composer visible on selection               PASS
+5b composer inside viewport                    PASS
+5c composer width unscaled by zoom             384 -> 384 PASS
+5d composer still inside viewport at 50%       PASS
+6a focus lands on the node                     node-n0
+6b keyboard resize (1 press)                   360x300 -> 380x300 (want +20 width)
+6c keyboard resize undo entries                1 (want exactly 1)
+6d Enter creates a branch node                 60 -> 61
+6e focus outline width                         2px
+pan frame mean / p95 / worst                   16.7 / 17.1 / 17.4 ms
+page errors                                    only Vite HMR websocket 403 (dev-server noise, port 8765 proxy)
+
+Bundle cost measured from the installed package:
+  dist/esm/index.js   233,341 raw   52,449 gzip
+  dist/style.css       18,596 raw    3,068 gzip
