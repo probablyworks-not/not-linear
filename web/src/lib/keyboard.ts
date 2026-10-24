@@ -22,6 +22,7 @@ export const ESC_PRIORITY = {
   // drop the composer before clearing the selection it is attached to.
   canvasOutputDetail: 144,
   canvasLibrary: 142,
+  canvasReading: 141,
   canvasComposer: 12,
   storyPlayer: 140,
   searchPalette: 130,

@@ -19,8 +19,10 @@ export const flags = {
   chatNotes: true,
   // Project screen: the Memory card shows its "Soon" placeholder until the memory backend exists.
   projectMemory: false,
-  // Canvas: a spatial thinking workspace under Projects. Off until the live loop lands (C4).
-  canvas: false,
+  // Canvas: a spatial thinking workspace under Projects. On from C4, when the loop closes:
+  // ask, branch from a selection, combine sources, save an output. Media is a later release and
+  // an unsupported output type says so rather than pretending.
+  canvas: true,
   // Design intake: a design bundle (dc.html + handoff README + screenshots) becomes user flows and
   // numbered requirements, reviewed by hand before the spec is frozen. Off until the UI lands (P2).
   designs: false,

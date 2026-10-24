@@ -40,6 +40,8 @@ export interface SaveArtifactInput {
   /** Saving the same key again makes a new version instead of a second artifact. */
   dedupeKey: string;
   noteId?: string;
+  canvasId?: string;
+  canvasOutputVersionId?: string;
 }
 
 /** Creates the artifact (v1) or, when `dedupeKey` already exists in the project, adds a version. Identical content is a no-op. */
@@ -54,6 +56,7 @@ export async function saveArtifact(input: SaveArtifactInput): Promise<SaveResult
         id: `art_${now.toString(36)}${Math.random().toString(36).slice(2, 8)}`,
         projectId: input.projectId, title: input.title, type: input.type, version: 1, chatId: input.chatId, updatedAt: now,
         content: input.content, source: input.source, dedupeKey: input.dedupeKey, ...(input.noteId ? { noteId: input.noteId } : {}),
+        ...(input.canvasId ? { canvasId: input.canvasId } : {}), ...(input.canvasOutputVersionId ? { canvasOutputVersionId: input.canvasOutputVersionId } : {}),
         versions: [{ v: 1, content: input.content, at: now }],
       };
       return { next: [...all, artifact], result: { artifact, created: true, changed: true } };

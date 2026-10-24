@@ -112,6 +112,12 @@ export interface CanvasMessage {
   rev: number;
   /** The run that produced this message, when a model did. */
   producedByRunId?: string;
+  /**
+   * The output family this message has been saved as, once it has been. Without it every save
+   * would mint a new family, and "save this reply again" would make a second artifact rather than
+   * a second version — which is exactly what happened before this field existed.
+   */
+  outputFamilyId?: string;
   /** Provisional until its run reaches a terminal status: a stream in flight is not an answer. */
   provisional?: boolean;
 }

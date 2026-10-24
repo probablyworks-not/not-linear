@@ -15,6 +15,12 @@ export interface ProjectArtifact {
   chatId: string;
   /** The Notes page it came from, when it came from one. */
   noteId?: string;
+  /** [SCHEMA] Additive (ADR-070): the canvas it came from, when it came from one. Absent on every
+   *  artifact written before Canvas existed, which readers must keep handling. */
+  canvasId?: string;
+  /** [SCHEMA] Additive: the exact Canvas output version this artifact was pinned to. Later Canvas
+   *  edits create new versions and never rewrite what was saved. */
+  canvasOutputVersionId?: string;
   updatedAt: number;
   /** Optional rendered thumbnail (data URL or http URL). Without it the card shows the striped placeholder. */
   previewUrl?: string;
@@ -23,8 +29,9 @@ export interface ProjectArtifact {
 /** What the artifacts db keeps: the list shape plus the content and its version history. */
 export interface StoredArtifact extends ProjectArtifact {
   content: string;
-  /** Where it came from: the AI's create_note tool, a code block saved from a reply, or a note the user saved. */
-  source: 'ai-note' | 'ai-block' | 'note-save';
+  /** Where it came from: the AI's create_note tool, a code block saved from a reply, a note the
+   *  user saved, or a Canvas output. `canvas` is additive — older records never carry it. */
+  source: 'ai-note' | 'ai-block' | 'note-save' | 'canvas';
   /** Same key in the same project = same artifact, new version. */
   dedupeKey: string;
   versions: { v: number; content: string; at: number }[];

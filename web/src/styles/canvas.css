@@ -1,0 +1,44 @@
+/* Canvas chrome. React Flow ships its own stylesheet with its own palette; these overrides put it
+   on our tokens so the workspace matches the app in all three themes. Only the library's chrome is
+   touched here — cards are components and style themselves.
+
+   The one load-bearing rule is the first: React Flow sets `user-select: none` on every node, which
+   makes text inside a card unselectable and so makes branching impossible. The C0 spike found it;
+   the node component sets `select-text`, and this guarantees the parent cannot take it back. */
+.react-flow__node { user-select: text; -webkit-user-select: text; }
+
+.react-flow__controls-button {
+  background: var(--surface);
+  border-bottom: 1px solid var(--rule);
+  fill: var(--text-2);
+}
+.react-flow__controls-button:hover { background: var(--bg-2); fill: var(--text); }
+
+.react-flow__minimap {
+  background: var(--surface);
+  border: 1px solid var(--rule-2);
+  border-radius: 10px;
+}
+.react-flow__minimap-mask { fill: var(--scrim); }
+.react-flow__minimap-node { fill: var(--cv-edge); }
+
+.react-flow__background-pattern { color: var(--rule); }
+
+/* Connectors support reading rather than dominate it: thin, dashed, and quiet until they matter. */
+.react-flow__edge-path { stroke: var(--cv-connector); stroke-width: 1.25; }
+.nl-edge-branch .react-flow__edge-path { stroke-dasharray: 5 6; }
+.nl-edge-synthesis .react-flow__edge-path { stroke-dasharray: 2 4; }
+.react-flow__edge.selected .react-flow__edge-path,
+.react-flow__edge:hover .react-flow__edge-path { stroke: var(--branch); }
+
+/* The resize handles have to stay visible against a white card in light and a dark one in dark. */
+.react-flow__resize-control.handle {
+  background: var(--surface);
+  border: 1px solid var(--branch);
+  border-radius: 2px;
+  width: 8px;
+  height: 8px;
+}
+.react-flow__resize-control.line { border-color: var(--branch); }
+
+.react-flow__attribution { display: none; }

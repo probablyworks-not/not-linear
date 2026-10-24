@@ -4,6 +4,7 @@
 @import './chat.css';
 /* The icon picker and Mind Garden glyph styles. */
 @import './emoji-picker.css';
+@import './canvas.css';
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
