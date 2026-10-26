@@ -163,10 +163,14 @@ describe('the saving indicator', () => {
     const threadId = useCanvasDoc.getState().doc!.threads[0]!.id;
     useCanvasDoc.getState().applyGeometry(d => setGeometry(d, threadId, { x: 5 }));
 
-    // the tab closes before the debounce fires — the early-return path
-    useCanvasDoc.setState({ canvasId: 'cv_somewhere_else' });
+    // Switching must not discard the original canvas's queued geometry.
+    const originalId = useCanvasDoc.getState().canvasId!;
+    const other = await createCanvas({ projectId: 'p1', title: 'Other' });
+    await useCanvasDoc.getState().load(other.summary.id);
     await flushCanvasWrites();
 
+    expect((await getCanvas(originalId))!.layouts[0]!.entries[threadId]!.x).toBe(5);
+    expect(useCanvasDoc.getState().doc!.summary.id).toBe(other.summary.id);
     expect(useCanvasDoc.getState().pendingWrites).toBe(0);
     expect(useCanvasDoc.getState().saving).toBe(false);
   });
@@ -183,5 +187,51 @@ describe('viewport', () => {
 
     expect((await getViewState(id))!.viewport).toEqual({ x: 120, y: -40, zoom: 0.5 });
     expect((await getCanvas(id))!.summary.rev).toBe(revBefore);
+  });
+});
+
+
+describe('independent canvas work', () => {
+  beforeEach(() => { resetCanvasDbForTests(`canvas-${Math.random()}`); freshStore(); });
+
+  it('finishes a background content write in its original canvas', async () => {
+    const first = await openCanvas();
+    const second = await createCanvas({ projectId: 'p1', title: 'Second' });
+    await useCanvasDoc.getState().load(second.summary.id);
+    await useCanvasDoc.getState().apply(d => createRootThread(d, 'First only', { now: 1 }), first);
+    expect((await getCanvas(first))!.threads).toHaveLength(1);
+    expect((await getCanvas(second.summary.id))!.threads).toHaveLength(0);
+    expect(useCanvasDoc.getState().doc!.summary.id).toBe(second.summary.id);
+    expect(useCanvasDoc.getState().saving).toBe(false);
+  });
+
+  it('does not lose pending geometry when a content write finishes', async () => {
+    const first = await openCanvas();
+    await useCanvasDoc.getState().apply(d => createRootThread(d, 'q', { now: 1 }));
+    const id = useCanvasDoc.getState().doc!.threads[0]!.id;
+    const write = useCanvasDoc.getState().apply(d => { d.summary.title = 'Changed'; });
+    useCanvasDoc.getState().applyGeometry(d => setGeometry(d, id, { x: 321 }));
+    await write;
+    expect(useCanvasDoc.getState().doc!.layouts[0]!.entries[id]!.x).toBe(321);
+    await flushCanvasWrites();
+    expect((await getCanvas(first))!.layouts[0]!.entries[id]!.x).toBe(321);
+  });
+
+  it('ignores late viewport events from an unmounted canvas', async () => {
+    const first = await openCanvas();
+    const other = await createCanvas({ projectId: 'p1', title: 'Other' });
+    await useCanvasDoc.getState().load(other.summary.id);
+    useCanvasDoc.getState().setViewport({ x: 99, y: 99, zoom: 0.5 }, first);
+    await flushCanvasWrites();
+    expect(await getViewState(other.summary.id)).toBeNull();
+  });
+
+  it('does not write unchanged geometry', async () => {
+    const id = await openCanvas();
+    const before = (await getCanvas(id))!.summary.rev;
+    useCanvasDoc.getState().applyGeometry(() => undefined);
+    await flushCanvasWrites();
+    expect((await getCanvas(id))!.summary.rev).toBe(before);
+    expect(useCanvasDoc.getState().saving).toBe(false);
   });
 });

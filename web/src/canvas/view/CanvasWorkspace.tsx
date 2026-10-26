@@ -80,11 +80,14 @@ function Workspace({ canvasId }: { canvasId: string }) {
   const saving = useCanvasDoc(s => s.saving);
   const storeError = useCanvasDoc(s => s.error);
   const undoDepth = useCanvasDoc(s => s.undo.length);
-  const apply = useCanvasDoc(s => s.apply);
-  const applyGeometry = useCanvasDoc(s => s.applyGeometry);
+  const applyStored = useCanvasDoc(s => s.apply);
+  const apply = useCallback(<T,>(fn: (d: CanvasDoc) => T) => applyStored(fn, canvasId), [applyStored, canvasId]);
+  const applyStoredGeometry = useCanvasDoc(s => s.applyGeometry);
+  const applyGeometry = useCallback((fn: (d: CanvasDoc) => void) => applyStoredGeometry(fn, canvasId), [applyStoredGeometry, canvasId]);
   const beginGesture = useCanvasDoc(s => s.beginGesture);
   const undoGeometry = useCanvasDoc(s => s.undoGeometry);
-  const setViewport = useCanvasDoc(s => s.setViewport);
+  const saveViewport = useCanvasDoc(s => s.setViewport);
+  const setViewport = useCallback((v: Viewport) => saveViewport(v, canvasId), [saveViewport, canvasId]);
 
   const [reading, setReading] = useState(false);
   const [contextOpen, setContextOpen] = useState(false);
@@ -557,7 +560,7 @@ function Workspace({ canvasId }: { canvasId: string }) {
           ...(files.length ? { attachments: files } : {}),
         },
         {
-          apply: fn => useCanvasDoc.getState().apply(fn),
+          apply: fn => useCanvasDoc.getState().apply(fn, canvasId),
           onDelta: (messageId, soFar) => {
             // An HTML reply streams its raw tags/CSS as text underneath — showing that live would
             // balloon the node's measured content height (it's markup, not prose), which drags the
@@ -571,7 +574,7 @@ function Workspace({ canvasId }: { canvasId: string }) {
               const m = d.messages.find(x => x.id === messageId);
               const part = m?.parts[0];
               if (part && part.kind === 'text') part.text = soFar;
-            }).then(() => undefined));
+            }, canvasId).then(() => undefined));
           },
           onStatus: setStatus,
           register: c => { abortRef.current = c; },
@@ -592,7 +595,7 @@ function Workspace({ canvasId }: { canvasId: string }) {
       abortRef.current = null;
       setActiveThreadId(null);
     }
-  }, [apply, snapshots, targetThread, prefs, projects, project, attachKey, doc, pickFlowY, skillsKey, setPicked]);
+  }, [apply, snapshots, targetThread, prefs, projects, project, attachKey, doc, pickFlowY, skillsKey, setPicked, canvasId]);
 
   // A thread's grown height/width are only a floor once it settles (goes inactive) — persisted
   // the same way drag/resize geometry is, on gesture end rather than on every delta. Read the
@@ -883,13 +886,14 @@ function WorkspaceHeader({ doc, saving, reading, onToggleReading, undoDepth, onU
 
 /** Loads the canvas, then hands it to the workspace. */
 export function CanvasWorkspace({ canvasId }: { canvasId: string }) {
+  const loadedCanvasId = useCanvasDoc(s => s.canvasId);
   const status = useCanvasDoc(s => s.status);
   const error = useCanvasDoc(s => s.error);
   const load = useCanvasDoc(s => s.load);
 
   useEffect(() => { void load(canvasId); }, [load, canvasId]);
 
-  if (status === 'loading' || status === 'idle') {
+  if (loadedCanvasId !== canvasId || status === 'loading' || status === 'idle') {
     return <main data-testid="canvas-workspace" data-canvas={canvasId} className="flex-1 p-8 text-sm text-text-3">Loading canvas&hellip;</main>;
   }
   if (status === 'error') {

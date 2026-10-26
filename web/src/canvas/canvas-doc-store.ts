@@ -43,16 +43,19 @@ interface DocState {
 
   load(canvasId: string): Promise<void>;
   /** Content change: applied in memory and written immediately. */
-  apply<T>(fn: (doc: CanvasDoc) => T): Promise<T | null>;
+  apply<T>(fn: (doc: CanvasDoc) => T, expectedCanvasId?: string): Promise<T | null>;
   /** Geometry change: applied in memory, written on a debounce. */
-  applyGeometry(fn: (doc: CanvasDoc) => void): void;
+  applyGeometry(fn: (doc: CanvasDoc) => void, expectedCanvasId?: string): void;
   /** Call once at the start of a drag or resize, never per frame (bug the C0 spike found). */
   beginGesture(label: string): void;
   undoGeometry(): void;
-  setViewport(v: CanvasViewState['viewport']): void;
+  setViewport(v: CanvasViewState['viewport'], expectedCanvasId?: string): void;
 }
 
 const UNDO_LIMIT = 50;
+// Pending layouts belong to their document, not whichever canvas is currently on screen.
+const pendingLayouts = new Map<string, CanvasDoc['layouts']>();
+let loadGeneration = 0;
 
 type SetState = (partial: Partial<DocState> | ((s: DocState) => Partial<DocState>)) => void;
 const busy = (pendingWrites: number, geometryPending: boolean): boolean => pendingWrites > 0 || geometryPending;
@@ -72,54 +75,64 @@ export const useCanvasDoc = create<DocState>((set, get) => ({
   pendingWrites: 0, geometryPending: false, saving: false,
 
   async load(canvasId) {
+    const generation = ++loadGeneration;
     set({ canvasId, status: 'loading', doc: null, view: null, undo: [], error: '', pendingWrites: 0, geometryPending: false, saving: false });
     try {
+      await Promise.all([geometryWriter.flush(canvasId), viewportWriter.flush(canvasId)]);
       const [doc, view] = await Promise.all([getCanvas(canvasId), getViewState(canvasId)]);
       // A different canvas may have been opened while this was in flight.
-      if (get().canvasId !== canvasId) return;
+      if (get().canvasId !== canvasId || loadGeneration !== generation) return;
       set(doc ? { doc, view, status: 'ready' } : { status: 'missing' });
     } catch (err) {
-      if (get().canvasId !== canvasId) return;
+      if (get().canvasId !== canvasId || loadGeneration !== generation) return;
       set({ status: 'error', error: err instanceof Error ? err.message : String(err) });
     }
   },
 
-  async apply(fn) {
-    const { canvasId, doc } = get();
-    if (!canvasId || !doc) return null;
+  async apply(fn, expectedCanvasId) {
+    const canvasId = expectedCanvasId ?? get().canvasId;
+    if (!canvasId || (!expectedCanvasId && !get().doc)) return null;
+    const generation = loadGeneration;
+    const visible = () => get().canvasId === canvasId && loadGeneration === generation;
     let out: unknown;
-    beginWrite(set);
+    if (visible()) beginWrite(set);
     try {
-      const { doc: saved } = await updateCanvas(canvasId, d => { out = fn(d); });
-      if (get().canvasId === canvasId) set({ doc: saved });
+      const { doc: saved } = await updateCanvas(canvasId, d => {
+        const layouts = pendingLayouts.get(canvasId);
+        if (layouts) d.layouts = layouts;
+        out = fn(d);
+      });
+      if (get().canvasId === canvasId && get().status === 'ready'
+        && (!get().doc || get().doc!.summary.rev <= saved.summary.rev)) {
+        set({ doc: { ...saved, layouts: pendingLayouts.get(canvasId) ?? saved.layouts } });
+      }
     } catch (err) {
-      set({ error: err instanceof Error ? err.message : String(err) });
+      if (visible()) set({ error: err instanceof Error ? err.message : String(err) });
       throw err;
     } finally {
-      endWrite(set);
+      if (visible()) endWrite(set);
     }
     return out as never;
   },
 
-  applyGeometry(fn) {
+  applyGeometry(fn, expectedCanvasId) {
     const { canvasId, doc } = get();
-    if (!canvasId || !doc) return;
-    // Apply to a copy so React sees a new reference, then coalesce the write.
+    if (!canvasId || !doc || (expectedCanvasId && expectedCanvasId !== canvasId)) return;
     const next: CanvasDoc = { ...doc, layouts: doc.layouts.map(l => ({ ...l, entries: { ...l.entries } })) };
     fn(next);
+    if (JSON.stringify(next.layouts) === JSON.stringify(doc.layouts)) return;
+    pendingLayouts.set(canvasId, next.layouts);
     set({ doc: next });
     beginGeometryWrite(set);
     geometryWriter.schedule(canvasId, async () => {
+      const layouts = pendingLayouts.get(canvasId);
       try {
-        const latest = get().doc;
-        if (!latest || get().canvasId !== canvasId) return;
-        await updateCanvas(canvasId, d => { d.layouts = latest.layouts; });
-      } catch (e) {
-        set({ error: e instanceof Error ? e.message : String(e) });
+        if (layouts) await updateCanvas(canvasId, d => { d.layouts = layouts; });
+      } catch (err) {
+        if (get().canvasId === canvasId) set({ error: err instanceof Error ? err.message : String(err) });
       } finally {
-        // Every exit clears it, including the early return: no path may leave the header
-        // claiming work that is not happening.
-        endGeometryWrite(set);
+        if (pendingLayouts.get(canvasId) === layouts) pendingLayouts.delete(canvasId);
+        if (get().canvasId === canvasId && !pendingLayouts.has(canvasId)) endGeometryWrite(set);
       }
     });
   },
@@ -135,22 +148,13 @@ export const useCanvasDoc = create<DocState>((set, get) => ({
     const { undo, canvasId, doc } = get();
     const last = undo[undo.length - 1];
     if (!last || !doc || !canvasId) return;
-    set({ doc: { ...doc, layouts: last.layouts }, undo: undo.slice(0, -1) });
-    beginGeometryWrite(set);
-    geometryWriter.schedule(canvasId, async () => {
-      try {
-        await updateCanvas(canvasId, d => { d.layouts = last.layouts; });
-      } catch (e) {
-        set({ error: e instanceof Error ? e.message : String(e) });
-      } finally {
-        endGeometryWrite(set);
-      }
-    });
+    set({ undo: undo.slice(0, -1) });
+    get().applyGeometry(d => { d.layouts = last.layouts; }, canvasId);
   },
 
-  setViewport(viewport) {
+  setViewport(viewport, expectedCanvasId) {
     const { canvasId } = get();
-    if (!canvasId) return;
+    if (!canvasId || (expectedCanvasId && canvasId !== expectedCanvasId)) return;
     const view: CanvasViewState = { ...(get().view ?? { updatedAt: 0 }), viewport, updatedAt: Date.now() };
     set({ view });
     viewportWriter.schedule(canvasId, () => { void putViewState(canvasId, view); });
@@ -165,5 +169,6 @@ export async function flushCanvasWrites(): Promise<void> {
 /** Tests only: drop pending writes so one test's debounce cannot fire against the next one's db. */
 export function cancelCanvasWritesForTests(canvasId: string): void {
   geometryWriter.cancel(canvasId);
+  pendingLayouts.delete(canvasId);
   viewportWriter.cancel(canvasId);
 }
