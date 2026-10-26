@@ -59,10 +59,12 @@ function branchHost(threadId: string, first: OpenBranch): TurnHost {
     clarifyBrief: turn => {
       const app = useAppStore.getState();
       const pid = app.threadState[threadId]?.projectId;
+      const quote = useBranchStore.getState().open[id]?.quote ?? latest.quote ?? first.quote;
       return buildClarifyBrief({
         project: typeof pid === 'string' ? app.projects[pid] : undefined,
         folderSources: turn.sources?.names,
         fileNames: turn.files?.map(f => f.name),
+        quote,
       });
     },
     write: async snap => {

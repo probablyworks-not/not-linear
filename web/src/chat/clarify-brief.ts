@@ -11,6 +11,7 @@ import type { PersistedProject } from '../db/types';
 
 const RULES_CHARS = 1500;
 const FILE_CHARS = 400;
+const QUOTE_CHARS = 600;
 const MAX_FILES = 6;
 const MAX_SOURCES = 20;
 export const CLARIFY_BRIEF_CHARS = 4000;
@@ -27,11 +28,16 @@ export interface ClarifyBriefInput {
   folderSources?: readonly string[];
   /** Names of the files attached to this message; their contents are not included. */
   fileNames?: readonly string[];
+  /** The passage the user highlighted to open this branch (and any ancestor branches' passages). Scopes the question hugely: a branch asking about a highlighted passage is rarely ambiguous. */
+  quote?: string;
 }
 
 /** The project digest prefixed to the clarify request. Empty when there is nothing to say. */
-export function buildClarifyBrief({ project, folderSources = [], fileNames = [] }: ClarifyBriefInput): string {
+export function buildClarifyBrief({ project, folderSources = [], fileNames = [], quote }: ClarifyBriefInput): string {
   const parts: string[] = [];
+  if (quote && quote.trim()) {
+    parts.push(`The user highlighted this passage and is asking about it specifically — it already scopes the question, do not ask what it's about or which part they mean:\n"${clip(quote, QUOTE_CHARS)}"`);
+  }
   if (project) {
     parts.push(`Project: ${project.name}`);
     if (project.rules && project.rules.trim()) {

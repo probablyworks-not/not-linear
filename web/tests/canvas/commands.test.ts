@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  acceptRun, addMessage, ancestorChain, branchFrom, continueThread, createRootThread, deleteThread,
+  acceptRun, addMessage, ancestorChain, branchFrom, continueThread, createRootThread, deleteOrphanSnapshot, deleteThread,
   editMessagePart, freezeSelection, placeBeside, retryRun, saveOutputVersion, setGeometry,
   setRunStatus, synthesize, textPart,
 } from '../../src/canvas/domain/commands';
@@ -53,6 +53,34 @@ describe('threads and messages', () => {
     expect(other.message.seq).toBe(0);
     expect(continueThread(d, threadId, 'x', ctx)?.seq).toBe(2);
   });
+
+  it('an unrelated new question never lands on top of an earlier one, and stacks below rather than beside it (bug #067, and the false-branch pan it caused)', () => {
+    const d = doc();
+    const first = createRootThread(d, 'first question', ctx);
+    const second = createRootThread(d, 'second, unrelated question', ctx);
+    const third = createRootThread(d, 'third, also unrelated', ctx);
+    const entries = d.layouts[0]!.entries;
+    // Stacked below, not placeBeside's "beside a source" offset — a plain new question must not
+    // read (or pan the view) like a branch off the previous reply.
+    expect(entries[second.thread.id]!.x).toBe(entries[first.thread.id]!.x);
+    expect(entries[third.thread.id]!.x).toBe(entries[second.thread.id]!.x);
+    expect(entries[second.thread.id]!.y).toBeGreaterThan(entries[first.thread.id]!.y);
+    expect(entries[third.thread.id]!.y).toBeGreaterThan(entries[second.thread.id]!.y);
+  });
+
+  it('a beside-placement that would still overlap a third, unrelated card is dropped clear of it instead (bug #067)', () => {
+    const d = doc();
+    const { thread: a } = createRootThread(d, 'a', ctx);
+    // A second, independent chain positioned so a naive "beside the previous thread" placement
+    // for a third card would land squarely on top of it.
+    placeBeside(d, 'th_unrelated', null);
+    const entries = d.layouts[0]!.entries;
+    entries['th_unrelated'] = { ...entries['th_unrelated']!, x: entries[a.id]!.x + entries[a.id]!.w + 80, y: entries[a.id]!.y };
+    const third = createRootThread(d, 'third', ctx); // anchors beside `a` by creation order
+    const t = entries[third.thread.id]!, u = entries['th_unrelated']!;
+    const overlap = t.x < u.x + u.w && t.x + t.w > u.x && t.y < u.y + u.h && t.y + t.h > u.y;
+    expect(overlap).toBe(false);
+  });
 });
 
 describe('branching', () => {
@@ -81,6 +109,29 @@ describe('branching', () => {
     const s2 = freezeSelection(d, r1.id, r1.parts[0]!.id, 'child', 0, ctx)!;
     const b2 = branchFrom(d, { snapshotId: s2.id, prompt: 'two' }, ctx)!;
     expect(ancestorChain(d, b2.thread.id)).toEqual([threadId, b1.thread.id, b2.thread.id]);
+  });
+});
+
+describe('orphan cleanup', () => {
+  it('removes a snapshot nothing cites', () => {
+    const { d, replyId, partId } = seeded();
+    const snap = freezeSelection(d, replyId, partId, 'beta', 6, ctx)!;
+    expect(d.snapshots).toHaveLength(1);
+    deleteOrphanSnapshot(d, snap.id);
+    expect(d.snapshots).toHaveLength(0);
+  });
+
+  it('leaves a snapshot a branch relation already cites', () => {
+    const { d, replyId, partId } = seeded();
+    const snap = freezeSelection(d, replyId, partId, 'beta', 6, ctx)!;
+    branchFrom(d, { snapshotId: snap.id, prompt: 'say more' }, ctx);
+    deleteOrphanSnapshot(d, snap.id);
+    expect(d.snapshots).toHaveLength(1);
+  });
+
+  it('is a no-op for an id that does not exist', () => {
+    const { d } = seeded();
+    expect(() => deleteOrphanSnapshot(d, 'sn_nope')).not.toThrow();
   });
 });
 

@@ -21,6 +21,8 @@ export const ESC_PRIORITY = {
   // open over it. The scoped composer sits just above the selection popover because Escape should
   // drop the composer before clearing the selection it is attached to.
   canvasOutputDetail: 144,
+  // C10. Memory/rules/files/outputs — between the library and output-detail slots so none collide.
+  canvasContext: 143,
   canvasLibrary: 142,
   canvasReading: 141,
   canvasComposer: 12,

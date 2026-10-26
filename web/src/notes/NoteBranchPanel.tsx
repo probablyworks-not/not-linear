@@ -1,15 +1,21 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { ArrowUp, ChevronUp, GitBranch, Maximize2, Minimize2, MoreHorizontal, Square, X } from 'lucide-react';
+import { ChevronUp, GitBranch, Maximize2, Minimize2, MoreHorizontal, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAppStore } from '../state/app-store';
+import { useChatStore } from '../chat/chat-store';
 import { claudeProvider } from '../providers/claude';
 import { deepseekProvider } from '../providers/deepseek';
 import { planModel } from '../chat/models';
-import { ModelChip } from '../chat/ComposerMenus';
+import { BranchComposer } from '../branch/BranchComposer';
+import { branchAttachKey, useAttachments } from '../attachments/attachments-store';
+import { userContentFor } from '../chat/user-content';
+import { flags } from '../flags';
+import { selectForTurn } from '../skills/skills-store';
+import { renderSkillsBlock } from '../skills/skills-prompt';
 import { friendlyError, highlightCodeIn, renderMarkdown } from '../lib/markdown';
 import { nameLinksIn } from '../lib/name-links';
 import { applySize, branchRail, clamp, resizeBounds, resizeDelta, type ResizeEdge, type ResizeStart } from '../branch/layout';
-import { apiMessages, buildNoteSystemPrompt, titleFromNoteQuote, truncate } from './note-branches';
+import { apiMessages, buildNoteSystemPrompt, titleFromNoteQuote, truncate, withAttachments } from './note-branches';
 import { patchBranch, type BranchGeometry, type BranchMessage, type NoteBranch } from './notes-repo';
 import { useNotesStore } from './notes-store';
 import type { LegacyNote } from './types';
@@ -25,19 +31,32 @@ const EDGES: Array<{ edge: ResizeEdge; title: string }> = [
 
 const message = (err: unknown): string => (err instanceof Error ? err.message : String(err));
 
+const lastAssistantText = (msgs: readonly BranchMessage[]): string => [...msgs].reverse().find(m => m.role === 'assistant')?.content ?? '';
+
+/** `note:<bid>` — this branch's key into the chat store's `skillsUsed` map (shared, in-memory only; ADR-007 untouched). */
+const skillsKeyFor = (bid: string): string => `note:${bid}`;
+
 interface Live { text: string }
 
-async function runReply(note: LegacyNote, br: NoteBranch, signal: AbortSignal, onDelta: (t: string) => void): Promise<{ text: string; error?: string }> {
+async function runReply(
+  note: LegacyNote, br: NoteBranch, signal: AbortSignal, onDelta: (t: string) => void, skills?: string[],
+): Promise<{ text: string; error?: string }> {
   const app = useAppStore.getState();
   const plan = planModel(app.prefs.model, !!app.prefs.thinking);
   if (!plan.supported || (plan.provider !== 'claude' && plan.provider !== 'deepseek')) {
     return { text: '', error: 'Notes branches support Claude and DeepSeek models for now — pick one from the model menu.' };
   }
   const provider = plan.provider === 'claude' ? claudeProvider : deepseekProvider;
+  const skillsKey = skillsKeyFor(br.bid);
+  const lastUserText = br.messages[br.messages.length - 1]?.content ?? '';
+  const picked = flags.skills ? await selectForTurn(lastUserText, lastAssistantText(br.messages), skills) : [];
+  if (flags.skills) useChatStore.getState().setSkillsUsed(skillsKey, picked.map(p => ({ name: p.skill.name, reason: p.reason, score: p.score })));
+  const files = useAttachments.getState().files[branchAttachKey(br.bid)] ?? [];
+  const messages = withAttachments(apiMessages(br.quote, br.messages), text => userContentFor(plan.provider as 'claude' | 'deepseek', text, files));
   let text = '';
   for await (const ev of provider.stream({
-    messages: apiMessages(br.quote, br.messages), tools: [], thinking: plan.thinking, signal, model: plan.modelId,
-    systemPrompt: buildNoteSystemPrompt(useNotesStore.getState().notes, note, br.quote, app.prefs),
+    messages, tools: [], thinking: plan.thinking, signal, model: plan.modelId,
+    systemPrompt: buildNoteSystemPrompt(useNotesStore.getState().notes, note, br.quote, app.prefs, renderSkillsBlock(picked) || undefined),
   })) {
     if (ev.t === 'delta') { text += ev.text; onDelta(text); }
     else if (ev.t === 'done') return { text: ev.text || text };
@@ -59,12 +78,10 @@ export function NoteBranchPanel({ note, branch, getAnchorTop, initialMessage, on
   const refresh = useNotesStore(s => s.load);
   const elRef = useRef<HTMLDivElement>(null);
   const bodyRef = useRef<HTMLDivElement>(null);
-  const taRef = useRef<HTMLTextAreaElement>(null);
   const drag = useRef<ResizeStart | null>(null);
   const ctrl = useRef<AbortController | null>(null);
   const [live, setLive] = useState<Live | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [draft, setDraft] = useState('');
   const [menu, setMenu] = useState(false);
   const [geo, setGeo] = useState<BranchGeometry>({
     collapsed: branch.collapsed, reader: branch.reader, width: branch.width, height: branch.height, top: branch.top, userSized: branch.userSized,
@@ -103,7 +120,7 @@ export function NoteBranchPanel({ note, branch, getAnchorTop, initialMessage, on
   useEffect(() => { const b = bodyRef.current; if (b) b.scrollTop = b.scrollHeight; }, [branch.messages.length, live?.text]);
   useEffect(() => { if (!live && bodyRef.current) { void highlightCodeIn(bodyRef.current); void nameLinksIn(bodyRef.current); } }, [branch.messages.length, live]);
 
-  const send = async (raw: string): Promise<void> => {
+  const send = async (raw: string, skills?: string[]): Promise<void> => {
     const text = raw.trim();
     if (!text || streaming) return;
     setError(null);
@@ -114,11 +131,12 @@ export function NoteBranchPanel({ note, branch, getAnchorTop, initialMessage, on
     // The question is saved first so it is not lost; it is taken back if nothing answers it.
     await patchBranch(note.id, branch.bid, b => { b.messages.push(userMsg); b.touchedAt = Date.now(); }, true);
     await refresh();
+    useAttachments.getState().clear(branchAttachKey(branch.bid));
     const current = useNotesStore.getState().notes.find(n => n.id === note.id);
     const saved = (current?.branches as NoteBranch[] | undefined)?.find(b => b.bid === branch.bid) ?? { ...branch, messages: [...branch.messages, userMsg] };
     let result: { text: string; error?: string };
     try {
-      result = await runReply(current ?? note, saved, abort.signal, t => setLive({ text: t }));
+      result = await runReply(current ?? note, saved, abort.signal, t => setLive({ text: t }), skills);
     } catch (err) {
       result = { text: '', error: message(err) };
     }
@@ -135,7 +153,6 @@ export function NoteBranchPanel({ note, branch, getAnchorTop, initialMessage, on
     if (result.error && result.text) setError(result.error);
     setLive(null);
     await refresh();
-    taRef.current?.focus();
   };
 
   const sentInitial = useRef(false);
@@ -209,24 +226,14 @@ export function NoteBranchPanel({ note, branch, getAnchorTop, initialMessage, on
           : <div className="msg ai streaming"><span className="text-text-3">&hellip;</span></div>)}
         {error && <div role="alert" className="msg ai text-sm text-danger" data-testid="note-branch-error">{friendlyError(error)}</div>}
       </div>
-      <div className="branch-compose">
-        <div className="composer">
-          <textarea
-            ref={taRef} rows={1} value={draft} disabled={streaming} aria-label="Ask about this" placeholder={branch.quote ? 'Ask about this passage…' : 'Ask about this note…'}
-            onChange={e => { setDraft(e.target.value); e.target.style.height = 'auto'; e.target.style.height = `${Math.min(120, e.target.scrollHeight)}px`; }}
-            onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); const t = draft; setDraft(''); void send(t); } }}
-          />
-          <div className="compose-row">
-            <div className="left"><ModelChip branchId={null} className="branch-model-chip" /></div>
-            <button
-              type="button" className="send-btn" aria-label={streaming ? 'Stop' : 'Send'} disabled={!streaming && !draft.trim()}
-              onClick={() => { if (streaming) ctrl.current?.abort(); else { const t = draft; setDraft(''); void send(t); } }}
-            >
-              {streaming ? <Square size={12} /> : <ArrowUp size={14} />}
-            </button>
-          </div>
-        </div>
-      </div>
+      <BranchComposer
+        branchId={branch.bid}
+        skillsKey={skillsKeyFor(branch.bid)}
+        streaming={streaming}
+        placeholder={branch.quote ? 'Ask about this passage…' : 'Ask about this note…'}
+        onSend={(text, skills) => { void send(text, skills); }}
+        onStop={() => ctrl.current?.abort()}
+      />
       {EDGES.map(({ edge, title }) => (
         <div key={edge} className="branch-resize" data-edge={edge} title={title} aria-hidden="true"
           onPointerDown={e => onResizeDown(e, edge)} onPointerMove={onResizeMove} onPointerUp={onResizeEnd} onPointerCancel={onResizeEnd} />

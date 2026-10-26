@@ -257,3 +257,19 @@ html[data-theme="light"], [data-preview-theme="light"]{
   --cv-island-files:#9DBBCE;  --cv-island-outputs:#DCBE82;
   --sec-canvas:#2F8795; --sec-canvas-soft:rgba(47,135,149,0.08); --sec-canvas-line:rgba(47,135,149,0.25);
 }
+
+/* ---- Ask surface (reference: feature-canvas/Conversations.html) ----
+   The floating "ask about this passage" popover/composer and its collapsed launcher pill are
+   deliberately dark graphite chrome floating over content in every theme — not a themed surface
+   like --cv-* / --sec-* above — so these are defined once here, constant across themes. */
+:root{
+  --ask-gradient:linear-gradient(170deg,#6B6B73 0%,#2A2A30 30%,#0B0B0E 55%,#1F1F24 80%,#45454D 100%);
+  --ask-fg:#FFFFFF;
+  --ask-fg-soft:rgba(255,255,255,0.80);
+  --ask-chip-bg:rgba(255,255,255,0.10);
+  --ask-chip-inset:rgba(255,255,255,0.15);
+  --ask-divider:rgba(255,255,255,0.18);
+  --ask-hint:#A8A8AE;
+  --ask-cta-bg:#FFFFFF;
+  --ask-cta-fg:#141414;
+}

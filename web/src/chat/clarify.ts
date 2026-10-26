@@ -37,7 +37,8 @@ Reply with ONE JSON object and nothing else (no prose, no code fences):
 Rules:
 - If the message is clear, specific, simple, or a follow-up whose intent is obvious from the conversation, reply {"questions":[]}.
 - A project context block may come first. It is settled fact. Never ask about anything it already states or strongly implies — the product, its users, the platform, the stack, the goal. Assume it.
-- Count only the decisions the project context and the conversation leave genuinely open. If there are none, reply {"questions":[]} — that is the common case for a message sent inside a well-described project.
+- If that block names a highlighted passage, the user is asking about that specific passage — that alone resolves "what are they asking about" and "which part do they mean". Only ask about something a highlighted passage leaves open, such as a genuine fork in how to use it (e.g. compare it to something unspecified); never ask it to restate or narrow the passage itself.
+- Count only the decisions the project context and the conversation leave genuinely open. If there are none, reply {"questions":[]} — that is the common case for a message sent inside a well-described project, and even more so for a message asking about a highlighted passage.
 - Otherwise ask at most ${MAX_QUESTIONS} questions that would genuinely change the answer: goal, audience, scope, constraints, format, or depth. Never ask what you could reasonably assume.
 - Each question has 2 to ${MAX_OPTIONS} short, mutually distinct options (labels under 8 words; "hint" is optional and under 12 words). Do not add an "Other" option; the interface adds one.
 - Set "multi" to true only when several options can apply together.

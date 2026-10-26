@@ -5,7 +5,7 @@ const rand = (): string => Math.random().toString(36).slice(2, 10);
 const stamp = (): string => Date.now().toString(36);
 
 export type IdKind =
-  | 'cv' | 'th' | 'ms' | 'pt' | 'sn' | 'cm' | 'rl' | 'ly' | 'rn' | 'sb' | 'ov' | 'as' | 'op';
+  | 'cv' | 'th' | 'ms' | 'pt' | 'sn' | 'cm' | 'rl' | 'ly' | 'rn' | 'sb' | 'ov' | 'as' | 'op' | 'mi' | 'cf';
 
 export const newId = (kind: IdKind): string => `${kind}_${stamp()}${rand()}`;
 

@@ -38,6 +38,11 @@ export default {
         files: { DEFAULT: v('sec-files'), soft: v('sec-files-soft'), line: v('sec-files-line') },
         canvas: { DEFAULT: v('sec-canvas'), soft: v('sec-canvas-soft'), line: v('sec-canvas-line') },
       },
+      ask: {
+        fg: v('ask-fg'), 'fg-soft': v('ask-fg-soft'),
+        chip: v('ask-chip-bg'), inset: v('ask-chip-inset'), divider: v('ask-divider'), hint: v('ask-hint'),
+        cta: v('ask-cta-bg'), 'cta-fg': v('ask-cta-fg'),
+      },
       scrim: v('scrim'),
       annotate: { DEFAULT: v('annotate'), faint: v('annotate-faint'), soft: v('annotate-soft'), line: v('annotate-line') },
       success: v('success'),
@@ -62,6 +67,7 @@ export default {
     extend: {
       width: { sidebar: v('sidebar-w') },
       spacing: { sidebar: v('sidebar-w') },
+      backgroundImage: { ask: v('ask-gradient') },
     },
   },
   plugins: [],

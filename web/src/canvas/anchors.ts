@@ -1,4 +1,4 @@
-import type { Anchor, AnchorStatus, CanvasDoc, CanvasMessage, SourceSnapshot, TextAnchor } from './types';
+import type { Anchor, AnchorStatus, CanvasDoc, CanvasMessage, HighlightTone, SourceSnapshot, TextAnchor } from './types';
 import { hashText } from './ids';
 
 // Resolving a frozen excerpt back onto a source that may have moved on. The contract (AC-05) is
@@ -27,6 +27,42 @@ const partTextOf = (m: CanvasMessage, partId: string): string | null => {
 export const messageText = (m: CanvasMessage): string =>
   m.parts.map(p => partTextOf(m, p.id) ?? '').join('\n\n');
 
+export interface TextHighlight {
+  /** The snapshot this highlight was frozen from — tags the rendered `<mark>` so an edge can
+   * leave from its exact position (see `useHighlightAnchors`). */
+  id: string;
+  partId: string;
+  quote: string;
+  tone: HighlightTone;
+}
+
+/** Every frozen quote, grouped by the message and then the part it was taken from — the one shape
+ * `ThreadNode`, `ReadingView` and `OutputDetailView` all build from so a branched/synthesized
+ * quote shows the same mark everywhere its source text is rendered (`apply-highlights.ts`
+ * actually paints it in). Pure/cheap enough to call per-render; callers that render many threads
+ * at once (`CanvasWorkspace`) still do their own per-thread/per-message narrowing on top of it. */
+export function highlightsByMessage(doc: CanvasDoc): Record<string, Record<string, TextHighlight[]>> {
+  const out: Record<string, Record<string, TextHighlight[]>> = {};
+  for (const s of doc.snapshots) {
+    if (s.anchor.kind !== 'text') continue;
+    const byPart = (out[s.anchor.messageId] ??= {});
+    (byPart[s.anchor.partId] ??= []).push({ id: s.id, partId: s.anchor.partId, quote: s.anchor.quote, tone: s.highlightTone ?? 'blue' });
+  }
+  return out;
+}
+
+/** Every thread ever frozen whole (`anchor.kind === 'whole'`), by thread id — the "whole card"
+ * counterpart to `highlightsByMessage` above, since there's no single part to mark a `<mark>`
+ * into; `ThreadNode` tints its entire body instead (`view/ThreadNode.tsx`). */
+export function wholeHighlightsByThread(doc: CanvasDoc): Record<string, HighlightTone> {
+  const out: Record<string, HighlightTone> = {};
+  for (const s of doc.snapshots) {
+    if (s.anchor.kind !== 'whole') continue;
+    out[s.anchor.threadId] = s.highlightTone ?? 'blue';
+  }
+  return out;
+}
+
 function resolveText(anchor: TextAnchor, snapshot: SourceSnapshot, doc: CanvasDoc): Resolution {
   const frozen = snapshot.content;
   const msg = doc.messages.find(m => m.id === anchor.messageId);
@@ -49,15 +85,25 @@ function resolveText(anchor: TextAnchor, snapshot: SourceSnapshot, doc: CanvasDo
   return { status: 'missing', frozen };
 }
 
+/** Every message belonging to `threadId`, in the doc's own order, joined the same way a single
+ * message's parts are — this is what `freezeWholeThread` hashed, so resolving has to rebuild it
+ * identically to compare. */
+export const threadText = (doc: CanvasDoc, threadId: string): string =>
+  doc.messages.filter(m => m.threadId === threadId).sort((a, b) => a.seq - b.seq).map(messageText).join('\n\n');
+
 export function resolveAnchor(snapshot: SourceSnapshot, doc: CanvasDoc): Resolution {
   const anchor: Anchor = snapshot.anchor;
   if (anchor.kind === 'text') return resolveText(anchor, snapshot, doc);
 
-  // `whole` and `media` resolve to the message's existence and whether its text still hashes the
-  // same. A media region needs the asset to compare properly; that is C5.
-  const id = anchor.kind === 'whole' ? anchor.messageId : anchor.messageId;
-  if (!id) return { status: 'ok', frozen: snapshot.content };
-  const msg = doc.messages.find(m => m.id === id);
+  if (anchor.kind === 'whole') {
+    if (!doc.threads.some(t => t.id === anchor.threadId)) return { status: 'missing', frozen: snapshot.content };
+    const current = threadText(doc, anchor.threadId);
+    return { status: hashText(current) === snapshot.hash ? 'ok' : 'changed', frozen: snapshot.content, current };
+  }
+
+  // `media` resolves to the message's existence and whether its text still hashes the same. A
+  // media region needs the asset to compare properly; that is C5.
+  const msg = doc.messages.find(m => m.id === anchor.messageId);
   if (!msg) return { status: 'missing', frozen: snapshot.content };
   const current = messageText(msg);
   return { status: hashText(current) === snapshot.hash ? 'ok' : 'changed', frozen: snapshot.content, current };

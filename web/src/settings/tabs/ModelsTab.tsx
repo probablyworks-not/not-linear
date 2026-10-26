@@ -32,6 +32,12 @@ const GROUPS: ReadonlyArray<{ title: string; cards: readonly Card[] }> = [
       { id: 'github', name: 'GitHub', sub: 'Token for repo and code research', kind: 'key' },
     ],
   },
+  {
+    title: 'Voice',
+    cards: [
+      { id: 'assemblyai', name: 'AssemblyAI', sub: 'Live speech-to-text for the mic button', kind: 'key' },
+    ],
+  },
 ];
 
 /** Only http(s) URLs are saved: anything else would make the search tool fail at call time. */

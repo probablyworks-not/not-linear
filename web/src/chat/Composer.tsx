@@ -1,6 +1,6 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { clsx } from 'clsx';
-import { ArrowUp, Square } from 'lucide-react';
+import { ArrowUp, Mic, Square } from 'lucide-react';
 import { useSkillPicker } from '../skills/SkillPicker';
 import { SkillsUsedLine } from '../skills/SkillsUsedLine';
 import { ModelChip, ModeChip } from './ComposerMenus';
@@ -10,6 +10,8 @@ import { addPastedFiles, imagesFromClipboard } from '../attachments/attach-actio
 import { useAttachments } from '../attachments/attachments-store';
 import { useUiStore } from '../state/ui-store';
 import { useEdgeReveal } from '../lib/edge-reveal';
+import { useVoiceInput } from '../lib/voice';
+import { toast } from '../ui/toast';
 
 interface ComposerProps {
   disabled?: boolean;
@@ -35,6 +37,26 @@ export function Composer({ disabled, alwaysShow, disabledReason, streaming, atta
   const barRef = useRef<HTMLDivElement>(null);
   const bar = useEdgeReveal(barRef, 'bottom', !!alwaysShow || text.length > 0 || files.length > 0);
   const canSend = !disabled && !streaming && (text.trim().length > 0 || files.length > 0);
+
+  const voiceBaseRef = useRef('');
+  const voice = useVoiceInput({
+    onPartial: (t) => setText(voiceBaseRef.current + t),
+    onFinal: (t) => { voiceBaseRef.current = voiceBaseRef.current + t + ' '; setText(voiceBaseRef.current); },
+    onError: (message) => toast(message),
+  });
+  const toggleVoice = (): void => {
+    if (!voice.recording) voiceBaseRef.current = text ? text.replace(/\s*$/, ' ') : '';
+    voice.toggle();
+  };
+
+  // Voice input sets `text` directly (no native input event), which the resize logic in
+  // the textarea's onChange below never sees — so the box stayed a fixed height while dictated
+  // text kept growing. Driving the resize off `text` itself covers both typed and dictated input.
+  useEffect(() => {
+    if (!ref.current) return;
+    ref.current.style.height = 'auto';
+    ref.current.style.height = `${Math.min(ref.current.scrollHeight, 160)}px`;
+  }, [text]);
 
   const send = (): void => {
     if (!canSend) return;
@@ -75,8 +97,6 @@ export function Composer({ disabled, alwaysShow, disabledReason, streaming, atta
           onChange={e => {
             setText(e.target.value);
             skills.onTextChange();
-            e.target.style.height = 'auto';
-            e.target.style.height = `${Math.min(e.target.scrollHeight, 160)}px`;
           }}
           onKeyDown={e => {
             if (skills.onKeyDown(e, text)) return;
@@ -97,6 +117,16 @@ export function Composer({ disabled, alwaysShow, disabledReason, streaming, atta
             <ModelChip branchId={null} className="model-chip" />
             <ModeChip className="mode-chip" />
           </div>
+          <button
+            type="button" aria-label={voice.recording ? 'Stop voice input' : 'Voice input'} title="Voice input"
+            disabled={disabled} onClick={toggleVoice}
+            className={clsx(
+              'mic-chip grid h-[30px] w-[30px] shrink-0 place-items-center rounded-full text-text-2 hover:bg-bg-3 hover:text-text',
+              voice.recording && 'recording',
+            )}
+          >
+            <Mic size={15} />
+          </button>
           {streaming ? (
             <button
               type="button" aria-label="Stop" title="Stop" onClick={onStop}

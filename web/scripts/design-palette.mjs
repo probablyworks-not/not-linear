@@ -25,6 +25,7 @@ const GROUPS = [
   ['Canvas surfaces', ['cv-ground', 'cv-card', 'cv-card-warm', 'cv-card-inset', 'cv-edge', 'cv-divider', 'cv-connector']],
   ['Canvas source tones', ['cv-hl-blue', 'cv-hl-pink', 'cv-hl-brown', 'cv-hl-green', 'cv-hl-yellow', 'cv-hl-orange']],
   ['Canvas context islands', ['cv-island-memory', 'cv-island-rules', 'cv-island-files', 'cv-island-outputs']],
+  ['Ask surface', ['ask-gradient', 'ask-chip-bg', 'ask-chip-inset', 'ask-divider', 'ask-hint', 'ask-cta-bg', 'ask-cta-fg']],
   ['Code syntax', ['syn-keyword', 'syn-string', 'syn-number', 'syn-comment', 'syn-function', 'syn-tag', 'syn-attr']],
 ];
 const THEMES = [['dark', 'Dark (default)'], ['grey', 'Grey'], ['light', 'Light']];

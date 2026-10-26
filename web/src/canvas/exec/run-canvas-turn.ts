@@ -1,15 +1,18 @@
 import { runTurn, type RunTurnDeps } from '../../chat/run-turn';
 import { planModel } from '../../chat/models';
 import { buildSystemPrompt } from '../../chat/system-prompt';
+import { userContentFor } from '../../chat/user-content';
 import { friendlyError } from '../../lib/markdown';
 import { claudeProvider } from '../../providers/claude';
 import { deepseekProvider } from '../../providers/deepseek';
 import { openaiProvider, geminiProvider } from '../../providers/openai';
 import { readApiKeys } from '../../lib/api-keys';
+import type { Attachment } from '../../attachments/read-files';
 import type { PersistedPrefs, PersistedProject } from '../../db/types';
 import { newId } from '../ids';
 import { resolveContext, manifestFor } from '../context/resolve';
 import { acceptRun, addMessage, setRunStatus, textPart } from '../domain/commands';
+import { extractHtmlDoc } from './html-trigger';
 import type { CanvasDoc, CanvasPart, RunStatus, RunUsage } from '../types';
 
 // Canvas execution. Calls `runTurn` directly rather than going through `run-and-persist`, which
@@ -30,6 +33,12 @@ export function setCanvasDepsForTests(factory: (() => RunTurnDeps) | null): void
   depsFactory = factory ?? defaultDeps;
 }
 
+/** The same provider deps a canvas turn streams with — for callers (the clarify pre-flight)
+ * that need to run a turn-shaped request outside `runCanvasTurn` itself. */
+export function canvasTurnDeps(): RunTurnDeps {
+  return depsFactory();
+}
+
 export interface CanvasTurnInput {
   threadId: string;
   /** Stable per send. The same id twice is the same submission, not a second one. */
@@ -38,6 +47,16 @@ export interface CanvasTurnInput {
   prefs: PersistedPrefs;
   project?: PersistedProject;
   extraContext?: string;
+  /** Opt-in only, set by an explicit phrase in the prompt (html-trigger.ts) — never inferred. */
+  wantsHtml?: boolean;
+  /**
+   * C9. Files picked in the Ink composer for *this* send. Native PDF/image blocks for a provider
+   * that supports them (today: Claude), text content inline for the rest — same `userContentFor`
+   * chat already uses. These are display-only on the canvas document itself (the attachment part
+   * carries no asset, since Canvas has no asset store yet — C5); the bytes only ever go to the
+   * model for this one turn.
+   */
+  attachments?: Attachment[];
 }
 
 export interface CanvasTurnHooks {
@@ -93,7 +112,11 @@ export async function runCanvasTurn(input: CanvasTurnInput, hooks: CanvasTurnHoo
   // The reply's message exists before the first token, so a reload mid-stream finds it rather than
   // losing the fact that a question was asked at all.
   const created = await hooks.apply(d => {
-    const context = resolveContext(d, input.threadId);
+    // C10. Disclosure only — the rules' *text* already reaches the model through the system
+    // prompt (`buildSystemPrompt` below takes `input.project` directly); this is what makes the
+    // Context Islands' Rules tab say "inherited" truthfully instead of always reading empty.
+    const inheritedRules = input.project?.rules?.trim() ? ['project-rules'] : [];
+    const context = resolveContext(d, input.threadId, { inheritedRules });
     d.manifests.push(manifestFor(runId, context.manifest, now));
     const msg = addMessage(d, {
       threadId: input.threadId,
@@ -108,19 +131,40 @@ export async function runCanvasTurn(input: CanvasTurnInput, hooks: CanvasTurnHoo
   if (!created) return { status: 'failed', runId, messageId: null, text: '', error: 'This canvas is no longer open.' };
 
   const { messageId, partId, messages } = created;
+  // The attachments belong to the question that was just sent — always the last message
+  // `resolveContext` produced, since it walks the ancestor chain ending at this thread's own,
+  // newest-first-by-seq turn. Swapping its `content` here (rather than threading attachments
+  // through `resolveContext` itself) keeps attachments a per-send, per-provider concern: a native
+  // image/PDF block only ever makes sense for the provider that is about to see it.
+  if (input.attachments?.length) {
+    const last = messages[messages.length - 1];
+    if (last?.role === 'user' && typeof last.content === 'string') {
+      last.content = userContentFor(plan.provider, last.content, input.attachments);
+    }
+  }
   let text = '';
 
   const settle = async (status: RunStatus, extra: { error?: string; usage?: RunUsage } = {}): Promise<CanvasTurnResult> => {
     await hooks.apply(d => {
       const m = d.messages.find(x => x.id === messageId);
       if (m) {
-        const part = m.parts.find(p => p.id === partId);
+        const idx = m.parts.findIndex(p => p.id === partId);
+        const part = idx >= 0 ? m.parts[idx] : undefined;
         if (part && part.kind === 'text') {
-          part.text = text;
           // Partial text is a real answer that stopped, not a failure to show. Only a run that
           // produced nothing at all is marked failed on the part itself.
-          part.state = status === 'completed' || text.trim() ? 'ready' : 'failed';
-          if (part.state === 'failed' && extra.error) part.error = friendlyError(extra.error);
+          const ready = status === 'completed' || !!text.trim();
+          if (input.wantsHtml && text.trim()) {
+            // Swap the whole part: the model's reply is the HTML document itself, not markdown.
+            m.parts[idx!] = {
+              id: partId, kind: 'html', state: ready ? 'ready' : 'failed', html: extractHtmlDoc(text),
+              ...(!ready && extra.error ? { error: friendlyError(extra.error) } : {}),
+            };
+          } else {
+            part.text = text;
+            part.state = ready ? 'ready' : 'failed';
+            if (part.state === 'failed' && extra.error) part.error = friendlyError(extra.error);
+          }
         }
         m.updatedAt = Date.now();
       }

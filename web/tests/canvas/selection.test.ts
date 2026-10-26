@@ -60,4 +60,38 @@ describe('reading a canvas selection', () => {
     );
     expect(readCanvasSelection(lookup)).toMatchObject({ messageId: 'ms_2', partId: 'pt_1', quote: 'beta', start: 6 });
   });
+
+  // Selection is scoped to a single card: a drag that strays into a neighboring part clamps back
+  // to the part where it started, rather than producing a cross-part quote.
+  const TWO_PARTS =
+    '<div data-message="ms_3">' +
+    '<div data-part="pt_a">alpha beta</div>' +
+    '<div data-part="pt_b">gamma delta</div>' +
+    '</div>';
+  const lookupTwo = (id: string): string | null => (id === 'pt_a' ? 'alpha beta' : id === 'pt_b' ? 'gamma delta' : null);
+
+  it('clamps a forward drag that crosses into the next part', () => {
+    document.body.innerHTML = TWO_PARTS;
+    const a = document.querySelector('[data-part="pt_a"]')!.firstChild!;
+    const b = document.querySelector('[data-part="pt_b"]')!.firstChild!;
+    const sel = window.getSelection()!;
+    sel.removeAllRanges();
+    sel.collapse(a, 6); // anchor: start of "beta" in pt_a
+    sel.extend(b, 5); // focus: dragged into pt_b, past "gamma"
+    const s = readCanvasSelection(lookupTwo);
+    expect(s).toMatchObject({ partId: 'pt_a', quote: 'beta' });
+  });
+
+  it('clamps a backward drag (anchor in the later part) to that same anchor part', () => {
+    document.body.innerHTML = TWO_PARTS;
+    const a = document.querySelector('[data-part="pt_a"]')!.firstChild!;
+    const b = document.querySelector('[data-part="pt_b"]')!.firstChild!;
+    const sel = window.getSelection()!;
+    sel.removeAllRanges();
+    sel.collapse(b, 5); // anchor: inside pt_b
+    sel.extend(a, 6); // focus: dragged backward into pt_a
+    const s = readCanvasSelection(lookupTwo);
+    expect(s).toMatchObject({ partId: 'pt_b' });
+    expect(s?.quote.length).toBeGreaterThan(0);
+  });
 });

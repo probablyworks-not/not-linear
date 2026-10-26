@@ -40,6 +40,12 @@ export const THREAD_ICON_CYCLE = [
   { id: 'branch', color: '#58A6FF' }, { id: 'compass', color: 'oklch(48% 0.08 195)' },
   { id: 'roots', color: 'oklch(50% 0.10 145)' }, { id: 'star', color: 'oklch(55% 0.13 25)' },
 ] as const;
+/** C11. The Canvas library's default cycle — same idea as the other two, a distinct enough set
+ * that two neighbouring canvases rarely default to the same glyph. */
+export const CANVAS_ICON_CYCLE = [
+  { id: 'compass', color: '#58A6FF' }, { id: 'star', color: 'oklch(52% 0.10 55)' },
+  { id: 'branch', color: 'oklch(48% 0.08 195)' }, { id: 'roots', color: 'oklch(55% 0.13 25)' },
+] as const;
 /* eslint-enable no-restricted-syntax */
 
 export const cycleIcon = <T extends { id: string; color: string }>(cycle: readonly T[], index: number): T =>

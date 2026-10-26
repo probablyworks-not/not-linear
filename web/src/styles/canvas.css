@@ -42,3 +42,21 @@
 .react-flow__resize-control.line { border-color: var(--branch); }
 
 .react-flow__attribution { display: none; }
+
+/* The idle "Ask" launcher (InkComposer's collapsed state): the icon's strokes draw in on a loop
+   and its hint text blinks a cursor, so the affordance reads as alive without demanding attention.
+   Deliberately opacity/stroke only, never a transform/position change — a button whose hit target
+   keeps moving is a bad click target for a pointer and, as it turns out, makes Playwright's
+   actionability check (which waits for a stable bounding box) spin forever. Both pause under
+   reduced motion — they're pure flourish, nothing is communicated by them running. */
+.nl-ask-draw { stroke-dasharray: 1; animation: nl-ask-draw 3.6s cubic-bezier(.6,0,.3,1) infinite; }
+.nl-ask-cursor { animation: nl-ask-blink 1s steps(1) infinite; }
+@keyframes nl-ask-draw {
+  0% { stroke-dashoffset: 1; }
+  30%, 70% { stroke-dashoffset: 0; }
+  100% { stroke-dashoffset: -1; }
+}
+@keyframes nl-ask-blink { 50% { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) {
+  .nl-ask-draw, .nl-ask-cursor { animation: none; }
+}

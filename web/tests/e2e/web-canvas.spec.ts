@@ -81,7 +81,26 @@ async function newCanvas(page: Page): Promise<void> {
   await expect(page.getByTestId('canvas-workspace')).toBeVisible();
 }
 
+// The default "new question" composer starts as a collapsed launcher pill; clicking it expands
+// into the full bar. A composer scoped to a selection or a reply thread never collapses, and one
+// restoring a non-empty draft expands itself once the draft loads — in both cases the launcher is
+// simply not there, which is fine, not a failure.
+async function openComposer(page: Page): Promise<void> {
+  const launcher = page.getByTestId('ink-launcher');
+  const composer = page.getByTestId('ink-composer');
+  // The canvas doc store can briefly still reflect the *previous* canvas while a freshly switched-
+  // to canvas's own doc loads — long enough to remount InkComposer and silently revert an
+  // already-opened launcher back to collapsed a few hundred ms after the click. Retry the
+  // click-then-verify rather than race that settle with a single attempt.
+  await expect(async () => {
+    await expect(launcher.or(composer)).toBeVisible();
+    if (await launcher.count()) await launcher.click();
+    await expect(composer).toBeVisible({ timeout: 1000 });
+  }).toPass({ timeout: 10000 });
+}
+
 async function ask(page: Page, text: string): Promise<void> {
+  await openComposer(page);
   const composer = page.getByTestId('ink-composer');
   await composer.getByRole('textbox').fill(text);
   await composer.getByRole('button', { name: 'Send' }).click();
@@ -90,18 +109,25 @@ async function ask(page: Page, text: string): Promise<void> {
 // One IndexedDB origin is shared by the whole run (playwright.config.ts: `workers: 1`), so a spec
 // that seeds the chat db has to put it back. Without this, the canvases and the project seeded
 // here leak into whatever spec runs next — which is how this spec broke an MCP integrations test
-// that passes on its own.
+// (#060) and then, less obviously, a different spec on each run.
+//
+// Order matters. Deleting while the app is still mounted is worse than not cleaning at all: the
+// delete blocks on the open connection, and the app immediately re-creates the chat db
+// half-seeded. So navigate to a same-origin page that does NOT boot the app, and delete from
+// there, with no timeout race to make it nondeterministic.
 test.afterEach(async ({ page }) => {
+  await page.goto('/tools/export-data.html').catch(() => undefined);
   await page.evaluate(async () => {
     const drop = (name: string) => new Promise<void>(resolve => {
       const req = indexedDB.deleteDatabase(name);
       req.onsuccess = () => resolve();
       req.onerror = () => resolve();
       req.onblocked = () => resolve();
-      setTimeout(resolve, 1000);
     });
-    localStorage.removeItem('nl_tabs_v1');
-    await Promise.all([drop('notlinear'), drop('notlinear-canvas'), drop('notlinear-artifacts')]);
+    try { localStorage.clear(); } catch { /* storage may be unavailable */ }
+    await drop('notlinear');
+    await drop('notlinear-canvas');
+    await drop('notlinear-artifacts');
   }).catch(() => undefined);
 });
 
@@ -165,11 +191,68 @@ test.describe('the canvas loop', () => {
     expect(last.messages.map(m => m.role)).toEqual(['user', 'assistant', 'user']);
   });
 
+  test('a branch connector anchors to the highlighted quote, including after a reload', async ({ page }) => {
+    await seed(page);
+    await openProject(page);
+    await newCanvas(page);
+    await ask(page, 'what is a widget?');
+    await expect(page.getByText('A widget has a sprocket and a flange.')).toBeVisible();
+
+    await page.evaluate(() => {
+      const el = [...document.querySelectorAll('[data-part]')].find(n => n.textContent?.includes('sprocket'));
+      const walker = document.createTreeWalker(el!, NodeFilter.SHOW_TEXT);
+      let node: Node | null = null;
+      while (walker.nextNode()) {
+        if (walker.currentNode.textContent?.includes('sprocket')) { node = walker.currentNode; break; }
+      }
+      const text = node!.textContent ?? '';
+      const at = text.indexOf('sprocket');
+      const range = document.createRange();
+      range.setStart(node!, at);
+      range.setEnd(node!, at + 'sprocket'.length);
+      const sel = window.getSelection()!;
+      sel.removeAllRanges();
+      sel.addRange(range);
+      document.dispatchEvent(new Event('selectionchange'));
+    });
+    await page.getByTestId('add-source').click();
+    await ask(page, 'what does it do?');
+    await expect(page.getByTestId('canvas-workspace').locator('[data-thread]')).toHaveCount(2);
+
+    // The edge's real rendered start point (via the SVG path's own screen CTM, so pan/zoom/transform
+    // don't matter) should land exactly on the highlighted mark's screen position, not the source
+    // card's border. Checked after a reload — a cold hydration from IndexedDB, not a live update —
+    // since that is the path that regressed (bug: measuring in a `useLayoutEffect` ran before the
+    // mark existed, because the mark is created by a descendant's `useEffect`; a `useLayoutEffect`
+    // in a parent fires before any passive effect anywhere in the tree, so it always lost the race
+    // on first mount and never got a second chance since nothing else re-triggered it).
+    await page.reload();
+    await expect(page.getByTestId('canvas-workspace')).toBeVisible();
+    await page.waitForSelector('.react-flow__edge-path');
+    const { markPoint, startScreen } = await page.evaluate(() => {
+      const mark = document.querySelector('mark[data-snapshot-id]') as HTMLElement;
+      const path = document.querySelector('.react-flow__edge-path') as SVGPathElement;
+      const markRect = mark.getBoundingClientRect();
+      const svg = path.ownerSVGElement!;
+      const pt = svg.createSVGPoint();
+      const start = path.getPointAtLength(0);
+      pt.x = start.x; pt.y = start.y;
+      const screen = pt.matrixTransform(path.getScreenCTM()!);
+      return {
+        markPoint: { x: markRect.right, y: markRect.top + markRect.height / 2 },
+        startScreen: { x: screen.x, y: screen.y },
+      };
+    });
+    expect(startScreen.x).toBeCloseTo(markPoint.x, 0);
+    expect(startScreen.y).toBeCloseTo(markPoint.y, 0);
+  });
+
   test('two canvases keep their own tabs, drafts and content across a reload', async ({ page }) => {
     await seed(page);
     await openProject(page);
 
     await newCanvas(page);
+    await openComposer(page);
     await page.getByTestId('ink-composer').getByRole('textbox').fill('draft for the first');
     const firstTab = await canvasTab(page).first().innerText();
 
@@ -177,6 +260,7 @@ test.describe('the canvas loop', () => {
     await page.getByRole('button', { name: 'Open left pane' }).click();
     await page.locator('aside[aria-label="Left pane"] [data-project="p1"] button').first().click();
     await newCanvas(page);
+    await openComposer(page);
     await page.getByTestId('ink-composer').getByRole('textbox').fill('draft for the second');
 
     await expect(page.getByRole('tab')).toHaveCount(3); // main chat + two canvases
@@ -219,6 +303,19 @@ test.describe('the canvas loop', () => {
     await expect(page.getByTestId('card-artifacts')).toContainText('1');
   });
 
+  test('a send that fails says so instead of sitting there', async ({ page }) => {
+    await seed(page);
+    // the provider refuses: the canvas must say what happened, not go quiet
+    await page.route('https://api.anthropic.com/v1/messages', r => r.fulfill({ status: 401, body: 'nope' }));
+    await openProject(page);
+    await newCanvas(page);
+    await ask(page, 'what is a widget?');
+
+    await expect(page.locator('[role="alert"]').first()).toBeVisible({ timeout: 15000 });
+    // and the indicator does not sit on "Saving…" claiming work that is not happening
+    await expect(page.getByTestId('canvas-save-state')).toHaveText('Saved', { timeout: 15000 });
+  });
+
   test('the reading view shows the same threads, and goes back to the canvas', async ({ page }) => {
     await seed(page);
     await openProject(page);
@@ -257,5 +354,41 @@ test.describe('the canvas loop', () => {
     await page.getByRole('button', { name: 'Delete Widgets copy' }).click();
     await page.getByRole('button', { name: 'Delete canvas' }).click();
     await expect(page.getByTestId('canvases-view')).not.toContainText('Widgets copy');
+  });
+
+  test('search (⌘K) finds a reply, opens it full, and Esc closes it over the canvas (UI-08/UI-09)', async ({ page }) => {
+    await seed(page);
+    await openProject(page);
+    await newCanvas(page);
+    await ask(page, 'what is a widget?');
+    await expect(page.getByText('A widget has a sprocket and a flange.')).toBeVisible();
+
+    // The chat palette has no concept of a canvas reply; this must be the canvas-native one.
+    await page.keyboard.press('Control+k');
+    const dialog = page.getByRole('dialog', { name: 'Search this canvas' });
+    await expect(dialog).toBeVisible();
+    await dialog.getByRole('combobox').fill('sprocket');
+    await dialog.getByRole('option').first().click();
+
+    const detail = page.getByTestId('canvas-output-detail');
+    await expect(detail).toBeVisible();
+    await expect(detail).toContainText('A widget has a sprocket and a flange.');
+
+    await page.keyboard.press('Escape');
+    await expect(detail).toHaveCount(0);
+    await expect(page.getByTestId('canvas-workspace')).toBeVisible();
+  });
+
+  test('"View full" on a card opens the same output-detail view', async ({ page }) => {
+    await seed(page);
+    await openProject(page);
+    await newCanvas(page);
+    await ask(page, 'what is a widget?');
+    await expect(page.getByText('A widget has a sprocket and a flange.')).toBeVisible();
+
+    await page.getByTestId('view-output').click();
+    await expect(page.getByTestId('canvas-output-detail')).toBeVisible();
+    await page.getByTestId('output-detail-close').click();
+    await expect(page.getByTestId('canvas-output-detail')).toHaveCount(0);
   });
 });

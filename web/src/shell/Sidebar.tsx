@@ -11,6 +11,7 @@ import { MoveToProjectButton } from '../projects/MoveToProjectButton';
 import { ProjectsSidebarSection } from '../projects/ProjectsSidebarSection';
 import { RecentBranches } from '../branch/RecentBranches';
 import { NotesSidebarSection } from '../notes/NotesSidebarSection';
+import { CanvasesSidebarSection } from '../canvas/view/CanvasesSidebarSection';
 import { SidebarSection } from './SidebarSection';
 import { ShowMoreButton } from './ShowMoreButton';
 import { SIDEBAR_VISIBLE, byRecency, threadTouchedAt } from './recency';
@@ -147,6 +148,8 @@ export function Sidebar() {
           </SidebarSection>
 
           {flags.notesV2 && <NotesSidebarSection />}
+
+          {flags.canvas && <CanvasesSidebarSection />}
 
           {flags.chat && <RecentBranches />}
         </div>

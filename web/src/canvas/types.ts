@@ -80,8 +80,8 @@ export interface MediaAnchor {
   timestampMs?: number;
   rect?: { x: number; y: number; w: number; h: number };
 }
-/** The whole of a source, with no selection inside it. */
-export interface WholeAnchor { kind: 'whole'; messageId?: string }
+/** The whole of a card — every message in a thread — with no selection inside it. */
+export interface WholeAnchor { kind: 'whole'; threadId: string }
 
 export type Anchor = TextAnchor | MediaAnchor | WholeAnchor;
 
@@ -125,6 +125,10 @@ export interface CanvasMessage {
 /** The source type a snapshot was frozen from. `chat` and `note` are imported, one-way, in v1. */
 export type SourceKind = 'message' | 'chat' | 'note' | 'artifact' | 'file' | 'rule';
 
+/** [SCHEMA] Additive (C6). Purely a display tint — never read by anchor resolution or export. */
+export type HighlightTone = 'blue' | 'pink' | 'brown' | 'green' | 'yellow' | 'orange';
+export const HIGHLIGHT_TONES: readonly HighlightTone[] = ['blue', 'pink', 'brown', 'green', 'yellow', 'orange'];
+
 /**
  * A frozen excerpt. `content` is a copy on purpose: it is the evidence of what the model was
  * given, and it must survive the original being edited or deleted.
@@ -142,6 +146,9 @@ export interface SourceSnapshot {
   hash: string;
   label: string;
   createdAt: Iso;
+  /** [SCHEMA] Additive (C6). Absent on every snapshot frozen before this field existed — readers
+   * default to 'blue'. */
+  highlightTone?: HighlightTone;
 }
 
 /** Exactly what a run was given, and what was dropped. Disclosure, not bookkeeping. */
@@ -229,6 +236,30 @@ export interface OutputVersion {
   createdAt: Iso;
 }
 
+/** [SCHEMA] Additive (C10). A free-text note the user chose to keep for this canvas — the
+ * "Memory" context island. Distinct from project-level `ProjectMemoryItem`: that feature has no
+ * backend yet (`flags.projectMemory: false`), so this is its own, real, canvas-scoped list. */
+export interface CanvasMemoryItem {
+  id: string;
+  text: string;
+  createdAt: Iso;
+}
+
+/**
+ * [SCHEMA] Additive (C10). The "Files" context island's own list. Deliberately not the full
+ * `Attachment` shape from `attachments/read-files.ts` — this file stays dependency-free, the same
+ * restraint every other record here follows; the view layer maps between the two.
+ */
+export interface CanvasFileRef {
+  id: string;
+  name: string;
+  size: number;
+  mime: string;
+  /** Extracted text, when any — the same content a per-send attachment would carry. */
+  content: string | null;
+  createdAt: Iso;
+}
+
 /** C5. Declared so media can land without a schema change; nothing writes one in v1. */
 export interface CanvasAsset {
   id: string;
@@ -293,6 +324,10 @@ export interface CanvasSummary {
   createdAt: Iso;
   updatedAt: Iso;
   rev: number;
+  /** [SCHEMA] Additive (C11). A Mind Garden icon token (`icon:<id>` or `icon:<id>:<hex>`), the
+   * same convention `thread.emoji`/`project.emoji` already use — absent means "use the cycle
+   * default", same as those. */
+  emoji?: string;
 }
 
 /** The heavy row. One canvas's whole content. */
@@ -309,6 +344,11 @@ export interface CanvasDoc {
   outputs: OutputVersion[];
   /** C5. Always empty in v1. */
   assets: CanvasAsset[];
+  /** [SCHEMA] Additive (C10). Absent on every doc written before this field existed — readers
+   * default to `[]`, same as every other optional collection added since v1. */
+  memory?: CanvasMemoryItem[];
+  /** [SCHEMA] Additive (C10). */
+  files?: CanvasFileRef[];
 }
 
 export const DEFAULT_LAYOUT_ID = 'canvas';
@@ -319,6 +359,6 @@ export function emptyDoc(summary: CanvasSummary): CanvasDoc {
     summary,
     threads: [], messages: [], snapshots: [], manifests: [],
     relations: [], layouts: [{ id: DEFAULT_LAYOUT_ID, entries: {} }],
-    runs: [], outputs: [], assets: [],
+    runs: [], outputs: [], assets: [], memory: [], files: [],
   };
 }

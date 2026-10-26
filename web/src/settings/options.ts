@@ -52,6 +52,7 @@ export const PROVIDERS: readonly { id: string; label: string; option: string }[]
   { id: 'github', label: 'GitHub', option: 'GitHub (repo & code research)' },
   { id: 'openai', label: 'OpenAI', option: 'OpenAI (GPT)' },
   { id: 'gemini', label: 'Gemini', option: 'Google (Gemini)' },
+  { id: 'assemblyai', label: 'AssemblyAI', option: 'AssemblyAI (Voice input)' },
   { id: 'custom', label: 'Other', option: 'Other' },
 ];
 

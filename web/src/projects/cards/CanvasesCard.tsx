@@ -5,6 +5,8 @@ import { useCanvasStore } from '../../canvas/canvas-store';
 import { shortTime } from '../project-summary';
 import type { CanvasSummary } from '../../canvas/types';
 import { EmptyBody, SectionCard } from './SectionCard';
+import { Glyph } from '../../ui/Glyph';
+import { CANVAS_ICON_CYCLE } from '../../lib/mind-garden';
 
 /** The Canvases section of the project overview: a count, the most recent few, New and View all. */
 export function CanvasesCard({ pid, canvases, error }: { pid: string; canvases: readonly CanvasSummary[]; error?: string }) {
@@ -42,13 +44,13 @@ export function CanvasesCard({ pid, canvases, error }: { pid: string; canvases: 
         </EmptyBody>
       ) : (
         <ul className="m-0 flex list-none flex-col gap-1 p-0">
-          {canvases.slice(0, 3).map(c => (
+          {canvases.slice(0, 3).map((c, i) => (
             <li key={c.id}>
               <button
                 type="button" data-canvas={c.id} onClick={() => openCanvas(c.id)}
                 className="flex w-full items-center gap-2 rounded-md px-1.5 py-1 text-left text-sm text-text-2 hover:bg-bg-2 hover:text-text"
               >
-                <Frame size={13} aria-hidden className="flex-none text-sec-canvas" />
+                <Glyph value={c.emoji} cycle={CANVAS_ICON_CYCLE} index={i} size={16} fallback={<Frame size={13} aria-hidden className="text-sec-canvas" />} />
                 <span className="min-w-0 flex-1 truncate">{c.title}</span>
                 <span className="flex-none font-mono text-xs text-text-3">{shortTime(c.updatedAt)}</span>
               </button>

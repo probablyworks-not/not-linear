@@ -1,9 +1,10 @@
 import { checksum, hashText, newId } from '../ids';
-import { messageText } from '../anchors';
+import { messageText, threadText } from '../anchors';
 import {
-  DEFAULT_LAYOUT_ID, type Anchor, type Author, type CanvasDoc, type CanvasMessage, type CanvasPart,
-  type CanvasRun, type CanvasThread, type Layout, type OutputVersion, type Relation,
-  type RunStatus, type RunUsage, type SourceKind, type SourceSnapshot, type TextAnchor,
+  DEFAULT_LAYOUT_ID, HIGHLIGHT_TONES, type Anchor, type Author, type CanvasDoc, type CanvasFileRef,
+  type CanvasMemoryItem, type CanvasMessage, type CanvasPart, type CanvasRun, type CanvasThread,
+  type HighlightTone, type Layout, type OutputVersion, type Relation, type RunStatus, type RunUsage,
+  type SourceKind, type SourceSnapshot, type TextAnchor, type WholeAnchor,
 } from '../types';
 
 // Pure commands over a canvas document. No React, no Dexie, no provider, no clock of their own —
@@ -27,18 +28,65 @@ const layoutOf = (doc: CanvasDoc, layoutId = DEFAULT_LAYOUT_ID): Layout => {
   return made;
 };
 
+const GAP_Y = 24;
+
+const overlaps = (a: { x: number; y: number; w: number; h: number }, b: { x: number; y: number; w: number; h: number }): boolean =>
+  a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
+
+/**
+ * Drops `self` straight down, past whichever existing entry it overlaps, until clear of all of
+ * them — x (and everything else on the canvas) never moves, only `self`'s y (bug #067: an
+ * unrelated "beside" placement, e.g. a root question anchored to the previous thread, can still
+ * land on top of a third node it was never placed relative to).
+ */
+function resolveOverlap(doc: CanvasDoc, entityId: string, layoutId = DEFAULT_LAYOUT_ID): void {
+  const layout = layoutOf(doc, layoutId);
+  const self = layout.entries[entityId];
+  if (!self) return;
+  const others = Object.values(layout.entries).filter(e => e.entityId !== entityId);
+  let moved = true, guard = 0;
+  while (moved && guard++ < 50) {
+    moved = false;
+    for (const o of others) {
+      if (overlaps(self, o)) {
+        self.y = o.y + o.h + GAP_Y;
+        moved = true;
+      }
+    }
+  }
+}
+
 /**
  * New cards go beside their source with vertical jitter and **nothing else moves** (FR-06). The
  * jitter is derived from the id, not Math.random, so the same branch lands in the same place on
  * re-import and a test can assert it.
+ *
+ * `besideY`, when given, overrides the jittered `src.y` — it's the flow-space Y of whatever the
+ * branch was actually taken from (e.g. the selected quote), so a branch off a tall card lands
+ * level with the text it came from instead of near the card's top (bug: branch always looked like
+ * it came from the top of the source regardless of where in it the quote was).
  */
-export function placeBeside(doc: CanvasDoc, entityId: string, sourceEntityId: string | null, layoutId = DEFAULT_LAYOUT_ID): void {
+export function placeBeside(doc: CanvasDoc, entityId: string, sourceEntityId: string | null, layoutId = DEFAULT_LAYOUT_ID, besideY?: number): void {
   const layout = layoutOf(doc, layoutId);
   const src = sourceEntityId ? layout.entries[sourceEntityId] : undefined;
   const jitter = ((hashText(entityId).charCodeAt(0) % 9) - 4) * 10;
   layout.entries[entityId] = src
-    ? { entityId, x: src.x + src.w + GAP_X, y: src.y + jitter, w: NODE_W, h: NODE_H }
+    ? { entityId, x: src.x + src.w + GAP_X, y: besideY ?? (src.y + jitter), w: NODE_W, h: NODE_H }
     : { entityId, x: 0, y: 0, w: NODE_W, h: NODE_H };
+  resolveOverlap(doc, entityId, layoutId);
+}
+
+/**
+ * New *unrelated* root threads stack below everything else instead of beside the last thread —
+ * `placeBeside` is reserved for an actual branch/synthesis source, since the canvas view follows
+ * new cards as if they were placed relative to what they came from (bug: a plain new question was
+ * panning the view to the right, as if it had branched off the previous reply).
+ */
+function placeBelowAll(doc: CanvasDoc, entityId: string, layoutId = DEFAULT_LAYOUT_ID): void {
+  const layout = layoutOf(doc, layoutId);
+  const others = Object.values(layout.entries).filter(e => e.entityId !== entityId);
+  const maxBottom = others.reduce((m, o) => Math.max(m, o.y + o.h), 0);
+  layout.entries[entityId] = { entityId, x: 0, y: others.length ? maxBottom + GAP_Y : 0, w: NODE_W, h: NODE_H };
 }
 
 /** Geometry only. Deliberately the one way to move a card, so content writes cannot ride along. */
@@ -114,8 +162,12 @@ export interface CreateThreadInput {
   title: string;
   kind: CanvasThread['kind'];
   prompt: string;
-  /** The card this one was spawned from, for placement only. */
+  /** The card this one was spawned from, for placement only. Omit for `placement: 'below'`. */
   besideEntityId?: string | null;
+  /** 'beside' (default) anchors next to `besideEntityId`; 'below' stacks under everything. */
+  placement?: 'beside' | 'below';
+  /** Flow-space Y to place the new card level with, overriding the jittered default. See `placeBeside`. */
+  besideY?: number;
 }
 
 function createThread(doc: CanvasDoc, input: CreateThreadInput, ctx: Ctx): { thread: CanvasThread; message: CanvasMessage } {
@@ -125,13 +177,19 @@ function createThread(doc: CanvasDoc, input: CreateThreadInput, ctx: Ctx): { thr
   };
   doc.threads.push(thread);
   const message = addMessage(doc, { threadId: thread.id, author: { kind: 'human' }, parts: [textPart(input.prompt)] }, ctx);
-  placeBeside(doc, thread.id, input.besideEntityId ?? null);
+  if (input.placement === 'below') placeBelowAll(doc, thread.id);
+  else placeBeside(doc, thread.id, input.besideEntityId ?? null, DEFAULT_LAYOUT_ID, input.besideY);
   return { thread, message };
 }
 
 /** The first send. One root thread, one message (FR-01). */
 export function createRootThread(doc: CanvasDoc, prompt: string, ctx: Ctx, title = 'Untitled'): { thread: CanvasThread; message: CanvasMessage } {
-  return createThread(doc, { title, kind: 'root', prompt, besideEntityId: null }, ctx);
+  // An unrelated new question isn't a branch off the last thread, so it must not share placeBeside's
+  // "beside a source" geometry — the view follows new cards as if they'd branched off whatever
+  // they're placed next to, which made a plain new message pan the canvas to the right of the
+  // previous reply (bug #067's fix anchored root threads to the last thread to avoid overlap; this
+  // fixes the resulting false-branch look by stacking below instead, still never overlapping).
+  return createThread(doc, { title, kind: 'root', prompt, placement: 'below' }, ctx);
 }
 
 /** Continue appends to the target thread; it never creates one (FR-02). */
@@ -147,6 +205,8 @@ export interface FreezeInput {
   anchor: Anchor;
   content: string;
   label: string;
+  /** C6. Defaults to a round-robin tone over existing snapshots when omitted. */
+  highlightTone?: HighlightTone;
 }
 
 /** Freezing is its own step because the evidence must exist before the thread that cites it. */
@@ -161,9 +221,22 @@ export function freezeSnapshot(doc: CanvasDoc, input: FreezeInput, ctx: Ctx): So
     hash: hashText(input.content),
     label: input.label,
     createdAt: ctx.now,
+    highlightTone: input.highlightTone ?? HIGHLIGHT_TONES[doc.snapshots.length % HIGHLIGHT_TONES.length],
   };
   doc.snapshots.push(snapshot);
   return snapshot;
+}
+
+/** Drops a frozen-but-never-used snapshot — picking (block, whole-card, or free-range) freezes
+ * immediately, before the user has committed to sending anything, so a pick that's removed from
+ * the tray (an explicit "x", Escape, a pane click, or being replaced by a fresh non-additive pick)
+ * would otherwise leave a permanent, dangling highlight in the source text with nothing pointing
+ * to it. Safe to call on any snapshot id: a no-op once a relation actually cites it (branched or
+ * synthesized from), so an already-used source is never touched. */
+export function deleteOrphanSnapshot(doc: CanvasDoc, snapshotId: string): void {
+  if (doc.relations.some(r => r.snapshotId === snapshotId)) return;
+  const idx = doc.snapshots.findIndex(s => s.id === snapshotId);
+  if (idx >= 0) doc.snapshots.splice(idx, 1);
 }
 
 /** Freeze a selection inside a Canvas message, which is the common case for Branch. */
@@ -177,10 +250,25 @@ export function freezeSelection(doc: CanvasDoc, messageId: string, partId: strin
   }, ctx);
 }
 
+/** Freeze an entire card (every message in a thread) as one source — the "whole card" selection
+ * granularity, where there's no single quote to anchor to. */
+export function freezeWholeThread(doc: CanvasDoc, threadId: string, ctx: Ctx): SourceSnapshot | null {
+  const thread = doc.threads.find(t => t.id === threadId);
+  if (!thread) return null;
+  const content = threadText(doc, threadId);
+  const anchor: WholeAnchor = { kind: 'whole', threadId };
+  return freezeSnapshot(doc, {
+    kind: 'message', sourceId: threadId, sourceRev: thread.rev, anchor, content,
+    label: thread.title,
+  }, ctx);
+}
+
 export interface BranchInput {
   snapshotId: string;
   prompt: string;
   title?: string;
+  /** Flow-space Y to place the new card level with — typically the selected quote's position. */
+  besideY?: number;
 }
 
 /**
@@ -197,6 +285,7 @@ export function branchFrom(doc: CanvasDoc, input: BranchInput, ctx: Ctx): { thre
     kind: 'branch',
     prompt: input.prompt,
     besideEntityId: fromThread ?? null,
+    besideY: input.besideY,
   }, ctx);
   const relation: Relation = {
     id: newId('rl'), kind: 'branch',
@@ -212,6 +301,8 @@ export interface SynthesisInput {
   snapshotIds: string[];
   prompt: string;
   title?: string;
+  /** Flow-space Y to place the new card level with — typically the last-picked quote's position. */
+  besideY?: number;
 }
 
 /**
@@ -231,6 +322,7 @@ export function synthesize(doc: CanvasDoc, input: SynthesisInput, ctx: Ctx): { t
     kind: 'synthesis',
     prompt: input.prompt,
     besideEntityId: besides,
+    besideY: input.besideY,
   }, ctx);
 
   const relations = snapshots.map<Relation>(s => {
@@ -373,6 +465,37 @@ export function deleteThread(doc: CanvasDoc, threadId: string, ctx: Ctx): boolea
   for (const l of doc.layouts) delete l.entries[threadId];
   touch(doc, ctx);
   return true;
+}
+
+// ---------- C10: context islands (Memory / Files) ----------
+// Rules and Outputs have no commands of their own here: Rules is read-only (project-level,
+// edited from the Project overview), and Outputs already has `saveOutputVersion` above.
+
+export function addMemoryItem(doc: CanvasDoc, text: string, ctx: Ctx): CanvasMemoryItem {
+  const item: CanvasMemoryItem = { id: newId('mi'), text, createdAt: ctx.now };
+  (doc.memory ??= []).unshift(item);
+  touch(doc, ctx);
+  return item;
+}
+
+export function editMemoryItem(doc: CanvasDoc, id: string, text: string): void {
+  const item = doc.memory?.find(m => m.id === id);
+  if (item) item.text = text;
+}
+
+export function removeMemoryItem(doc: CanvasDoc, id: string): void {
+  if (doc.memory) doc.memory = doc.memory.filter(m => m.id !== id);
+}
+
+export function addFileRef(doc: CanvasDoc, input: Omit<CanvasFileRef, 'id' | 'createdAt'>, ctx: Ctx): CanvasFileRef {
+  const ref: CanvasFileRef = { id: newId('cf'), createdAt: ctx.now, ...input };
+  (doc.files ??= []).unshift(ref);
+  touch(doc, ctx);
+  return ref;
+}
+
+export function removeFileRef(doc: CanvasDoc, id: string): void {
+  if (doc.files) doc.files = doc.files.filter(f => f.id !== id);
 }
 
 export { messageText };

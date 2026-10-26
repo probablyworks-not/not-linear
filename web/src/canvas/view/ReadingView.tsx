@@ -1,6 +1,8 @@
+import { useMemo } from 'react';
 import { ArrowLeft, GitBranch, Layers, MessageSquare } from 'lucide-react';
 import type { CanvasDoc } from '../types';
 import { ancestorChain } from '../domain/commands';
+import { highlightsByMessage } from '../anchors';
 import { PartView } from './PartView';
 
 // The same threads and messages, linear. Not a copy: it reads the same document, renders the same
@@ -14,6 +16,11 @@ export function ReadingView({ doc, onBack, onShowOnCanvas }: {
   onBack(): void;
   onShowOnCanvas(threadId: string): void;
 }) {
+  // Same per-message/per-part marks the canvas cards show (`anchors.ts`'s `highlightsByMessage`,
+  // painted in by `apply-highlights.ts`) — Reading View renders the identical `PartView` content,
+  // so a branched-from quote should look the same way here, not just on the card it came from.
+  const highlights = useMemo(() => highlightsByMessage(doc), [doc]);
+
   // Thread order: roots in creation order, each followed by what branched from it.
   const ordered = [...doc.threads].sort((a, b) => {
     const da = ancestorChain(doc, a.id).length;
@@ -48,7 +55,7 @@ export function ReadingView({ doc, onBack, onShowOnCanvas }: {
                 <div className="mb-1 font-mono text-xs uppercase tracking-widest text-text-3">
                   {m.author.kind === 'human' ? 'You' : m.author.kind === 'model' ? m.author.model : m.author.agentId}
                 </div>
-                {m.parts.map(p => <PartView key={p.id} part={p} />)}
+                {m.parts.map(p => <PartView key={p.id} part={p} messageId={m.id} highlightsByPart={highlights[m.id]} />)}
               </div>
             ))}
           </section>

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import { Check, ChevronDown, Crown, Diamond, Sparkles, Zap, Brain, Bot, Plus } from 'lucide-react';
 import { clsx } from 'clsx';
 import { useAppStore } from '../state/app-store';
@@ -55,10 +56,11 @@ export function FloatingMenu({ anchor, label, onClose, escId, escPriority, child
     return () => document.removeEventListener('mousedown', down);
   }, [anchor, onClose]);
   useEscLayer(escId, escPriority, true, onClose);
-  return (
+  return createPortal(
     <div ref={ref} role="menu" aria-label={label} className="fixed z-[220] max-h-[calc(100vh-40px)] min-w-[210px] overflow-y-auto rounded-lg border border-rule-2 bg-surface-2 p-1 shadow-lg">
       {children}
-    </div>
+    </div>,
+    document.body
   );
 }
 

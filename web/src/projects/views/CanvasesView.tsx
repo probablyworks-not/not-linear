@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Copy, Frame, Pencil, Trash2 } from 'lucide-react';
 import { useUiStore } from '../../state/ui-store';
 import { openCanvas } from '../../canvas/open-canvas';
@@ -8,14 +8,20 @@ import { shortTime } from '../project-summary';
 import { confirmDeleteCanvas } from '../../ui/confirm-copy';
 import { EmptyBody } from '../cards/SectionCard';
 import { headerPrimary, ViewHeader } from './ViewHeader';
+import { GlyphButton } from '../../ui/GlyphButton';
+import { CANVAS_ICON_CYCLE } from '../../lib/mind-garden';
 
-/** The Canvases drill-in: search, create, rename, duplicate, delete, reopen. */
+type Sort = 'updated' | 'name';
+
+/** The Canvases drill-in: search, sort, create, rename, re-icon, duplicate, delete, reopen. */
 export function CanvasesView({ pid, projectName, canvases }: { pid: string; projectName: string; canvases: readonly CanvasSummary[] }) {
   const [q, setQ] = useState('');
+  const [sort, setSort] = useState<Sort>('updated');
   const [renaming, setRenaming] = useState<string | null>(null);
   const [draft, setDraft] = useState('');
   const create = useCanvasStore(s => s.create);
   const rename = useCanvasStore(s => s.rename);
+  const setGlyph = useCanvasStore(s => s.setGlyph);
   const duplicate = useCanvasStore(s => s.duplicate);
   const remove = useCanvasStore(s => s.remove);
   const unassigned = useCanvasStore(s => s.unassigned);
@@ -23,7 +29,11 @@ export function CanvasesView({ pid, projectName, canvases }: { pid: string; proj
 
   // Search is a filter over what is already loaded, so it resets when the view is reopened.
   const needle = q.trim().toLowerCase();
-  const shown = needle ? canvases.filter(c => c.title.toLowerCase().includes(needle)) : canvases;
+  const filtered = needle ? canvases.filter(c => c.title.toLowerCase().includes(needle)) : canvases;
+  const shown = useMemo(
+    () => (sort === 'name' ? [...filtered].sort((a, b) => a.title.localeCompare(b.title)) : [...filtered].sort((a, b) => b.updatedAt - a.updatedAt)),
+    [filtered, sort],
+  );
 
   const newCanvas = async (): Promise<void> => {
     const made = await create(pid);
@@ -51,11 +61,20 @@ export function CanvasesView({ pid, projectName, canvases }: { pid: string; proj
       />
 
       {canvases.length > 0 && (
-        <input
-          type="search" value={q} onChange={e => setQ(e.target.value)}
-          aria-label="Search canvases" placeholder="Search canvases"
-          className="mb-4 h-[34px] w-full max-w-[320px] rounded-[10px] border border-rule bg-surface px-3 text-sm text-text placeholder:text-text-3"
-        />
+        <div className="mb-4 flex gap-2">
+          <input
+            type="search" value={q} onChange={e => setQ(e.target.value)}
+            aria-label="Search canvases" placeholder="Search canvases"
+            className="h-[34px] w-full max-w-[320px] rounded-[10px] border border-rule bg-surface px-3 text-sm text-text placeholder:text-text-3"
+          />
+          <select
+            value={sort} onChange={e => setSort(e.target.value as Sort)} aria-label="Sort canvases"
+            className="h-[34px] rounded-[10px] border border-rule bg-surface px-2.5 text-sm text-text-2"
+          >
+            <option value="updated">Last updated</option>
+            <option value="name">Name</option>
+          </select>
+        </div>
       )}
 
       {canvases.length === 0 ? (
@@ -73,27 +92,35 @@ export function CanvasesView({ pid, projectName, canvases }: { pid: string; proj
         </div>
       ) : (
         <ul className="m-0 grid list-none grid-cols-1 gap-3 p-0 sm:grid-cols-2 lg:grid-cols-3">
-          {shown.map(c => (
+          {shown.map((c, i) => (
             <li key={c.id} data-canvas={c.id} className="group rounded-[14px] border border-rule bg-surface p-3.5 hover:border-rule-2">
-              {renaming === c.id ? (
-                <input
-                  autoFocus value={draft} aria-label="Canvas name"
-                  onChange={e => setDraft(e.target.value)}
-                  onBlur={() => { void commitRename(c); }}
-                  onKeyDown={e => {
-                    if (e.key === 'Enter') { void commitRename(c); }
-                    if (e.key === 'Escape') { e.stopPropagation(); setRenaming(null); }
-                  }}
-                  className="mb-1.5 w-full rounded-md border border-rule-2 bg-bg-2 px-2 py-1 text-base text-text"
+              <div className="mb-1.5 flex items-center gap-1.5">
+                <GlyphButton
+                  value={c.emoji} cycle={CANVAS_ICON_CYCLE} index={i} size={20}
+                  fallback={<Frame size={15} aria-hidden />} title={`Set icon for ${c.title}`}
+                  onPick={token => { void setGlyph(pid, c.id, token); }}
+                  className="grid h-6 w-6 flex-none cursor-pointer place-items-center rounded-md text-sm hover:bg-bg-2"
                 />
-              ) : (
-                <button
-                  type="button" data-testid="canvas-open" onClick={() => openCanvas(c.id)}
-                  className="mb-1.5 block w-full truncate text-left text-base font-medium text-text hover:underline"
-                >
-                  {c.title}
-                </button>
-              )}
+                {renaming === c.id ? (
+                  <input
+                    autoFocus value={draft} aria-label="Canvas name"
+                    onChange={e => setDraft(e.target.value)}
+                    onBlur={() => { void commitRename(c); }}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter') { void commitRename(c); }
+                      if (e.key === 'Escape') { e.stopPropagation(); setRenaming(null); }
+                    }}
+                    className="min-w-0 flex-1 rounded-md border border-rule-2 bg-bg-2 px-2 py-1 text-base text-text"
+                  />
+                ) : (
+                  <button
+                    type="button" data-testid="canvas-open" onClick={() => openCanvas(c.id)}
+                    className="min-w-0 flex-1 truncate text-left text-base font-medium text-text hover:underline"
+                  >
+                    {c.title}
+                  </button>
+                )}
+              </div>
               <div className="flex items-center gap-2 text-xs text-text-3">
                 <span className="font-mono">{c.counts.threads} thread{c.counts.threads === 1 ? '' : 's'}</span>
                 <span aria-hidden>·</span>

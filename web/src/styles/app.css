@@ -44,9 +44,10 @@
 .branch-head .logo-ico { display: grid; place-items: center; }
 .branch-head .actions button svg { display: block; }
 
-/* Tailwind's reset removes list markers; legacy's markdown relied on the browser's defaults. */
-.msg.ai ul { list-style: disc; }
-.msg.ai ol { list-style: decimal; }
+/* Tailwind's reset removes list markers; legacy's markdown relied on the browser's defaults.
+   .nl-md is canvas's equivalent of .msg.ai (see chat.css) and needs the same restore. */
+.msg.ai ul, .nl-md ul { list-style: disc; }
+.msg.ai ol, .nl-md ol { list-style: decimal; }
 
 /* In-text highlight and text-colour tokens. They live in frontend/styles/notes.css, which only the
    classic app loads; same values, duplicated until the P6 cutover moves them into tokens.css. */

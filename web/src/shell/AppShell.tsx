@@ -32,6 +32,7 @@ const NotesView = lazy(() => import('../notes/NotesView').then(m => ({ default: 
 // Lazy for the same reason Notes is: the spatial editor and React Flow arrive in C3, and the
 // initial bundle must not carry them.
 const CanvasWorkspace = lazy(() => import('../canvas/view/CanvasWorkspace').then(m => ({ default: m.CanvasWorkspace })));
+const CanvasSearchPalette = lazy(() => import('../canvas/view/CanvasSearchPalette').then(m => ({ default: m.CanvasSearchPalette })));
 
 export function AppShell() {
   const sidebarOpen = useUiStore(s => s.sidebarOpen);
@@ -111,7 +112,11 @@ export function AppShell() {
         )}
       </div>
       {flags.settings && <SettingsPage />}
-      {flags.search && <SearchPalette />}
+      {flags.search && (
+        view === 'canvas' && activeTabId && isCanvasTabId(activeTabId) ? (
+          <Suspense fallback={null}><CanvasSearchPalette key={activeTabId} canvasId={canvasIdOfTab(activeTabId)} /></Suspense>
+        ) : <SearchPalette />
+      )}
       {flags.projects && <ProjectsGrid />}
       {flags.projects && <ProjectPanel />}
       <ShortcutsDialog />

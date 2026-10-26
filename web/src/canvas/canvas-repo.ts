@@ -122,6 +122,11 @@ export async function renameCanvas(canvasId: string, title: string): Promise<voi
   await updateCanvas(canvasId, doc => { doc.summary.title = title; });
 }
 
+/** C11. Same shape as `setThreadGlyph`/`setProjectGlyph` (state/actions.ts) — a Mind Garden token on the summary. */
+export async function setCanvasGlyph(canvasId: string, token: string): Promise<void> {
+  await updateCanvas(canvasId, doc => { doc.summary.emoji = token; });
+}
+
 /**
  * Deleting a project does not delete its canvases: they move to the Unassigned listing so no work
  * becomes unreachable (§4.3, AC-17). This is the same call the project-delete path makes.

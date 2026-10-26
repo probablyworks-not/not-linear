@@ -89,3 +89,22 @@ export function resolveContext(doc: CanvasDoc, threadId: string, opts: {
 export function manifestFor(runId: string, manifest: ResolvedContext['manifest'], now: number): ContextManifest {
   return { id: newId('cm'), runId, createdAt: now, ...manifest };
 }
+
+/**
+ * C10. The Memory and Files context islands' text, in the exact form it reaches the model — the
+ * Context Islands panel renders the same `doc.memory`/`doc.files` it reads here, so what the UI
+ * shows as "included" can never drift from what was actually sent (same rule as the manifest
+ * above). Folded into `extraContext` rather than threaded through `resolveContext`'s per-message
+ * loop, since both are whole-canvas, not per-thread.
+ */
+export function canvasContextBlock(doc: CanvasDoc): string {
+  const parts: string[] = [];
+  if (doc.memory?.length) {
+    parts.push(`Canvas memory (kept for this canvas by the user):\n${doc.memory.map(m => `- ${m.text}`).join('\n')}`);
+  }
+  if (doc.files?.length) {
+    const files = doc.files.map(f => `<canvas_file name="${f.name}">\n${f.content ?? 'No readable text was extracted from this file.'}\n</canvas_file>`);
+    parts.push(`Canvas files (attached to this canvas, not to one question):\n\n${files.join('\n\n')}`);
+  }
+  return parts.join('\n\n');
+}

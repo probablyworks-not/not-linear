@@ -218,3 +218,108 @@ test('08 settings', async ({ page }) => {
   await settle(page, false);
   await page.screenshot({ path: `${OUT}/08-settings.png` });
 });
+
+// A reply with 2+ headings and `LABEL:` lines whose label reads as a heading (all-caps, 3+
+// chars) — the two conditions web/src/canvas/view/structure-reply.ts looks for.
+const CANVAS_REPLY_MD = [
+  '# Flow Sketch',
+  '',
+  "WHO IT'S FOR: PMs, founders, designers and researchers who leave notlinear, build a flow in Figma, screenshot it, and come back.",
+  '',
+  'JOB TO BE DONE: Express a sequence of screens, decisions and outcomes without switching tools.',
+  '',
+  '## Strongest argument against',
+  '',
+  'notlinear is a thinking canvas, not a design suite.',
+  '',
+  '## Recommended concept',
+  '',
+  'Four node types. Nothing else: Screen, Action, Decision, Outcome.',
+  '',
+  '## Comparable tools',
+  '',
+  '- Figma',
+  'Focus: freeform diagramming with no canvas-native model.',
+  'Fit: closest to this, but a screenshot is the only way the flow leaves Figma.',
+  '',
+  '- Linear',
+  'Focus: issue tracking, not spatial thinking.',
+].join('\n');
+
+async function canvasWithReply(page: Page): Promise<void> {
+  await boot(page, 'dark');
+  await page.addInitScript(() => {
+    const open = indexedDB.open('notlinear', 1);
+    open.onupgradeneeded = () => { if (!open.result.objectStoreNames.contains('kv')) open.result.createObjectStore('kv', { keyPath: 'key' }); };
+    open.onsuccess = () => {
+      const db = open.result;
+      const tx = db.transaction('kv', 'readwrite');
+      const store = tx.objectStore('kv');
+      store.get('state').onsuccess = e => {
+        if ((e.target as IDBRequest).result) return;
+        store.put({ key: 'state', value: {
+          threads: { 'doc-main': { kind: 'doc', title: 'Main', stream: '', docContent: '<p><br></p>', highlights: [], branchSnapshots: {}, branchRecents: {} } },
+          current: 'doc-main', dynamic: [], deletedThreads: [], chatCount: 1,
+          projects: { p1: { id: 'p1', name: 'Research', rules: '', files: [], path: '', updatedAt: Date.now() } },
+          projectCount: 1, prefs: { model: 'opus' },
+        } });
+      };
+      tx.oncomplete = () => db.close();
+    };
+  });
+  await mockClaudeMd(page, CANVAS_REPLY_MD);
+  await page.goto(WEB);
+  await page.getByRole('button', { name: 'Open left pane' }).click();
+  await page.locator('aside[aria-label="Left pane"] [data-project="p1"] button').first().click();
+  await expect(page.getByTestId('project-overview')).toBeVisible();
+  const card = page.getByTestId('card-canvases');
+  const empty = card.getByTestId('canvas-new-empty');
+  if (await empty.count()) await empty.click();
+  else await card.getByTestId('canvas-new-card').click();
+  await expect(page.getByTestId('canvas-workspace')).toBeVisible();
+  // The default composer starts as a collapsed launcher pill; click it open first. `.count()`
+  // doesn't wait, so wait for either testid before checking which one actually rendered.
+  const launcher = page.getByTestId('ink-launcher');
+  const composer = page.getByTestId('ink-composer');
+  await expect(launcher.or(composer)).toBeVisible();
+  if (await launcher.count()) await launcher.click();
+  await composer.getByRole('textbox').fill('give me the flow sketch brief');
+  await composer.getByRole('button', { name: 'Send' }).click();
+  await expect(page.getByRole('heading', { name: /Recommended concept/ })).toBeVisible();
+  await page.waitForTimeout(400);
+}
+
+test('10 canvas: a sectioned reply, jump-to pills and callout cards', async ({ page }) => {
+  await canvasWithReply(page);
+  const fitView = page.locator('.react-flow__controls-fitview');
+  if (await fitView.count()) await fitView.click({ force: true });
+  await page.waitForTimeout(300);
+  await settle(page, false);
+  await page.screenshot({ path: `${OUT}/10-canvas-card.png` });
+});
+
+test('11 canvas: the same reply in Reading view', async ({ page }) => {
+  await canvasWithReply(page);
+  await page.getByTestId('canvas-reading-toggle').click();
+  await page.waitForTimeout(300);
+  await settle(page, false);
+  await page.screenshot({ path: `${OUT}/11-canvas-reading.png` });
+});
+
+test('12 canvas: the search palette, grouped Threads and Replies (UI-08)', async ({ page }) => {
+  await canvasWithReply(page);
+  await page.keyboard.press('Control+k');
+  await expect(page.getByRole('dialog', { name: 'Search this canvas' })).toBeVisible();
+  await page.waitForTimeout(200);
+  await settle(page, false);
+  await page.screenshot({ path: `${OUT}/12-canvas-search.png` });
+});
+
+test('13 canvas: the output-detail view, a reply in full (UI-09)', async ({ page }) => {
+  await canvasWithReply(page);
+  await page.getByTestId('view-output').click();
+  await expect(page.getByTestId('canvas-output-detail')).toBeVisible();
+  await page.waitForTimeout(200);
+  await settle(page, false);
+  await page.screenshot({ path: `${OUT}/13-canvas-output-detail.png` });
+});

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import { ArrowUp, Square } from 'lucide-react';
+import { clsx } from 'clsx';
+import { ArrowUp, Mic, Square } from 'lucide-react';
 import { ModelChip, ModeChip } from '../chat/ComposerMenus';
 import { AttachChip } from '../chat/AttachMenu';
 import { AttachmentRow } from '../attachments/AttachmentRow';
@@ -8,12 +9,16 @@ import { branchAttachKey, useAttachments } from '../attachments/attachments-stor
 import { useUiStore } from '../state/ui-store';
 import { useSkillPicker } from '../skills/SkillPicker';
 import { SkillsUsedLine } from '../skills/SkillsUsedLine';
+import { useVoiceInput } from '../lib/voice';
+import { toast } from '../ui/toast';
 
 interface Props {
   branchId: string;
   /** Key of this branch's turns in the chat store, for the "skills used" line. */
   skillsKey: string;
   streaming: boolean;
+  /** Overrides the default "Ask about this passage…" base placeholder (e.g. a quote-less branch). */
+  placeholder?: string;
   onSend(text: string, skills?: string[]): void;
   onStop(): void;
 }
@@ -23,13 +28,33 @@ interface Props {
  * Shift+Enter adds a line, Send becomes Stop while streaming. Styled by chat.css's
  * `.composer` family, which is what a panel's composer looks like in legacy.
  */
-export function BranchComposer({ branchId, skillsKey, streaming, onSend, onStop }: Props) {
+export function BranchComposer({ branchId, skillsKey, streaming, placeholder, onSend, onStop }: Props) {
   const [text, setText] = useState('');
   const ref = useRef<HTMLTextAreaElement>(null);
   const key = branchAttachKey(branchId);
   const files = useAttachments(s => s.files[key]) ?? [];
-  const skills = useSkillPicker(text, setText, ref, 'Ask about this passage…');
+  const skills = useSkillPicker(text, setText, ref, placeholder ?? 'Ask about this passage…');
   const canSend = text.trim().length > 0 || files.length > 0;
+
+  const voiceBaseRef = useRef('');
+  const voice = useVoiceInput({
+    onPartial: (t) => setText(voiceBaseRef.current + t),
+    onFinal: (t) => { voiceBaseRef.current = voiceBaseRef.current + t + ' '; setText(voiceBaseRef.current); },
+    onError: (message) => toast(message),
+  });
+  const toggleVoice = (): void => {
+    if (!voice.recording) voiceBaseRef.current = text ? text.replace(/\s*$/, ' ') : '';
+    voice.toggle();
+  };
+
+  // Voice input sets `text` directly (no native input event), which the resize logic in the
+  // textarea's onChange never sees — so the box stayed a fixed height while dictated text kept
+  // growing. Driving the resize off `text` itself covers both typed and dictated input.
+  useEffect(() => {
+    if (!ref.current) return;
+    ref.current.style.height = 'auto';
+    ref.current.style.height = `${Math.min(ref.current.scrollHeight, 120)}px`;
+  }, [text]);
 
   // Focus once the panel has slid in (legacy waits 280ms), an effect because focus is the DOM's.
   useEffect(() => {
@@ -61,8 +86,6 @@ export function BranchComposer({ branchId, skillsKey, streaming, onSend, onStop 
           onChange={e => {
             setText(e.target.value);
             skills.onTextChange();
-            e.target.style.height = 'auto';
-            e.target.style.height = `${Math.min(e.target.scrollHeight, 120)}px`;
           }}
           onKeyDown={e => {
             if (skills.onKeyDown(e, text)) return;
@@ -81,6 +104,12 @@ export function BranchComposer({ branchId, skillsKey, streaming, onSend, onStop 
             <ModelChip branchId={branchId} className="branch-model-chip" />
             <ModeChip className="branch-mode-chip" />
           </div>
+          <button
+            type="button" className={clsx('chip', 'mic-chip', voice.recording && 'recording')}
+            aria-label={voice.recording ? 'Stop voice input' : 'Voice input'} title="Voice input" onClick={toggleVoice}
+          >
+            <Mic size={13} />
+          </button>
           {streaming ? (
             <button type="button" className="send-btn" title="Stop generation" aria-label="Stop" onClick={onStop}>
               <Square size={11} fill="currentColor" />
