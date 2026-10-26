@@ -566,7 +566,17 @@ function Workspace({ canvasId }: { canvasId: string }) {
           ...(files.length ? { attachments: files } : {}),
         },
         {
-          apply: fn => useCanvasDoc.getState().apply(fn, canvasId),
+          apply: fn => useCanvasDoc.getState().apply(d => {
+            const hadHtml = new Set(d.messages.filter(m => m.parts.some(p => p.kind === 'html')).map(m => m.threadId));
+            const result = fn(d);
+            for (const m of d.messages) {
+              if (!hadHtml.has(m.threadId) && m.parts.some(p => p.kind === 'html')) {
+                setGeometry(d, m.threadId, { w: HTML_W });
+                hadHtml.add(m.threadId);
+              }
+            }
+            return result;
+          }, canvasId),
           onDelta: (messageId, soFar) => {
             // An HTML reply streams its raw tags/CSS as text underneath — showing that live would
             // balloon the node's measured content height (it's markup, not prose), which drags the
@@ -726,11 +736,11 @@ function Workspace({ canvasId }: { canvasId: string }) {
           onToggleContext={() => setContextOpen(v => !v)}
         />
         {selectionPopover}
-        <ReadingView doc={doc} onBack={() => setReading(false)} onShowOnCanvas={showOnCanvas} />
+        <ReadingView doc={doc} onBlockPick={pickBlock} onBack={() => setReading(false)} onShowOnCanvas={showOnCanvas} />
         {detailMessageId && (
           <OutputDetailView
             doc={doc} messageId={detailMessageId} onClose={() => setDetailMessageId(null)}
-            onSaveOutput={id => { void onSaveOutput(id); }}
+            onSaveOutput={id => { void onSaveOutput(id); }} onBlockPick={pickBlock}
           />
         )}
         {contextOpen && (
@@ -838,7 +848,7 @@ function Workspace({ canvasId }: { canvasId: string }) {
       {detailMessageId && (
         <OutputDetailView
           doc={doc} messageId={detailMessageId} onClose={() => setDetailMessageId(null)}
-          onSaveOutput={id => { void onSaveOutput(id); }}
+          onSaveOutput={id => { void onSaveOutput(id); }} onBlockPick={pickBlock}
         />
       )}
       {contextOpen && (

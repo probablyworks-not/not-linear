@@ -1,4 +1,6 @@
 import { test, expect, type Page, type Route } from '@playwright/test';
+import { addMessage, branchFrom, createRootThread, freezeSelection, setGeometry, textPart } from '../../src/canvas/domain/commands';
+import { emptyDoc } from '../../src/canvas/types';
 
 // Canvas (C2-C4), end to end in a real browser. The model is mocked — no request leaves the page —
 // but everything else is real: the Dexie db, the tabs, React Flow, the composer's persisted drafts.
@@ -10,7 +12,7 @@ import { test, expect, type Page, type Route } from '@playwright/test';
 
 type Req = { messages: { role: string; content: string }[]; system: string };
 
-async function seed(page: Page): Promise<Req[]> {
+async function seed(page: Page, response = 'A widget has a sprocket and a flange.'): Promise<Req[]> {
   const requests: Req[] = [];
   await page.addInitScript(() => {
     localStorage.setItem('nl_api_keys', JSON.stringify({ anthropic: 'sk-test' }));
@@ -35,7 +37,7 @@ async function seed(page: Page): Promise<Req[]> {
   await page.route('https://api.anthropic.com/v1/messages', async (route: Route) => {
     const body = JSON.parse(route.request().postData() ?? '{}') as Req;
     requests.push(body);
-    const text = 'A widget has a sprocket and a flange.';
+    const text = response;
     const events = [
       { type: 'message_start', message: { usage: { input_tokens: 7 } } },
       { type: 'content_block_start', index: 0, content_block: { type: 'text' } },
@@ -74,11 +76,15 @@ async function artifacts(page: Page): Promise<Artifact[]> {
 
 async function newCanvas(page: Page): Promise<void> {
   // The empty card offers New in its body; once there are canvases it is the header's +.
+  const existing = page.getByTestId('canvas-workspace');
+  const previous = await existing.count() ? await existing.getAttribute('data-canvas') : null;
   const card = page.getByTestId('card-canvases');
   const empty = card.getByTestId('canvas-new-empty');
   if (await empty.count()) await empty.click();
   else await card.getByTestId('canvas-new-card').click();
+  await expect(page.getByTestId('project-overview')).not.toBeVisible();
   await expect(page.getByTestId('canvas-workspace')).toBeVisible();
+  if (previous) await expect(page.getByTestId('canvas-workspace')).not.toHaveAttribute('data-canvas', previous);
 }
 
 // The default "new question" composer starts as a collapsed launcher pill; clicking it expands
@@ -94,7 +100,7 @@ async function openComposer(page: Page): Promise<void> {
   // click-then-verify rather than race that settle with a single attempt.
   await expect(async () => {
     await expect(launcher.or(composer)).toBeVisible();
-    if (await launcher.count()) await launcher.click();
+    if (await launcher.isVisible()) await launcher.click({ timeout: 500 }).catch(() => undefined);
     await expect(composer).toBeVisible({ timeout: 1000 });
   }).toPass({ timeout: 10000 });
 }
@@ -132,6 +138,237 @@ test.afterEach(async ({ page }) => {
 });
 
 test.describe('the canvas loop', () => {
+
+  test('formatted selection freezes readable context and restores multi-node marks', async ({ page }) => {
+    await seed(page, 'alpha **beta** gamma');
+    await openProject(page); await newCanvas(page); await ask(page, 'explain');
+    const paragraph = page.locator('.react-flow [data-part] p').filter({ hasText: 'alpha beta gamma' });
+    await expect(paragraph).toBeVisible();
+    const points = await paragraph.evaluate(el => {
+      const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+      const texts: Text[] = [];
+      while (walker.nextNode()) if (!walker.currentNode.parentElement?.closest('button')) texts.push(walker.currentNode as Text);
+      const start = document.createRange(); start.setStart(texts[0]!, 0); start.setEnd(texts[0]!, 1);
+      const last = texts.at(-1)!;
+      const end = document.createRange(); end.setStart(last, last.length - 1); end.setEnd(last, last.length);
+      const a = start.getBoundingClientRect(), b = end.getBoundingClientRect();
+      return { x1: a.left + 0.5, y1: a.top + a.height / 2, x2: b.right - 0.5, y2: b.top + b.height / 2 };
+    });
+    await page.mouse.move(points.x1, points.y1); await page.mouse.down();
+    await page.mouse.move(points.x2, points.y2, { steps: 12 }); await page.mouse.up();
+    await page.getByTestId('add-source').click();
+    await expect(page.getByTestId('context-chips')).toContainText('alpha beta gamma');
+    await ask(page, 'why?');
+    await expect(page.locator('.react-flow mark[data-snapshot-id]')).toHaveCount(3);
+    await page.reload();
+    await expect(page.locator('.react-flow mark[data-snapshot-id]')).toHaveCount(3);
+    await expect(page.getByTestId('canvas-save-state')).toHaveText('Saved');
+  });
+
+  test('HTML viewport settles and wheel gestures pan the canvas at the document edge', async ({ page }) => {
+    const html = '<!doctype html><html><body style="margin:8px;min-height:100vh"><p>alpha <b>beta</b> &amp; gamma</p>' + '<p>Long HTML document</p>'.repeat(100) + '</body></html>';
+    await seed(page, html);
+    await openProject(page); await newCanvas(page); await ask(page, 'render as html');
+    const iframe = page.locator('.react-flow iframe');
+    await expect(iframe).toBeVisible();
+    await expect(page.getByTestId('canvas-save-state')).toHaveText('Saved');
+    const frame = page.frameLocator('.react-flow iframe');
+    await expect(frame.locator('p').first()).toHaveText('alpha beta & gamma');
+    expect(await iframe.evaluate(el => (el as HTMLElement).offsetHeight)).toBe(480);
+    expect(await iframe.locator('xpath=ancestor::*[contains(@class, "react-flow__node")][1]').evaluate(el => (el as HTMLElement).offsetWidth)).toBe(880);
+    await page.getByRole('button', { name: 'Zoom Out', exact: true }).click();
+    await page.getByRole('button', { name: 'Zoom Out', exact: true }).click();
+    const local = await frame.locator('p').first().evaluate(el => {
+      const range = document.createRange(); range.selectNodeContents(el);
+      const selection = window.getSelection()!; selection.removeAllRanges(); selection.addRange(range);
+      document.dispatchEvent(new Event('selectionchange'));
+      const r = range.getBoundingClientRect(); return { left: r.left, width: r.width };
+    });
+    await expect(page.getByTestId('canvas-selection-popover')).toBeVisible();
+    const bounds = (await iframe.boundingBox())!;
+    const dimensions = await iframe.evaluate(el => ({ width: (el as HTMLElement).offsetWidth, border: el.clientLeft }));
+    const popover = (await page.getByTestId('canvas-selection-popover').boundingBox())!;
+    expect(popover.x + popover.width / 2).toBeCloseTo(bounds.x + (local.left + dimensions.border + local.width / 2) * bounds.width / dimensions.width, 0);
+    await frame.locator('body').evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+    await iframe.hover();
+    const before = await page.locator('.react-flow__viewport').getAttribute('style');
+    await page.mouse.wheel(0, 240);
+    await expect.poll(() => page.locator('.react-flow__viewport').getAttribute('style')).not.toBe(before);
+    await expect(page.getByTestId('canvas-save-state')).toHaveText('Saved');
+    expect(await iframe.evaluate(el => (el as HTMLElement).offsetHeight)).toBe(480);
+    await page.reload();
+    await expect(page.locator('.react-flow iframe')).toBeVisible();
+    await expect(page.getByTestId('canvas-save-state')).toHaveText('Saved');
+  });
+
+  test('full-page HTML reader preserves formatted selection, marks and the canvas camera', async ({ page }) => {
+    const html = '<!doctype html><html><head><title>alpha beta &amp; gamma</title></head><body><p>alpha <b>beta</b> &amp; gamma</p>' + '<p>Reading content</p>'.repeat(60) + '</body></html>';
+    await seed(page, html);
+    await openProject(page); await newCanvas(page); await ask(page, 'render as html');
+    await expect(page.locator('.react-flow iframe')).toBeVisible();
+    await expect(page.getByTestId('canvas-save-state')).toHaveText('Saved');
+    const viewport = await page.locator('.react-flow__viewport').getAttribute('style');
+    await page.getByTestId('view-output').click();
+    const reader = page.getByTestId('canvas-output-detail');
+    await expect(reader).toHaveCSS('height', `${page.viewportSize()!.height}px`);
+    const iframe = reader.locator('iframe');
+    const frame = page.frameLocator('[data-testid="canvas-output-detail"] iframe');
+    const paragraph = frame.locator('p').first();
+    await expect(paragraph).toHaveText('alpha beta & gamma');
+    expect((await iframe.boundingBox())!.height).toBeGreaterThan(600);
+    await page.screenshot({ path: test.info().outputPath('canvas-full-page-reader.png') });
+    await paragraph.evaluate(el => {
+      const r = document.createRange(); r.selectNodeContents(el);
+      const sel = window.getSelection()!; sel.removeAllRanges(); sel.addRange(r);
+      document.dispatchEvent(new Event('selectionchange'));
+    });
+    await expect(page.getByTestId('add-source')).toBeVisible();
+    await page.getByTestId('add-source').click();
+    await expect(reader).toHaveCount(0);
+    await expect(page.getByTestId('context-chips')).toContainText('alpha beta & gamma');
+    await expect(page.locator('.react-flow__viewport')).toHaveAttribute('style', viewport!);
+    await ask(page, 'why?');
+    await page.reload();
+    await expect(page.frameLocator('.react-flow iframe').first().locator('mark')).toHaveCount(3);
+    await page.getByTestId('view-output').first().click();
+    const fullFrame = page.frameLocator('[data-testid="canvas-output-detail"] iframe');
+    await fullFrame.locator('p').first().click();
+    await page.keyboard.press('Escape');
+    await expect(page.getByTestId('canvas-output-detail')).toHaveCount(0);
+  });
+
+  test('linear reading view selections can become a branch', async ({ page }) => {
+    await seed(page, 'alpha **beta** gamma');
+    await openProject(page); await newCanvas(page); await ask(page, 'explain');
+    await expect(page.locator('.react-flow [data-part] strong')).toHaveText('beta');
+    await page.getByTestId('canvas-reading-toggle').click();
+    await page.getByTestId('canvas-reading').locator('[data-part] p').filter({ hasText: 'alpha beta gamma' }).evaluate(el => {
+      const r = document.createRange(); r.selectNodeContents(el);
+      const sel = window.getSelection()!; sel.removeAllRanges(); sel.addRange(r);
+      document.dispatchEvent(new Event('selectionchange'));
+    });
+    await page.getByTestId('add-source').click();
+    await expect(page.getByTestId('canvas-reading')).toHaveCount(0);
+    await expect(page.getByTestId('context-chips')).toContainText('alpha beta gamma');
+    await ask(page, 'why?');
+    await expect(page.locator('.react-flow [data-thread]')).toHaveCount(2);
+  });
+
+  test('a populated canvas settles while idle and stops observing after leaving', async ({ page }) => {
+    await seed(page);
+    await page.addInitScript(() => {
+      const state = window as unknown as Window & { sceneObservers: number };
+      state.sceneObservers = 0;
+      const Native = window.MutationObserver;
+      window.MutationObserver = class extends Native {
+        private scene = false;
+        override observe(target: Node, options?: MutationObserverInit): void {
+          if (!this.scene && target instanceof Element && target.matches('.react-flow__nodes')) {
+            this.scene = true; state.sceneObservers++;
+          }
+          super.observe(target, options);
+        }
+        override disconnect(): void {
+          if (this.scene) { this.scene = false; state.sceneObservers--; }
+          super.disconnect();
+        }
+      };
+    });
+    await openProject(page); await newCanvas(page);
+    const id = (await page.getByTestId('canvas-workspace').getAttribute('data-canvas'))!;
+    const fixture = emptyDoc({ id, title: 'Performance fixture', projectId: 'p1', rev: 2, createdAt: 1, updatedAt: 1, counts: { threads: 0, messages: 0, outputs: 0 } });
+    for (let i = 0; i < 50; i++) {
+      const { thread } = createRootThread(fixture, `Question ${i}`, { now: i + 1 });
+      const reply = addMessage(fixture, { threadId: thread.id, author: { kind: 'model', provider: 'p', model: 'm' }, parts: [textPart('A readable paragraph. '.repeat(30))] }, { now: i + 1 });
+      setGeometry(fixture, thread.id, { x: (i % 5) * 400, y: Math.floor(i / 5) * 340, w: 360, h: 300 });
+      if (i === 0) {
+        const source = freezeSelection(fixture, reply.id, reply.parts[0]!.id, 'readable', 2, { now: 1 })!;
+        const made = branchFrom(fixture, { snapshotId: source.id, prompt: 'why readable?' }, { now: 2 })!;
+        setGeometry(fixture, made.thread.id, { x: 2200, y: 0, w: 360, h: 300 });
+      }
+    }
+    fixture.summary.counts = { threads: fixture.threads.length, messages: fixture.messages.length, outputs: 0 };
+    await page.evaluate(async fixture => {
+      const db = await new Promise<IDBDatabase>((resolve, reject) => {
+        const r = indexedDB.open('notlinear-canvas'); r.onsuccess = () => resolve(r.result); r.onerror = () => reject(r.error);
+      });
+      await new Promise<void>((resolve, reject) => {
+        const tx = db.transaction('kv', 'readwrite');
+        tx.objectStore('kv').put({ key: `canvas_doc_v1:${fixture.summary.id}`, value: fixture });
+        tx.oncomplete = () => resolve(); tx.onerror = () => reject(tx.error);
+      }); db.close();
+    }, fixture);
+    await page.reload();
+    await expect(page.locator('.react-flow [data-thread]')).toHaveCount(51);
+    await expect.poll(() => page.evaluate(() => (window as unknown as Window & { sceneObservers: number }).sceneObservers)).toBe(1);
+    await expect(page.getByTestId('canvas-save-state')).toHaveText('Saved');
+    const mutations = await page.locator('.react-flow__nodes').evaluate(el => new Promise<number>(resolve => {
+      let count = 0; const observer = new MutationObserver(changes => { count += changes.length; });
+      observer.observe(el, { childList: true, subtree: true });
+      setTimeout(() => { observer.disconnect(); resolve(count); }, 800);
+    }));
+    expect(mutations).toBe(0);
+    await page.getByRole('tab').filter({ hasText: 'Main' }).getByRole('button').first().click();
+    await expect(page.locator('.react-flow')).toHaveCount(0);
+    expect(await page.evaluate(() => (window as unknown as Window & { sceneObservers: number }).sceneObservers)).toBe(0);
+  });
+
+  test('a slow stream finishes in its original canvas after switching away', async ({ page }) => {
+    await seed(page);
+    await page.addInitScript(() => {
+      const original = window.fetch;
+      window.fetch = async (input, init) => {
+        const url = input instanceof Request ? input.url : String(input);
+        if (!url.includes('api.anthropic.com/v1/messages')) return original(input, init);
+        const encode = (e: unknown) => new TextEncoder().encode(`data: ${JSON.stringify(e)}\n\n`);
+        return new Response(new ReadableStream({
+          async start(controller) {
+            controller.enqueue(encode({ type: 'content_block_start', index: 0, content_block: { type: 'text' } }));
+            for (let i = 0; i < 40; i++) {
+              controller.enqueue(encode({ type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: `word${i} ` } }));
+              await new Promise(resolve => setTimeout(resolve, 60));
+            }
+            controller.enqueue(encode({ type: 'message_delta', delta: { stop_reason: 'end_turn' }, usage: { output_tokens: 40 } }));
+            controller.close();
+          },
+        }), { headers: { 'content-type': 'text/event-stream' } });
+      };
+    });
+    await openProject(page); await newCanvas(page); await ask(page, 'slow answer');
+    await expect(page.getByTestId('live-text')).toContainText('word0');
+    await page.getByRole('button', { name: 'Open left pane' }).click();
+    await page.locator('aside[aria-label="Left pane"] [data-project="p1"] button').first().click();
+    await newCanvas(page);
+    await openComposer(page);
+    await page.getByTestId('ink-composer').getByRole('textbox').fill('second canvas draft');
+    await expect(page.locator('.react-flow [data-thread]')).toHaveCount(0);
+    await canvasTab(page).first().getByRole('button').first().click();
+    await expect(page.locator('.react-flow')).toContainText('word39', { timeout: 10000 });
+    await expect(page.getByTestId('canvas-save-state')).toHaveText('Saved');
+    await canvasTab(page).nth(1).getByRole('button').first().click();
+    await expect(page.getByTestId('ink-composer').getByRole('textbox')).toHaveValue('second canvas draft');
+    await expect(page.locator('.react-flow [data-thread]')).toHaveCount(0);
+  });
+
+  test('a backward drag at reduced zoom selects the second repeated phrase', async ({ page }) => {
+    await seed(page, 'echo then **echo**');
+    await openProject(page); await newCanvas(page); await ask(page, 'repeat');
+    const second = page.locator('.react-flow [data-part] strong');
+    await expect(second).toHaveText('echo');
+    await page.getByRole('button', { name: 'Zoom Out', exact: true }).click();
+    await page.getByRole('button', { name: 'Zoom Out', exact: true }).click();
+    const rect = (await second.boundingBox())!;
+    await page.mouse.move(rect.x + rect.width - 0.3, rect.y + rect.height / 2); await page.mouse.down();
+    await page.mouse.move(rect.x + 0.3, rect.y + rect.height / 2, { steps: 10 }); await page.mouse.up();
+    await page.getByTestId('add-source').click();
+    await expect(page.getByTestId('context-chips')).toContainText('echo');
+    await ask(page, 'why this one?');
+    await page.reload();
+    const firstCard = page.locator('.react-flow [data-thread]').first();
+    await expect(firstCard.locator('strong mark')).toHaveText('echo');
+    expect(await firstCard.locator('[data-part] p').last().innerHTML()).toMatch(/^.*echo then/);
+  });
+
   test('ask, stream a reply, and keep it across a reload', async ({ page }) => {
     const requests = await seed(page);
     await openProject(page);
@@ -229,7 +466,8 @@ test.describe('the canvas loop', () => {
     await page.reload();
     await expect(page.getByTestId('canvas-workspace')).toBeVisible();
     await page.waitForSelector('.react-flow__edge-path');
-    const { markPoint, startScreen } = await page.evaluate(() => {
+    const matchesQuote = async (): Promise<void> => {
+      const { markPoint, startScreen } = await page.evaluate(() => {
       const mark = document.querySelector('mark[data-snapshot-id]') as HTMLElement;
       const path = document.querySelector('.react-flow__edge-path') as SVGPathElement;
       const markRect = mark.getBoundingClientRect();
@@ -243,8 +481,16 @@ test.describe('the canvas loop', () => {
         startScreen: { x: screen.x, y: screen.y },
       };
     });
-    expect(startScreen.x).toBeCloseTo(markPoint.x, 0);
-    expect(startScreen.y).toBeCloseTo(markPoint.y, 0);
+      expect(startScreen.x).toBeCloseTo(markPoint.x, 0);
+      expect(startScreen.y).toBeCloseTo(markPoint.y, 0);
+    };
+    await expect(matchesQuote).toPass({ timeout: 7000 });
+    const sourceHeader = page.locator('.react-flow [data-thread]').first().locator('header > span').first();
+    const rect = (await sourceHeader.boundingBox())!;
+    await page.mouse.move(rect.x + 12, rect.y + rect.height / 2); await page.mouse.down();
+    await page.mouse.move(rect.x + 132, rect.y + rect.height / 2 + 60, { steps: 10 }); await page.mouse.up();
+    await expect(matchesQuote).toPass({ timeout: 7000 });
+
   });
 
   test('two canvases keep their own tabs, drafts and content across a reload', async ({ page }) => {

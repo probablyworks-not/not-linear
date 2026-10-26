@@ -82,13 +82,13 @@ export const ThreadNode = memo(function ThreadNode({ data, selected, width, heig
   } = data;
   const headerRef = useRef<HTMLButtonElement>(null);
   const Icon = KIND_ICON[thread.kind];
+  const latestOutput = [...messages].reverse().find(m => !m.provisional && m.author.kind === 'model');
   // Set by CanvasWorkspace's clarify pre-flight (send()) while it waits on the user; cleared once
   // answered or skipped. Only the active thread ever has one, so this read is cheap elsewhere.
   const clarifyQuestions = useChatStore(s => s.live[thread.id]?.clarify);
 
-  // A generated-HTML reply is never meant to scroll inside its own card — the node should just be
-  // as tall as the HTML (its width is a fixed reading column instead, set by the workspace). So a
-  // thread holding one auto-grows permanently, not only while `active`.
+  // Fit HTML cards around the stable iframe viewport. The document itself scrolls internally;
+  // its intrinsic height/width never feeds back into the surrounding card geometry.
   const hasHtml = messages.some(m => m.parts.some(p => p.kind === 'html'));
   const autoGrow = active || hasHtml;
 
@@ -151,6 +151,12 @@ export const ThreadNode = memo(function ThreadNode({ data, selected, width, heig
       <header className="flex flex-none items-center gap-2 border-b border-cv-divider px-3 py-2">
         <Icon size={13} aria-hidden className="flex-none text-text-3" />
         <span className="min-w-0 flex-1 truncate font-mono text-xs uppercase tracking-widest text-text-3">{thread.title}</span>
+        {latestOutput && (
+          <button type="button" data-testid="view-output" onClick={() => onViewOutput(latestOutput.id)}
+            title="Read the full answer" className="nodrag flex flex-none items-center gap-1 rounded-md border border-cv-edge px-1.5 py-0.5 text-xs text-text-2 hover:text-accent">
+            <Expand size={12} aria-hidden /> View full
+          </button>
+        )}
         {onPickWhole && (
           <button
             ref={headerRef} type="button" data-testid="pick-whole-card" title="Select this whole card"
@@ -205,7 +211,7 @@ export const ThreadNode = memo(function ThreadNode({ data, selected, width, heig
             {!m.provisional && m.author.kind === 'model' && (
               <div className="mt-1.5 flex items-center gap-1.5">
                 <button
-                  type="button" data-testid="view-output" onClick={() => onViewOutput(m.id)}
+                  type="button" data-testid="view-message-output" onClick={() => onViewOutput(m.id)}
                   className="nodrag flex items-center gap-1 rounded-md border border-cv-edge px-1.5 py-0.5 text-xs text-text-3 hover:text-text"
                 >
                   <Expand size={11} aria-hidden /> View full

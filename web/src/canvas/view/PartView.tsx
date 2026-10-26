@@ -31,9 +31,9 @@ export type BlockPickHandler = (
 // `partId` and `highlights` only change identity when this part's own content actually did —
 // letting an edit elsewhere on the canvas skip re-parsing this markdown entirely.
 const Markdownish = memo(function Markdownish({
-  text, partId, messageId, highlights, onBlockPick,
+  text, partId, messageId, highlights, onBlockPick, sourceText = text,
 }: {
-  text: string; partId: string; messageId: string; highlights?: readonly TextHighlight[]; onBlockPick?: BlockPickHandler;
+  text: string; sourceText?: string; partId: string; messageId: string; highlights?: readonly TextHighlight[]; onBlockPick?: BlockPickHandler;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   // `onBlockPick` is read through a ref rather than a dependency so the listener effect below is
@@ -57,8 +57,8 @@ const Markdownish = memo(function Markdownish({
     // Always run, even with an empty list: a highlight going from present to absent (its snapshot
     // was deleted — a cancelled "ask about this" pick) still needs the stale `<mark>` unwrapped,
     // which only `applyHighlights`'s own reconciliation does.
-    applyHighlights(el, highlights ?? [], text);
-  }, [text, highlights]);
+    applyHighlights(el, highlights ?? [], sourceText);
+  }, [text, sourceText, highlights]);
 
   useEffect(() => {
     const el = ref.current;
@@ -94,7 +94,7 @@ const Markdownish = memo(function Markdownish({
         const range = document.createRange();
         if (block) range.selectNodeContents(block);
         const occurrence = block ? quoteOccurrence(el, range, quote) : 0;
-        const span = sourceRange(text, quote, occurrence, false, el);
+        const span = sourceRange(sourceText, quote, occurrence, false, el);
         onBlockPickRef.current(messageId, partId, quote, i === lo ? startAdditive : true, rect, occurrence, span ?? undefined);
       }
       dragStart = null; dragOver = null;
@@ -107,7 +107,7 @@ const Markdownish = memo(function Markdownish({
       el.removeEventListener('mouseover', onMouseOver);
       window.removeEventListener('mouseup', onMouseUp);
     };
-  }, [messageId, partId, text]);
+  }, [messageId, partId, sourceText]);
 
   return (
     <div
@@ -249,7 +249,7 @@ export function PartView({ part, messageId, highlightsByPart, onBlockPick, fullP
     case 'report':
       return <Markdownish text={part.text} partId={part.id} messageId={messageId} highlights={highlightsByPart?.[part.id]} onBlockPick={onBlockPick} />;
     case 'code':
-      return <Markdownish text={`\`\`\`${part.language}\n${part.text}\n\`\`\``} partId={part.id} messageId={messageId} highlights={highlightsByPart?.[part.id]} onBlockPick={onBlockPick} />;
+      return <Markdownish sourceText={part.text} text={`\`\`\`${part.language}\n${part.text}\n\`\`\``} partId={part.id} messageId={messageId} highlights={highlightsByPart?.[part.id]} onBlockPick={onBlockPick} />;
     case 'tool_result':
       return (
         <details data-part={part.id} className="rounded-lg border border-cv-edge bg-cv-card-inset px-2.5 py-1.5 text-xs">
