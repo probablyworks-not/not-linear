@@ -10,6 +10,8 @@
 // contiguous run) lives in `PartView.tsx` as one delegated listener — this module only makes the
 // handles exist and finds the text behind each one.
 
+import { contentText } from './selection-source';
+
 const BLOCK_SELECTOR = 'p, li, h1, h2, h3, h4, blockquote, pre, table';
 export const BLOCK_HANDLE_ATTR = 'data-block-handle';
 export const BLOCK_ATTR = 'data-block';
@@ -56,7 +58,7 @@ export function blockQuote(root: HTMLElement, index: number): string | null {
   if (!block) return null;
   const clone = block.cloneNode(true) as HTMLElement;
   clone.querySelector(`[${BLOCK_HANDLE_ATTR}]`)?.remove();
-  const text = clone.textContent?.trim();
+  const text = contentText(clone).trim();
   return text || null;
 }
 

@@ -3,6 +3,7 @@ import { Handle, NodeResizer, Position, type Node, type NodeProps } from '@xyflo
 import { Download, Expand, GitBranch, Layers, MessageSquare, SquareDashedMousePointer } from 'lucide-react';
 import type { CanvasMessage, CanvasThread, HighlightTone } from '../types';
 import type { TextHighlight } from '../anchors';
+import { cardWheel } from './wheel';
 import { PartView, type BlockPickHandler } from './PartView';
 import { liveText } from './live-text';
 import { renderMarkdown } from '../../lib/markdown';
@@ -132,7 +133,7 @@ export const ThreadNode = memo(function ThreadNode({ data, selected, width, heig
   useEffect(() => {
     const el = bodyRef.current;
     if (!el) return;
-    const onWheel = (e: WheelEvent) => { if (!e.ctrlKey) e.stopPropagation(); };
+    const onWheel = (e: WheelEvent) => cardWheel(el, e);
     el.addEventListener('wheel', onWheel);
     return () => el.removeEventListener('wheel', onWheel);
   }, []);

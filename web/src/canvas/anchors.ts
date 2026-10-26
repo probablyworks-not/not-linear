@@ -34,6 +34,7 @@ export interface TextHighlight {
   partId: string;
   quote: string;
   tone: HighlightTone;
+  start?: number;
 }
 
 /** Every frozen quote, grouped by the message and then the part it was taken from — the one shape
@@ -46,7 +47,7 @@ export function highlightsByMessage(doc: CanvasDoc): Record<string, Record<strin
   for (const s of doc.snapshots) {
     if (s.anchor.kind !== 'text') continue;
     const byPart = (out[s.anchor.messageId] ??= {});
-    (byPart[s.anchor.partId] ??= []).push({ id: s.id, partId: s.anchor.partId, quote: s.anchor.quote, tone: s.highlightTone ?? 'blue' });
+    (byPart[s.anchor.partId] ??= []).push({ id: s.id, partId: s.anchor.partId, quote: s.content, start: s.anchor.start, tone: s.highlightTone ?? 'blue' });
   }
   return out;
 }

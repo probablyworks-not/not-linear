@@ -9,6 +9,7 @@ export interface HtmlSelection {
   messageId: string;
   partId: string;
   quote: string;
+  occurrence?: number;
   rect: { left: number; top: number; width: number; height: number };
   /** Whether the iframe this came from sits inside the ReactFlow pane right now — false for the
    * same part rendered in Reading View or the Output Detail overlay, which are plain scrolling

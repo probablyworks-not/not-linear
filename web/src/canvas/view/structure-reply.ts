@@ -153,6 +153,7 @@ function addSections(root: HTMLElement): void {
       child.id = id;
       const badge = document.createElement('span');
       badge.className = BADGE_CLASS;
+      badge.setAttribute('data-canvas-decoration', 'true');
       badge.textContent = num;
       child.prepend(badge);
 

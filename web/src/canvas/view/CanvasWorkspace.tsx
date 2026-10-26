@@ -28,6 +28,7 @@ import { buildClarifyBrief } from '../../chat/clarify-brief';
 import { getClarifyFirst } from '../../chat/clarify-pref';
 import { createDebouncedWriter } from '../../lib/debounced-writer';
 import { liveText } from './live-text';
+import { sourceRange } from './selection-source';
 import { ThreadNode, type ThreadNodeType } from './ThreadNode';
 import { HighlightEdge } from './HighlightEdge';
 import { useHighlightAnchors } from './useHighlightAnchors';
@@ -49,9 +50,7 @@ const NODE_W = 360, NODE_H = 300;
 /** The active thread gets a wider card while it grows — a 360px column turns a long reply into
  * an absurdly tall, hard-to-read strip. */
 const ACTIVE_W = 640;
-/** A generated-HTML reply gets a fixed, comfortable reading width instead — like a document page,
- * not sized to the markup's own (often arbitrary) layout width. It still only ever grows tall to
- * fit its content (see `hasHtml` in the node builder below), never scrolling inside the card. */
+/** Stable HTML preview width; the sandboxed document scrolls within its own viewport. */
 const HTML_W = 880;
 const MIN_ZOOM = 0.2, MAX_ZOOM = 2;
 /** Streamed text reaches the document this often, so a reload mid-stream keeps the partial answer. */
@@ -156,7 +155,7 @@ function Workspace({ canvasId }: { canvasId: string }) {
   const projects = useAppStore(s => s.projects);
   const project = doc?.summary.projectId ? projects[doc.summary.projectId] : undefined;
   const rf = useReactFlow();
-  const highlightAnchors = useHighlightAnchors(doc, resizeTick, rf);
+  const highlightAnchors = useHighlightAnchors(doc, resizeTick, rf, !reading);
 
   const partTextOf = useMemo(() => partTextLookup(doc), [doc]);
   const { selection, clear: clearSelection } = useCanvasSelection(partTextOf);
@@ -200,7 +199,7 @@ function Workspace({ canvasId }: { canvasId: string }) {
   // thread it's tracked the same way but never read.
   const onContentSize = useCallback((threadId: string, size: { width: number; height: number }) => {
     const targetH = Math.max(NODE_H, size.height + 64 /* header + padding chrome */);
-    const targetW = Math.max(NODE_W, size.width + 28 /* card side padding */);
+    const targetW = Math.max(NODE_W, size.width); // scrollWidth already includes body padding.
     setAutoSizes(prev => {
       const cur = prev[threadId];
       if (cur && targetH <= cur.height && targetW <= cur.width) return prev;
@@ -212,22 +211,29 @@ function Workspace({ canvasId }: { canvasId: string }) {
   // placement `addSelectionAsSource` already does for a free-range quote, shared here so block and
   // whole-card picks land the same way.
   const placePick = useCallback((rect: { left: number; top: number; width: number; height: number }) => {
+    if (detailMessageId || reading) {
+      setPickScreenAnchor({ x: rect.left + rect.width / 2, y: rect.top });
+      setPickFlowAnchor(null); setPickFlowY(null); return;
+    }
     setPickScreenAnchor(null);
     setPickFlowAnchor(rf.screenToFlowPosition({ x: rect.left + rect.width / 2, y: rect.top }));
     setPickFlowY(rf.screenToFlowPosition({ x: rect.left, y: rect.top + rect.height / 2 }).y);
-  }, [rf]);
+  }, [rf, detailMessageId, reading]);
 
   // A block handle's click/drag-through — see `PartView.tsx`'s `BlockPickHandler`. A plain click
   // (`additive` false) replaces the tray with just this block, matching a fresh free-range pick;
   // Cmd/Ctrl (or any block after the first in a drag-through run) appends.
-  const pickBlock = useCallback<NonNullable<ThreadNodeType['data']['onBlockPick']>>((messageId, partId, quote, additive, rect) => {
+  const pickBlock = useCallback<NonNullable<ThreadNodeType['data']['onBlockPick']>>((messageId, partId, quote, additive, rect, occurrence, sourceSpan) => {
     const text = partTextOf(partId);
-    const start = text ? text.indexOf(quote) : -1;
-    if (start < 0) return;
-    void apply(d => freezeSelection(d, messageId, partId, quote, start, { now: Date.now() })).then(made => {
+    const mapped = sourceSpan ?? (text ? sourceRange(text, quote, occurrence ?? 0) : null);
+    if (!mapped) return;
+    const start = mapped.start;
+    void apply(d => freezeSelection(d, messageId, partId, quote, start, { now: Date.now() }, mapped.end)).then(made => {
       if (!made) return;
       setPicked(p => (additive ? [...p, made.id] : [made.id]));
       placePick(rect);
+      setDetailMessageId(null);
+      setReading(false);
     });
   }, [partTextOf, apply, placePick, setPicked]);
 
@@ -275,10 +281,8 @@ function Workspace({ canvasId }: { canvasId: string }) {
       const isActive = thread.id === activeThreadId;
       const autoSize = autoSizes[thread.id];
       const messages = doc.messages.filter(m => m.threadId === thread.id).sort((a, b) => a.seq - b.seq);
-      // A generated-HTML reply is never meant to scroll inside its own card (see `ThreadNode`'s
-      // own `hasHtml`) — the node stays as tall *and as wide* as its real content permanently, not
-      // just while active, sized to what `HtmlFrame`'s bridge script actually measured
-      // (`autoSize`), falling back to `HTML_W` only until the first report arrives.
+      // HTML uses a fixed preview viewport. Fit the card height around it without deriving
+      // another card width from the already-padded body (which previously grew forever).
       const hasHtml = messages.some(m => m.parts.some(p => p.kind === 'html'));
       // Grouped by part, not just message, so each PartView gets an already-stable, pre-filtered
       // array for its own part — filtering per-part at render time (the old `forPart`) produced a
@@ -320,7 +324,7 @@ function Workspace({ canvasId }: { canvasId: string }) {
         type: 'thread' as const,
         position: { x: geo?.x ?? 0, y: geo?.y ?? 0 },
         width: hasHtml
-          ? Math.max(autoSize?.width ?? 0, geo?.w ?? HTML_W)
+          ? (geo?.w ?? HTML_W)
           : isActive ? Math.max(geo?.w ?? NODE_W, ACTIVE_W) : (geo?.w ?? NODE_W),
         height: hasHtml
           ? Math.max(autoSize?.height ?? 0, geo?.h ?? NODE_H)
@@ -395,9 +399,11 @@ function Workspace({ canvasId }: { canvasId: string }) {
 
   const addSelectionAsSource = useCallback(async () => {
     if (!selection || selection.start < 0) return;
-    const made = await apply(d => freezeSelection(d, selection.messageId, selection.partId, selection.quote, selection.start, { now: Date.now() }));
+    const made = await apply(d => freezeSelection(d, selection.messageId, selection.partId, selection.quote, selection.start, { now: Date.now() }, selection.end));
     if (made) {
       setPicked(p => [...p, made.id]);
+      setDetailMessageId(null);
+      setReading(false);
       const anchorPoint = { x: selection.rect.left + selection.rect.width / 2, y: selection.rect.top };
       // Reading View and the Output Detail overlay render the same content as a plain scrolling
       // panel, outside the ReactFlow pane entirely — a screen->flow conversion of a selection made
@@ -608,12 +614,9 @@ function Workspace({ canvasId }: { canvasId: string }) {
       const n = nodes.find(x => x.id === prevId);
       const docNow = useCanvasDoc.getState().doc;
       const current = docNow?.layouts.find(l => l.id === DEFAULT_LAYOUT_ID)?.entries[prevId];
-      // A generated-HTML reply keeps its content-measured width (`auto.width`, falling back to
-      // `HTML_W` before the first bridge report) rather than the `ACTIVE_W` floor other replies
-      // get while streaming — persisting `ACTIVE_W` here would otherwise overwrite it the first
-      // time the thread settles.
+      // Preserve the HTML preview's chosen width; its content cannot resize the card.
       const hasHtml = docNow?.messages.some(m => m.threadId === prevId && m.parts.some(p => p.kind === 'html')) ?? false;
-      const w = hasHtml ? Math.max(auto?.width ?? 0, current?.w ?? HTML_W) : Math.max(current?.w ?? NODE_W, ACTIVE_W);
+      const w = hasHtml ? (current?.w ?? HTML_W) : Math.max(current?.w ?? NODE_W, ACTIVE_W);
       const h = auto?.height;
       if (n && ((h && h > (current?.h ?? NODE_H)) || w > (current?.w ?? NODE_W))) {
         applyGeometry(d => setGeometry(d, prevId, {
@@ -690,6 +693,31 @@ function Workspace({ canvasId }: { canvasId: string }) {
   const edgeTypes = useMemo(() => ({ highlight: HighlightEdge }), []);
   if (!doc) return null;
 
+  const selectionPopover = (
+    selection && selection.start >= 0 && selection.rect.width + selection.rect.height > 0 && (
+          <div
+            data-testid="canvas-selection-popover"
+            className="fixed z-[180] -translate-x-1/2 rounded-full bg-ask px-1 py-1 text-ask-fg shadow-lg"
+            style={{
+              left: selection.rect.left + selection.rect.width / 2,
+              // Prefer floating above the selection; when there isn't room (near the top of a
+              // card, or the top of the viewport), render below it instead of clamping to a fixed
+              // y that ends up overlapping whatever text sits above the selection.
+              top: selection.rect.top - 40 >= 8 ? selection.rect.top - 40 : selection.rect.top + selection.rect.height + 8,
+            }}
+          >
+            <button
+              type="button" data-testid="add-source"
+              onMouseDown={e => e.preventDefault()}
+              onClick={() => { void addSelectionAsSource(); }}
+              className="rounded-full px-2.5 py-1 text-xs text-ask-fg-soft hover:bg-ask-chip hover:text-ask-fg"
+            >
+              Ask about this
+            </button>
+          </div>
+        )
+  );
+
   if (reading) {
     return (
       <>
@@ -697,6 +725,7 @@ function Workspace({ canvasId }: { canvasId: string }) {
           doc={doc} saving={saving} reading onToggleReading={() => setReading(false)} undoDepth={undoDepth} onUndo={undoGeometry}
           onToggleContext={() => setContextOpen(v => !v)}
         />
+        {selectionPopover}
         <ReadingView doc={doc} onBack={() => setReading(false)} onShowOnCanvas={showOnCanvas} />
         {detailMessageId && (
           <OutputDetailView
@@ -774,27 +803,7 @@ function Workspace({ canvasId }: { canvasId: string }) {
           </ReactFlow>
         </div>
 
-        {selection && selection.start >= 0 && selection.rect.width + selection.rect.height > 0 && (
-          <div
-            data-testid="canvas-selection-popover"
-            className="fixed z-[70] -translate-x-1/2 rounded-full bg-ask px-1 py-1 text-ask-fg shadow-lg"
-            style={{
-              left: selection.rect.left + selection.rect.width / 2,
-              // Prefer floating above the selection; when there isn't room (near the top of a
-              // card, or the top of the viewport), render below it instead of clamping to a fixed
-              // y that ends up overlapping whatever text sits above the selection.
-              top: selection.rect.top - 40 >= 8 ? selection.rect.top - 40 : selection.rect.top + selection.rect.height + 8,
-            }}
-          >
-            <button
-              type="button" data-testid="add-source"
-              onClick={() => { void addSelectionAsSource(); }}
-              className="rounded-full px-2.5 py-1 text-xs text-ask-fg-soft hover:bg-ask-chip hover:text-ask-fg"
-            >
-              Ask about this
-            </button>
-          </div>
-        )}
+        {selectionPopover}
 
         <InkComposer
           key={target.key}

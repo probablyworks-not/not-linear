@@ -1,10 +1,13 @@
-import { memo, useEffect, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useRef } from 'react';
 import { highlightCodeIn, renderMarkdown, renderMermaidIn } from '../../lib/markdown';
 import type { CanvasPart } from '../types';
 import { structureReply } from './structure-reply';
 import { withSelectionBridge } from './html-bridge';
 import { htmlSelectionBus } from './html-selection-bus';
 import { applyHighlights, type TextHighlight } from './apply-highlights';
+import { canScroll } from './wheel';
+import { htmlAnchors } from './html-anchors';
+import { quoteOccurrence, sourceRange } from './selection-source';
 import { BLOCK_HANDLE_ATTR, blockQuote, tagBlocks } from './block-select';
 
 /** Fired when a block's left-edge hover handle is picked — a click (one block, `additive` false
@@ -15,6 +18,8 @@ import { BLOCK_HANDLE_ATTR, blockQuote, tagBlocks } from './block-select';
 export type BlockPickHandler = (
   messageId: string, partId: string, quote: string, additive: boolean,
   rect: { left: number; top: number; width: number; height: number },
+  occurrence?: number,
+  sourceSpan?: { start: number; end: number },
 ) => void;
 
 // Renders a typed part. Markdown, code, maths and diagrams go through the app's existing renderer
@@ -52,7 +57,7 @@ const Markdownish = memo(function Markdownish({
     // Always run, even with an empty list: a highlight going from present to absent (its snapshot
     // was deleted — a cancelled "ask about this" pick) still needs the stale `<mark>` unwrapped,
     // which only `applyHighlights`'s own reconciliation does.
-    applyHighlights(el, highlights ?? []);
+    applyHighlights(el, highlights ?? [], text);
   }, [text, highlights]);
 
   useEffect(() => {
@@ -86,7 +91,11 @@ const Markdownish = memo(function Markdownish({
         if (!quote) continue;
         const block = el.querySelector<HTMLElement>(`[data-block="${i}"]`);
         const rect = block?.getBoundingClientRect() ?? { left: 0, top: 0, width: 0, height: 0 };
-        onBlockPickRef.current(messageId, partId, quote, i === lo ? startAdditive : true, rect);
+        const range = document.createRange();
+        if (block) range.selectNodeContents(block);
+        const occurrence = block ? quoteOccurrence(el, range, quote) : 0;
+        const span = sourceRange(text, quote, occurrence, false, el);
+        onBlockPickRef.current(messageId, partId, quote, i === lo ? startAdditive : true, rect, occurrence, span ?? undefined);
       }
       dragStart = null; dragOver = null;
     };
@@ -98,7 +107,7 @@ const Markdownish = memo(function Markdownish({
       el.removeEventListener('mouseover', onMouseOver);
       window.removeEventListener('mouseup', onMouseUp);
     };
-  }, [messageId, partId]);
+  }, [messageId, partId, text]);
 
   return (
     <div
@@ -109,18 +118,12 @@ const Markdownish = memo(function Markdownish({
   );
 });
 
-const MIN_HTML_HEIGHT = 160;
-const DEFAULT_HTML_HEIGHT = 320;
-const MIN_HTML_WIDTH = 360;
-const MAX_HTML_WIDTH = 1400;
-const DEFAULT_HTML_WIDTH = 880;
-
 interface NlHtmlPartMessage {
   __nlHtmlPart: true;
-  type: 'height' | 'selection' | 'wheel';
-  height?: number;
-  width?: number;
+  type: 'selection' | 'wheel' | 'anchors' | 'escape';
+  marks?: { id: string; rect: { left: number; top: number; width: number; height: number } }[];
   text?: string;
+  occurrence?: number;
   rect?: { left: number; top: number; width: number; height: number };
   deltaX?: number;
   deltaY?: number;
@@ -134,58 +137,92 @@ interface NlHtmlPartMessage {
 const isNlHtmlPartMessage = (data: unknown): data is NlHtmlPartMessage =>
   !!data && typeof data === 'object' && (data as { __nlHtmlPart?: unknown }).__nlHtmlPart === true;
 
-/** The sandboxed iframe for a generated-HTML reply, auto-sized to its real content on both axes —
- * height uncapped (so the canvas node grows tall to fit rather than the iframe ever scrolling its
- * own content), width clamped to a sane range (`MIN_HTML_WIDTH`–`MAX_HTML_WIDTH`) so a document
- * that fits in a narrow table doesn't sit in an oversized card and a wide one isn't clipped. Also
- * bridges a selection made inside it back out to the same "Ask about this" flow markdown text
- * uses (`html-bridge.ts`/`html-selection-bus.ts`) — a sandboxed document has no other way out. */
-function HtmlFrame({ part, messageId }: { part: Extract<CanvasPart, { kind: 'html' }>; messageId: string }) {
+/** A stable preview or full-reader viewport. The HTML document scrolls inside its sandbox. */
+function HtmlFrame({ part, messageId, fullPage, highlights }: {
+  part: Extract<CanvasPart, { kind: 'html' }>; messageId: string; fullPage?: boolean; highlights?: readonly TextHighlight[];
+}) {
   const ref = useRef<HTMLIFrameElement>(null);
-  const [height, setHeight] = useState(DEFAULT_HTML_HEIGHT);
-  const [width, setWidth] = useState(DEFAULT_HTML_WIDTH);
-  const srcDoc = withSelectionBridge(part.html);
+  const srcDoc = withSelectionBridge(part.html, fullPage);
+  const paint = useCallback(() => {
+    const palette = getComputedStyle(document.documentElement);
+    const marks = (highlights ?? []).map(h => {
+      let occurrence = 0;
+      if (h.start !== undefined) {
+        while (true) {
+          const span = sourceRange(part.html, h.quote, occurrence, true);
+          if (!span || span.start >= h.start) break;
+          occurrence++;
+        }
+      }
+      return { id: h.id, quote: h.quote, occurrence, color: palette.getPropertyValue(`--cv-hl-${h.tone}`).trim() };
+    });
+    ref.current?.contentWindow?.postMessage({ __nlHtmlCommand: 'marks', marks }, '*');
+  }, [highlights, part.html]);
+  useEffect(() => { paint(); }, [paint]);
 
   useEffect(() => {
     const onMessage = (ev: MessageEvent): void => {
       if (ev.source !== ref.current?.contentWindow || !isNlHtmlPartMessage(ev.data)) return;
-      if (ev.data.type === 'height' && typeof ev.data.height === 'number') {
-        setHeight(Math.max(MIN_HTML_HEIGHT, ev.data.height));
-        if (typeof ev.data.width === 'number') setWidth(Math.min(MAX_HTML_WIDTH, Math.max(MIN_HTML_WIDTH, ev.data.width)));
+      if (ev.data.type === 'escape') {
+        document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+      } else if (ev.data.type === 'anchors' && Array.isArray(ev.data.marks)) {
+        if (ref.current) htmlAnchors.update(ref.current, ev.data.marks);
       } else if (ev.data.type === 'selection') {
         const text = ev.data.text?.trim();
         if (!text || !ev.data.rect) { htmlSelectionBus.emit(null); return; }
         const frame = ref.current?.getBoundingClientRect();
+        const sx = frame && ref.current?.offsetWidth ? frame.width / ref.current.offsetWidth : 1;
+        const sy = frame && ref.current?.offsetHeight ? frame.height / ref.current.offsetHeight : 1;
         htmlSelectionBus.emit({
-          messageId, partId: part.id, quote: text,
-          rect: { left: ev.data.rect.left + (frame?.left ?? 0), top: ev.data.rect.top + (frame?.top ?? 0), width: ev.data.rect.width, height: ev.data.rect.height },
+          messageId, partId: part.id, quote: text, occurrence: ev.data.occurrence,
+          rect: { left: (ev.data.rect.left + (ref.current?.clientLeft ?? 0)) * sx + (frame?.left ?? 0), top: (ev.data.rect.top + (ref.current?.clientTop ?? 0)) * sy + (frame?.top ?? 0), width: ev.data.rect.width * sx, height: ev.data.rect.height * sy },
           inCanvasPane: !!ref.current?.closest('.react-flow'),
         });
       } else if (ev.data.type === 'wheel') {
         // Re-dispatch as a native wheel event on the ReactFlow pane the iframe sits inside, at the
         // iframe's own screen position — a wheel event born inside a cross-origin iframe document
         // has no other way to reach react-flow's own listeners (see `html-bridge.ts`).
-        const pane = ref.current?.closest<HTMLElement>('.react-flow');
+        const pane = ref.current?.closest<HTMLElement>('.react-flow')?.querySelector<HTMLElement>('.react-flow__renderer');
         const frame = ref.current?.getBoundingClientRect();
-        if (!pane || !frame) return;
+        if (!frame) return;
+        if (!pane) {
+          let el = ref.current?.parentElement;
+          while (el) {
+            const style = getComputedStyle(el);
+            if (/auto|scroll/.test(style.overflow + style.overflowY + style.overflowX) && canScroll(el, ev.data.deltaX ?? 0, ev.data.deltaY ?? 0)) {
+              const unit = ev.data.deltaMode === 1 ? 16 : ev.data.deltaMode === 2 ? el.clientHeight : 1;
+              el.scrollBy((ev.data.deltaX ?? 0) * unit, (ev.data.deltaY ?? 0) * unit); break;
+            }
+            el = el.parentElement;
+          }
+          return;
+        }
         pane.dispatchEvent(new WheelEvent('wheel', {
           bubbles: true, cancelable: true,
           deltaX: ev.data.deltaX, deltaY: ev.data.deltaY, deltaMode: ev.data.deltaMode,
           ctrlKey: ev.data.ctrlKey, metaKey: ev.data.metaKey,
-          clientX: frame.left + (ev.data.clientX ?? 0), clientY: frame.top + (ev.data.clientY ?? 0),
+          clientX: frame.left + (ev.data.clientX ?? 0) * (frame.width / (ref.current?.offsetWidth || frame.width)),
+          clientY: frame.top + (ev.data.clientY ?? 0) * (frame.height / (ref.current?.offsetHeight || frame.height)),
         }));
       }
     };
+    const frame = ref.current;
+    const clear = () => frame?.contentWindow?.postMessage({ __nlHtmlCommand: 'clear' }, '*');
     window.addEventListener('message', onMessage);
-    return () => window.removeEventListener('message', onMessage);
+    window.addEventListener('nl-clear-html-selection', clear);
+    return () => {
+      window.removeEventListener('message', onMessage);
+      window.removeEventListener('nl-clear-html-selection', clear);
+      if (frame) htmlAnchors.remove(frame);
+    };
   }, [messageId, part.id]);
 
   return (
     <iframe
       ref={ref} data-part={part.id} title={part.title || 'Generated HTML'} sandbox="allow-scripts" srcDoc={srcDoc}
-      // `maxWidth: 100%` is what keeps this from overflowing a narrower container than the
-      // measured width — Reading View's and Output Detail's own fixed-width panels, in particular.
-      style={{ height, width, maxWidth: '100%' }} className="rounded-lg border border-cv-edge bg-cv-card"
+      onLoad={paint}
+      style={{ height: fullPage ? '100%' : 480, width: fullPage ? '100%' : 880, maxWidth: '100%' }}
+      className="block min-h-0 rounded-lg border border-cv-edge bg-cv-card"
     />
   );
 }
@@ -194,8 +231,8 @@ function HtmlFrame({ part, messageId }: { part: Extract<CanvasPart, { kind: 'htm
 // once per thread content-change in `CanvasWorkspace` — so a plain property lookup here hands
 // `Markdownish` the same array reference across renders when nothing about this part's highlights
 // changed, rather than a fresh `.filter()` result every time.
-export function PartView({ part, messageId, highlightsByPart, onBlockPick }: {
-  part: CanvasPart; messageId: string; highlightsByPart?: Record<string, readonly TextHighlight[]>; onBlockPick?: BlockPickHandler;
+export function PartView({ part, messageId, highlightsByPart, onBlockPick, fullPage }: {
+  part: CanvasPart; messageId: string; fullPage?: boolean; highlightsByPart?: Record<string, readonly TextHighlight[]>; onBlockPick?: BlockPickHandler;
 }) {
   if (part.state === 'failed') {
     return (
@@ -225,7 +262,7 @@ export function PartView({ part, messageId, highlightsByPart, onBlockPick }: {
       // `allow-same-origin` is withheld, so the document still executes in an opaque, isolated
       // origin with no access to the app's cookies, storage, or DOM. Same boundary as
       // ArtifactDetail otherwise. The declared network policy lands with the HTML surface in C5.
-      return <HtmlFrame part={part} messageId={messageId} />;
+      return <HtmlFrame part={part} messageId={messageId} fullPage={fullPage} highlights={highlightsByPart?.[part.id]} />;
     case 'attachment':
       return (
         <div data-part={part.id} className="flex items-center gap-2 rounded-lg border border-cv-edge bg-cv-card-inset px-2.5 py-1.5 text-xs text-text-2">

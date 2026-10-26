@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { htmlSelectionBus } from './html-selection-bus';
+import { contentText, quoteOccurrence, sourceRange } from './selection-source';
 
 // Reading a text selection that lands inside a canvas card, and saying exactly where it came from.
 // The offsets are taken against the *part's* text, not the rendered DOM, because the part text is
@@ -11,6 +12,7 @@ export interface CanvasSelection {
   quote: string;
   /** Offset within the part's text. -1 when the quote could not be located. */
   start: number;
+  end?: number;
   /** Only `left`/`top`/`width`/`height` are ever read (positioning the popover) — a real DOMRect
    * from the main document, or a plain object translated from an html part's sandboxed iframe
    * (`html-selection-bus.ts`), both satisfy this. */
@@ -93,7 +95,7 @@ export function readCanvasSelection(partTextOf: (partId: string) => string | nul
   clampToAnchorPart(sel);
   if (sel.isCollapsed || sel.rangeCount === 0) return null;
   const range = sel.getRangeAt(0);
-  const quote = sel.toString().trim();
+  const quote = contentText(range.cloneContents()).trim();
   if (!quote) return null;
   const partId = closestAttr(range.startContainer, 'data-part');
   const messageId = closestAttr(range.startContainer, 'data-message');
@@ -103,15 +105,17 @@ export function readCanvasSelection(partTextOf: (partId: string) => string | nul
   // caller answers.
   const rect = range.getBoundingClientRect();
   const text = partTextOf(partId);
+  const part = closestEl(range.startContainer, 'data-part');
+  const mapped = text && part ? sourceRange(text, quote, quoteOccurrence(part, range, quote), false, part) : null;
   return {
-    messageId, partId, quote, start: text ? text.indexOf(quote) : -1, rect,
+    messageId, partId, quote, start: mapped?.start ?? -1, end: mapped?.end, rect,
     inCanvasPane: inReactFlowPane(range.startContainer),
   };
 }
 
 /** Tracks the current selection inside the canvas, clearing it when it goes away. */
 const sameSelection = (a: CanvasSelection | null, b: CanvasSelection | null): boolean =>
-  a === b || (!!a && !!b && a.messageId === b.messageId && a.partId === b.partId && a.quote === b.quote && a.start === b.start
+  a === b || (!!a && !!b && a.messageId === b.messageId && a.partId === b.partId && a.quote === b.quote && a.start === b.start && a.end === b.end
     && a.inCanvasPane === b.inCanvasPane
     && a.rect.left === b.rect.left && a.rect.top === b.rect.top && a.rect.width === b.rect.width && a.rect.height === b.rect.height);
 
@@ -142,15 +146,18 @@ export function useCanvasSelection(partTextOf: (partId: string) => string | null
       const sel = htmlSelectionBus.get();
       if (!sel) { commit(null); return; }
       const text = partTextOf(sel.partId);
+      const mapped = text ? sourceRange(text, sel.quote, sel.occurrence ?? 0, true) : null;
       commit({
         messageId: sel.messageId, partId: sel.partId, quote: sel.quote,
-        start: text ? text.indexOf(sel.quote) : -1, rect: sel.rect, inCanvasPane: sel.inCanvasPane,
+        start: mapped?.start ?? -1, end: mapped?.end, rect: sel.rect, inCanvasPane: sel.inCanvasPane,
       });
     });
   }, [partTextOf]);
 
   const clear = useCallback(() => {
     window.getSelection()?.removeAllRanges();
+    window.dispatchEvent(new Event('nl-clear-html-selection'));
+    htmlSelectionBus.emit(null);
     setSelection(null);
   }, []);
 

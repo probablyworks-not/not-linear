@@ -240,10 +240,14 @@ export function deleteOrphanSnapshot(doc: CanvasDoc, snapshotId: string): void {
 }
 
 /** Freeze a selection inside a Canvas message, which is the common case for Branch. */
-export function freezeSelection(doc: CanvasDoc, messageId: string, partId: string, quote: string, start: number, ctx: Ctx): SourceSnapshot | null {
+export function freezeSelection(doc: CanvasDoc, messageId: string, partId: string, quote: string, start: number, ctx: Ctx, sourceEnd?: number): SourceSnapshot | null {
   const msg = doc.messages.find(m => m.id === messageId);
   if (!msg) return null;
-  const anchor: TextAnchor = { kind: 'text', messageId, partId, quote, start, end: start + quote.length };
+  const part = msg.parts.find(p => p.id === partId);
+  const raw = part && (part.kind === 'html' ? part.html : 'text' in part ? part.text : part.kind === 'tool_result' ? part.markdown : null);
+  const end = sourceEnd ?? start + quote.length;
+  const anchorQuote = sourceEnd !== undefined && raw ? raw.slice(start, end) : quote;
+  const anchor: TextAnchor = { kind: 'text', messageId, partId, quote: anchorQuote, start, end };
   return freezeSnapshot(doc, {
     kind: 'message', sourceId: messageId, sourceRev: msg.rev, anchor, content: quote,
     label: quote.length > 60 ? `${quote.slice(0, 57)}…` : quote,
