@@ -1,0 +1,98 @@
+/* Shared by the comparison sheet and the live conversation canvas. */
+[data-composer=obsidian] .nl-composer:not(.is-collapsed){background:#181A1E!important;border:1px solid #41444D!important;border-radius:20px!important;box-shadow:0 18px 60px #11182730,inset 0 1px 0 #FFFFFF12!important;padding:14px!important}
+[data-composer=frost] .nl-composer:not(.is-collapsed){background:rgba(247,249,253,.97)!important;border:1px solid #C9D1DF!important;border-radius:20px!important;box-shadow:0 16px 50px #52627B20!important;padding:14px!important}
+[data-composer=lilac] .nl-composer:not(.is-collapsed){background:#EEE9F8!important;border:1px solid #D5C9E9!important;border-radius:24px!important;box-shadow:0 16px 48px #6A4D8D20!important;padding:14px!important}
+[data-composer=ink] .nl-composer:not(.is-collapsed){background:#FFF!important;border:1px solid #242424!important;border-radius:10px!important;box-shadow:5px 5px 0 #252525!important;padding:14px!important}
+[data-composer] .nl-composer:not(.is-collapsed) .nl-input-layout input{min-height:58px!important;font-size:16px!important}
+[data-composer] .nl-composer:not(.is-collapsed) .nl-picker-trigger{font-size:12px!important}
+[data-composer] .nl-composer:not(.is-collapsed) .nl-model-picker,[data-composer] .nl-composer:not(.is-collapsed) .nl-role-picker{gap:5px!important}
+[data-composer=obsidian] .nl-composer:not(.is-collapsed) .cx{color:#D1D5E0!important}
+[data-composer=obsidian] .nl-composer:not(.is-collapsed) [title="Ask (Enter)"]{background:#DDE5FA!important;color:#232936!important}
+[data-composer=frost] .nl-composer:not(.is-collapsed) input,[data-composer=lilac] .nl-composer:not(.is-collapsed) input,[data-composer=ink] .nl-composer:not(.is-collapsed) input{color:#242630!important}
+[data-composer=frost] .nl-composer:not(.is-collapsed) input::placeholder,[data-composer=lilac] .nl-composer:not(.is-collapsed) input::placeholder,[data-composer=ink] .nl-composer:not(.is-collapsed) input::placeholder{color:#8C8D98!important}
+[data-composer=frost] .nl-composer:not(.is-collapsed) button,[data-composer=frost] .nl-model-picker,[data-composer=frost] .nl-role-picker{color:#626C7D!important}
+[data-composer=lilac] .nl-composer:not(.is-collapsed) button,[data-composer=lilac] .nl-model-picker,[data-composer=lilac] .nl-role-picker{color:#7A698E!important}
+[data-composer=ink] .nl-composer:not(.is-collapsed) button,[data-composer=ink] .nl-model-picker,[data-composer=ink] .nl-role-picker{color:#555!important}
+[data-composer=frost] .nl-composer:not(.is-collapsed) .cx,[data-composer=lilac] .nl-composer:not(.is-collapsed) .cx,[data-composer=ink] .nl-composer:not(.is-collapsed) .cx{color:#505364!important}
+[data-composer=frost] .nl-composer:not(.is-collapsed) [title="Ask (Enter)"],[data-composer=ink] .nl-composer:not(.is-collapsed) [title="Ask (Enter)"]{background:#22252C!important;color:white!important}
+[data-composer=lilac] .nl-composer:not(.is-collapsed) [title="Ask (Enter)"]{background:#66507C!important;color:white!important}
+[data-composer=frost] .nl-composer:not(.is-collapsed) .composer-source,[data-composer=ink] .nl-composer:not(.is-collapsed) .composer-source{background:#E8EDF4!important;color:#505364!important}
+[data-composer=lilac] .nl-composer:not(.is-collapsed) .composer-source{background:#E2D9F0!important;color:#665375!important}
+/* Distinct arrangements, shared between explorations and the canvas. */
+[data-composer] .nl-input-layout [title="Voice"]{display:grid!important;flex:none}
+[data-composer=obsidian] .nl-composer:not(.is-collapsed){border-radius:32px!important;padding:16px 20px!important}
+[data-composer=obsidian] .nl-composer:not(.is-collapsed) .composer-source{border-radius:6px!important;max-width:85%;border-left:2px solid #A7B9E2}
+[data-composer=frost] .nl-composer:not(.is-collapsed){border-radius:8px 22px 22px 22px!important;padding:18px!important;max-width:360px}
+[data-composer=frost] .nl-composer:not(.is-collapsed) .composer-source{border-radius:5px!important;border-left:2px solid #8C9EBA;padding:10px!important;font-style:italic}
+[data-composer=frost] .nl-composer:not(.is-collapsed) .nl-input-layout input{min-height:95px!important}
+[data-composer=lilac] .nl-composer:not(.is-collapsed){border-radius:16px!important;padding:16px 66px 16px 16px!important;position:relative}
+[data-composer=lilac] .nl-composer:not(.is-collapsed) .composer-source{border-radius:6px!important;font-size:10px}
+[data-composer=lilac] .nl-input-layout [title="Voice"]{position:absolute;right:14px;top:18px}
+[data-composer=lilac] .nl-input-layout [title="Ask (Enter)"]{position:absolute;right:14px;bottom:15px}
+[data-composer=ink] .nl-composer:not(.is-collapsed){border-radius:14px!important;box-shadow:0 5px 20px #00000012!important;padding:10px 12px!important}
+[data-composer=ink] .nl-composer:not(.is-collapsed) .composer-source{background:none!important;border-bottom:1px solid #DDD;border-radius:0!important;font-size:10px!important;padding:4px 0 7px!important}
+[data-composer=ink] .nl-composer:not(.is-collapsed) .nl-input-layout input{min-height:36px!important;font-size:14px!important}
+html[data-composer=obsidian] .nl-composer:not(.is-collapsed){left:50%!important;top:auto!important;bottom:24px!important;transform:translateX(-50%)!important;width:min(640px,calc(100vw - 40px))!important}
+html[data-composer=frost] .nl-composer:not(.is-collapsed){left:auto!important;right:24px!important;top:24%!important;bottom:auto!important;transform:none!important;width:min(350px,calc(100vw - 40px))!important}
+html[data-composer=lilac] .nl-composer:not(.is-collapsed){width:min(530px,calc(100vw - 32px))!important}
+html[data-composer=ink] .nl-composer:not(.is-collapsed){width:min(440px,calc(100vw - 32px))!important}
+html[data-composer=ink] .nl-composer:not(.is-collapsed){border:1.5px solid #292C31!important;border-radius:18px!important;box-shadow:0 9px 28px #2222220C!important;padding:14px 16px!important}
+html[data-composer=ink] .nl-composer:not(.is-collapsed) .nl-input-layout input{min-height:72px!important;font-size:16px!important}
+.live-bubble-settings{position:relative}.live-bubble-settings>button{all:unset;cursor:pointer;display:grid;place-items:center;width:32px;height:32px;border-radius:7px;font-size:19px}.live-bubble-settings>button:hover{background:#EEE}.live-settings-panel{display:none;position:absolute;left:-10px;bottom:calc(100% + 10px);width:250px;padding:16px;border:1px solid #D5D5CD;border-radius:12px;background:white;box-shadow:0 12px 40px #0002;z-index:90}.live-bubble-settings:before{content:'';position:absolute;bottom:100%;left:-10px;height:12px;width:250px}.live-bubble-settings:hover .live-settings-panel,.live-bubble-settings:focus-within .live-settings-panel,.live-bubble-settings.pinned .live-settings-panel{display:block}.live-settings-panel>small{font:9px 'Space Mono';letter-spacing:.06em;color:#999}.live-settings-panel label{display:flex;justify-content:space-between;margin-top:15px;gap:12px;font-size:12px}.live-settings-panel label>svg{display:none}.live-settings-panel .nl-picker-trigger{background:#F3F3F0;border-radius:6px;padding:6px 9px;font-size:12px!important}.live-settings-panel .nl-picker-trigger>span{display:none}
+html[data-composer=ink] .nl-input-layout:not(.has-message) [title="Ask (Enter)"]{display:none!important}
+html[data-composer=ink] .nl-input-layout [title="Voice"]{margin-left:auto!important;width:38px!important;height:38px!important;background:#23262D!important;color:white!important}
+html[data-composer=ink] .nl-input-layout.has-message [title="Voice"]{background:transparent!important;color:#777!important;width:28px!important}
+html[data-composer=ink] .nl-input-layout.has-message [title="Ask (Enter)"]{margin-left:0!important}
+/* Compact inline composer. */
+html[data-composer=ink] .nl-composer:not(.is-collapsed){width:min(360px,calc(100vw - 32px))!important;padding:8px 11px!important;border-radius:14px!important;gap:3px!important}
+html[data-composer=ink] .nl-composer:not(.is-collapsed) .nl-input-layout{gap:3px!important}
+html[data-composer=ink] .nl-composer:not(.is-collapsed) .nl-input-layout input{height:36px!important;min-height:36px!important;padding:7px 2px!important;font-size:13px!important}
+html[data-composer=ink] .nl-composer:not(.is-collapsed) .composer-source{padding:3px 0 6px!important;font-size:10px!important}
+html[data-composer=ink] .nl-composer:not(.is-collapsed) .nl-input-layout>button{width:28px!important;height:28px!important}
+html[data-composer=ink] .nl-composer:not(.is-collapsed) .nl-input-layout [title="Voice"],html[data-composer=ink] .nl-composer:not(.is-collapsed) .nl-input-layout [title="Ask (Enter)"]{width:30px!important;height:30px!important}
+html[data-composer=ink] .live-bubble-settings>button{width:28px;height:28px;font-size:17px}
+.variant[data-composer=ink] .nl-composer:not(.is-collapsed){padding:8px 11px!important;border-radius:14px!important;max-width:360px}
+.variant[data-composer=ink] textarea{height:42px!important;min-height:0!important;font-size:13px!important;padding-top:10px!important}
+.variant[data-composer=ink] .source{font-size:10px!important;padding-bottom:6px!important}.variant[data-composer=ink] .footer{min-height:30px;gap:8px}.variant[data-composer=ink] .footer>.voice{width:30px;height:30px}.variant[data-composer=ink] .footer [title="Ask (Enter)"]{width:30px;height:30px}
+.live-bubble-settings.dismissed .live-settings-panel{display:none!important}.live-settings-close{position:absolute!important;top:8px;right:9px;display:grid!important;place-items:center;width:22px!important;height:22px!important;border:0;background:none;cursor:pointer;font-size:17px!important;color:#888!important}.live-settings-close:hover{background:#EEE!important;border-radius:5px}.live-settings-panel>small{display:block;padding-right:20px}
+.composer-context-chips{display:flex;flex-wrap:wrap;gap:5px;width:100%;max-height:98px;overflow:auto;padding:2px 0 7px}.composer-context-chip{display:flex;align-items:center;gap:6px;max-width:100%;border-radius:6px;padding:5px 7px 5px 9px;font:10px 'Space Grotesk';color:#505667}.composer-context-chip>span{overflow:hidden;white-space:nowrap;text-overflow:ellipsis;max-width:255px}.composer-context-chip>button{all:unset!important;cursor:pointer!important;display:grid!important;place-items:center;width:14px!important;height:14px!important;flex:none!important;color:#727283!important;font-size:13px!important}.composer-context-chip>button:hover{background:#FFF8!important;border-radius:3px!important}
+html[data-composer=ink] .nl-composer:not(.is-collapsed){background:#F6F5FA!important;border-color:#B9B7C7!important;box-shadow:0 8px 28px #514A7415!important}.nl-composer:not(.is-collapsed) .nl-input-layout{border-top:1px solid #DAD8E580;padding-top:3px}html[data-composer=ink] .nl-input-layout [title="Voice"],html[data-composer=ink] .nl-input-layout [title="Ask (Enter)"]{background:#605773!important;color:#FFF!important}.live-bubble-settings>button{color:#867597!important}
+html[data-composer=ink] .nl-composer:not(.is-collapsed){background:#252628!important;border-color:#47494D!important;box-shadow:0 10px 32px #11111125!important;color:#E5E5E7!important}
+html[data-composer=ink] .nl-composer:not(.is-collapsed) .nl-input-layout{border-color:#FFFFFF16!important}
+html[data-composer=ink] .nl-composer:not(.is-collapsed) .nl-input-layout input{color:#F0F0F1!important}
+html[data-composer=ink] .nl-composer input::placeholder{color:#AAADB3!important}
+html[data-composer=ink] .nl-input-layout>button,html[data-composer=ink] .live-bubble-settings>button{color:#C1C3C8!important}
+html[data-composer=ink] .nl-input-layout [title="Voice"],html[data-composer=ink] .nl-input-layout [title="Ask (Enter)"]{background:#E5E6E8!important;color:#252628!important}
+html[data-composer=ink] .nl-input-layout.has-message [title="Voice"]{background:transparent!important;color:#C1C3C8!important}
+html[data-composer=ink] .composer-context-chip,html[data-composer=ink] .composer-context-chip button{color:#404650!important}
+/* Soft graphite-to-silver finish, with a fine monochrome grain. */
+html[data-composer=ink] .nl-composer:not(.is-collapsed){background-color:#D5D5D5!important;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.8' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' opacity='.07' filter='url(%23n)'/%3E%3C/svg%3E"),linear-gradient(135deg,#F6F6F5 0%,#E8E8E7 38%,#CFCFD0 78%,#B7B8BB 100%)!important;border-color:#FFFFFF!important;color:#343536!important;box-shadow:inset 0 1px 0 #FFFFFFC0,0 10px 30px #30303018!important}
+html[data-composer=ink] .nl-composer:not(.is-collapsed) .nl-input-layout{border-color:#8D8E922E!important}
+html[data-composer=ink] .nl-composer:not(.is-collapsed) .nl-input-layout input{color:#303133!important}
+html[data-composer=ink] .nl-composer input::placeholder{color:#777A80!important}
+html[data-composer=ink] .nl-input-layout>button,html[data-composer=ink] .live-bubble-settings>button{color:#676A70!important}
+html[data-composer=ink] .nl-input-layout [title="Voice"],html[data-composer=ink] .nl-input-layout [title="Ask (Enter)"]{background:linear-gradient(145deg,#62656A,#303236)!important;color:#FFF!important;box-shadow:inset 0 1px 0 #FFFFFF30!important}
+html[data-composer=ink] .nl-input-layout.has-message [title="Voice"]{background:none!important;color:#62656B!important;box-shadow:none!important}
+/* Borderless smoked-glass variation of the inline composer. */
+html[data-composer=ink] .nl-composer:not(.is-collapsed){border:0!important;outline:0!important;background-color:#DDDDDD!important;background-image:linear-gradient(155deg,rgba(247,247,247,.96),rgba(213,214,217,.94) 60%,rgba(188,190,195,.92))!important;border-radius:16px!important;box-shadow:0 12px 32px rgba(43,46,54,.14)!important;backdrop-filter:blur(18px)!important}
+
+/* Borderless brushed titanium: directional sheen over a deep neutral body. */
+html[data-composer=ink] .nl-composer:not(.is-collapsed){
+  background-color:#343638!important;
+  background-image:linear-gradient(118deg,transparent 15%,#FFFFFF0B 32%,#FFFFFF1C 39%,#FFFFFF03 48%,transparent 59%),repeating-linear-gradient(0deg,#FFFFFF02 0px,#FFFFFF02 1px,transparent 1px,transparent 3px),linear-gradient(155deg,#606264 0%,#424446 32%,#303234 68%,#222426 100%)!important;
+  border:0!important;outline:0!important;
+  box-shadow:inset 0 1px 0 #FFFFFF20,inset 0 -1px 0 #00000035,0 14px 34px #17191C36,0 3px 8px #17191C18!important;
+  color:#F4F4F2!important;
+}
+html[data-composer=ink] .nl-composer:not(.is-collapsed) .nl-input-layout input{color:#F4F4F2!important;caret-color:#FFF!important}
+html[data-composer=ink] .nl-composer:not(.is-collapsed) .nl-input-layout input::placeholder{color:#C3C5C6!important;opacity:1}
+html[data-composer=ink] .nl-composer:not(.is-collapsed) .nl-input-layout{border-color:#FFFFFF18!important}
+html[data-composer=ink] .nl-composer:not(.is-collapsed) .nl-input-layout>button,
+html[data-composer=ink] .nl-composer:not(.is-collapsed) .live-bubble-settings>button{color:#D8DADB!important}
+html[data-composer=ink] .live-bubble-settings>button:hover{background:#FFFFFF14!important}
+html[data-composer=ink] .nl-composer:not(.is-collapsed) .nl-input-layout [title="Voice"],
+html[data-composer=ink] .nl-composer:not(.is-collapsed) .nl-input-layout [title="Ask (Enter)"]{
+  background:linear-gradient(145deg,#F2F2EF,#B9BCBE)!important;color:#26282A!important;
+  box-shadow:inset 0 1px 0 #FFFFFFB3,0 2px 5px #0003!important;
+}
+html[data-composer=ink] .nl-composer:not(.is-collapsed) .nl-input-layout.has-message [title="Voice"]{background:none!important;color:#D8DADB!important;box-shadow:none!important}
