@@ -1,7 +1,7 @@
 /* global parent, MutationObserver, document, innerWidth, NodeFilter, getComputedStyle, window, Event, requestAnimationFrame, cancelAnimationFrame */
 /** Runs inside the opaque iframe. Self contained so it can be serialized into srcdoc. */
 export function installHtmlPagination() {
-  const PAGE = 640, GAP = 24, LIMIT = 100000;
+  const PAGE = 640, GAP = 8, LIMIT = 100000;
   let scheduled = 0, lastWidth = 0, disposed = false;
   let decoration = [], originalStyles = new Map();
   let lastReport = '', burstAt = 0, layoutChanges = 0, unstable = false;

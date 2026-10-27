@@ -59,3 +59,10 @@ Notable changes to notlinear. Newest first.
 - Files changed: `PartView.tsx`, `html-pagination.js`, pagination production stress harness, generated changelog fallback.
 - Added a parent/iframe pagination handshake on listener setup and frame load. The iframe resends unchanged measurements on request, so an initial post sent before React attaches its listener cannot leave the desktop at the placeholder height.
 - Behavior changes: section measurement reliably initializes after a late parent listener; no persistence changes.
+
+## 2026-10-27 · Codex · Improve HTML reading contrast and continuity
+
+- Files changed: `web/src/canvas/view/{html-reading.js,html-bridge.ts,html-stream.js,html-pagination.js}`, `web/src/canvas/exec/html-trigger.ts`, canvas browser regressions and production stress harness, generated changelog fallback.
+- Existing and new HTML use white paper and black text. Native selections and saved highlights retain readable black text; SVG/canvas paint is preserved. Streaming preserves the reading policy through head updates.
+- Behavior changes: fixed light HTML appearance regardless of app/OS theme; section gaps reduced from 24px to 8px and paragraph margins to 0.65em. HTML generation guidance requests the same palette/spacing, replacing dark-mode guidance at the user's request. Shared system-prompt/tool guidance and branch context are unchanged. Stored source offsets and schemas remain unchanged.
+- Verification: browser contrast, highlight/reload, streaming, chart paint and gap regressions; command results and native-check limitations in project notes. Live-provider before/after comparison not run; prompt composition checked using mocked responses.

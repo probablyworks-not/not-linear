@@ -1,3 +1,4 @@
+import { readingScript } from './html-reading.js';
 import { streamingScript } from './html-stream.js';
 import { paginationScript } from './html-pagination.js';
 // The iframe remains an opaque sandbox. Only selection, wheel and mark geometry cross it.
@@ -58,7 +59,7 @@ function paint(marks){
       var n=run.node, lo=Math.max(0,at-run.start), hi=Math.min(run.end-run.start,at+h.quote.length-run.start);
       if(hi>lo){
         var r=document.createRange();r.setStart(n,lo);r.setEnd(n,hi);
-        var mark=document.createElement('mark');mark.dataset.snapshotId=h.id;mark.style.backgroundColor=h.color;mark.style.color='inherit';r.surroundContents(mark);
+        var mark=document.createElement('mark');mark.dataset.snapshotId=h.id;mark.style.backgroundColor=h.color;mark.style.color='var(--nl-ink)';r.surroundContents(mark);
       }
     });
   });
@@ -95,6 +96,6 @@ window.addEventListener('wheel',function(e){
 
 export function withSelectionBridge(html: string, fullPage = false, paginated = false, streaming = false): string {
   const readerStyle = fullPage ? '<style>body{box-sizing:border-box;max-width:880px;margin-inline:auto!important;padding:24px}img,svg,canvas{max-width:100%}</style>' : '';
-  const bridge = readerStyle + BRIDGE_SCRIPT + (paginated ? paginationScript : '') + (streaming ? streamingScript : '');
+  const bridge = readerStyle + readingScript + BRIDGE_SCRIPT + (paginated ? paginationScript : '') + (streaming ? streamingScript : '');
   return /<\/body>/i.test(html) ? html.replace(/<\/body>/i, `${bridge}</body>`) : html + bridge;
 }

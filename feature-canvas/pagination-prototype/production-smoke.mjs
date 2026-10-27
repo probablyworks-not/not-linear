@@ -1,12 +1,13 @@
 import { chromium } from '../../web/node_modules/@playwright/test/index.mjs';
 import { installHtmlPagination } from '../../web/src/canvas/view/html-pagination.js';
 import assert from 'node:assert/strict';
+import { installHtmlReading } from '../../web/src/canvas/view/html-reading.js';
 import { installHtmlStreaming } from '../../web/src/canvas/view/html-stream.js';
 const browser = await chromium.launch({ headless: true });
 try {
  const page = await browser.newPage({ viewport: { width: 1100, height: 1600 } });
  const errors=[];page.on('pageerror',e=>errors.push(e.message));
- const script=`<script>(${installHtmlPagination.toString()})();</script>`;
+ const script=`<script>(${installHtmlReading.toString()})();</script><script>(${installHtmlPagination.toString()})();</script>`;
  async function run(html) {
   await page.setContent('<script>window.reports=[];addEventListener("message",e=>{if(e.data.type==="pagination")reports.push(e.data)})</script><iframe sandbox="allow-scripts" style="border:0;width:880px;height:640px"></iframe>');
   await page.locator('iframe').evaluate((el,html)=>{el.srcdoc=html},html+script);
@@ -21,6 +22,7 @@ try {
  assert.equal(await frame.locator('#report>p').evaluate(el=>getComputedStyle(el).fontSize),'24px');
  assert.equal(await frame.locator('#report>p').count(),1);
  assert.ok(report.pages.every(p=>p.height<=660),'Prose pages should be bounded');
+ assert.ok(await frame.locator('[data-nl-page-gap]').evaluateAll(els => els.length > 0 && els.every(el => el.getBoundingClientRect().height === 8)));
  await page.locator('iframe').evaluate((el,height)=>el.style.height=`${height}px`,report.height);
  const before=await page.evaluate(()=>reports.length);
  await page.waitForTimeout(150);
@@ -79,6 +81,26 @@ try {
  assert.equal(await streaming.locator('#third').count(),0);
  await streaming.evaluate(()=>getSelection().removeAllRanges());
  await streaming.waitForSelector('#third');
+ // Existing dark answers and inline styles must remain readable in OS dark mode,
+ // including WebKit text-fill, saved marks, streaming head replacement and charts.
+ await page.emulateMedia({colorScheme:'dark'});
+ ({frame}=await run('<style>body,p,b{background:#111!important;color:#ddd!important;-webkit-text-fill-color:#ddd!important}</style><p id="contrast" style="color:gray!important">Readable <b>formatted</b> &amp; linked text</p><mark data-snapshot-id="saved" style="background:rgb(255,220,140)">Saved <b>quote</b></mark><svg><rect fill="red" width="20" height="20"/></svg>'));
+ assert.equal(await frame.locator('#contrast').evaluate(el=>getComputedStyle(el).color),'rgb(0, 0, 0)');
+ const colors = await frame.locator('#contrast b').evaluate(el=>{const s=getComputedStyle(el), selected=getComputedStyle(el,'::selection');return {color:s.color,fill:s.webkitTextFillColor,bg:s.backgroundColor,selected:selected.color,selectionBg:selected.backgroundColor}});
+ assert.deepEqual(colors,{color:'rgb(0, 0, 0)',fill:'rgb(0, 0, 0)',bg:'rgb(255, 255, 255)',selected:'rgb(0, 0, 0)',selectionBg:'rgb(184, 216, 255)'});
+ assert.equal(await frame.locator('mark').evaluate(el=>getComputedStyle(el).backgroundColor),'rgb(255, 220, 140)');
+ assert.equal(await frame.locator('mark b').evaluate(el=>getComputedStyle(el).color),'rgb(0, 0, 0)');
+ assert.equal(await frame.locator('rect').evaluate(el=>getComputedStyle(el).fill),'rgb(255, 0, 0)');
+ // The same style must survive both complete and appended streaming updates.
+ await page.setContent('<iframe sandbox="allow-scripts"></iframe>');
+ await page.locator('iframe').evaluate((el,html)=>el.srcdoc=html, '<body></body>'+script+`<script>(${installHtmlStreaming.toString()})();</script>`);
+ const lightStream=page.frames().find(f=>f.parentFrame());await lightStream.waitForLoadState();
+ for(const id of ['one','two']) {
+   await page.locator('iframe').evaluate((el,id)=>el.contentWindow.postMessage({__nlHtmlCommand:'stream',html:`<style>p{color:white!important;background:black!important}</style><p id="${id}">Readable stream</p>`},'*'),id);
+   await lightStream.waitForSelector('#'+id);
+   assert.equal(await lightStream.locator('p').evaluate(el=>getComputedStyle(el).color),'rgb(0, 0, 0)');
+   assert.equal(await lightStream.locator('style[data-nl-reading]').count(),1);
+ }
  assert.deepEqual(errors,[]);
  console.log('PASS production pagination: ancestor CSS, long prose, tables, viewport units, short pages, grid/chart identity, bounded fallback.');
 }finally{await browser.close()}

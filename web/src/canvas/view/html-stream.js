@@ -34,6 +34,9 @@ export function installHtmlStreaming() {
       }
     });
     window.dispatchEvent(new Event('nl-pagination-reset'));
+    // Keep the display policy out of authored-node reconciliation. Otherwise the
+    // first authored style can reuse and overwrite the policy element itself.
+    document.querySelector('style[data-nl-reading]')?.remove();
     reconcile(document.head, parsed.head);
     reconcile(document.body, parsed.body);
     window.dispatchEvent(new Event('nl-stream-update'));
