@@ -47,3 +47,9 @@ Notable changes to notlinear. Newest first.
 - Behavior changes: HTML cards no longer offer the full-window View full action; the complete answer is present in the canvas. Ordinary sections target 640px; indivisible widgets can be explicitly taller, while positioned/unsupported/unstable documents use a labeled scrollable fallback. Viewport units use a fixed logical page height. Expanding reports make room below, selections/composers stay within the visible window, and cards fit final content rather than retaining a loading-height floor. Existing Markdown reading/detail behavior is retained. No persisted shape, DB version, endpoint or dependency changes.
 - Observed: repeated table headers are intentionally not cloned; cross-page selection/provenance uses original source text. The installed desktop update is a local branch fast-forward/build, with the existing Vite config edit preserved. Physical trackpad and real-provider native smoke are recorded separately, not implied by Chromium results.
 - Verification: detailed final commands/results are in private project-notes/RUNS.md and feature-canvas/pagination-prototype/TEST-PLAN.md. No merge or remote push.
+
+## 2026-10-27 · Codex · Preserve report width through delayed geometry writes
+
+- Files changed: `web/src/canvas/view/CanvasWorkspace.tsx`, `web/tests/e2e/web-canvas.spec.ts`, generated changelog fallback.
+- Geometry callbacks queued before HTML settles now resolve the chosen report width from the document at write time. A stale provisional closure cannot overwrite the committed 880px width. Browser assertions wait for React Flow to apply the settled layout rather than sampling an intermediate render frame.
+- Behavior changes: delayed automatic measurements preserve the chosen width; explicit resizing remains supported. Persistence fields remain unchanged.

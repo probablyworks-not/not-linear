@@ -239,7 +239,7 @@ test.describe('the canvas loop', () => {
     await expect(frame.locator('p').first()).toHaveText('alpha beta & gamma');
     expect(await iframe.evaluate(el => (el as HTMLElement).offsetHeight)).toBeGreaterThan(640);
     expect(await page.getByTestId('html-section').count()).toBeGreaterThan(1);
-    expect(await iframe.locator('xpath=ancestor::*[contains(@class, "react-flow__node")][1]').evaluate(el => (el as HTMLElement).offsetWidth)).toBe(880);
+    await expect.poll(() => iframe.locator('xpath=ancestor::*[contains(@class, "react-flow__node")][1]').evaluate(el => (el as HTMLElement).offsetWidth)).toBe(880);
     await page.getByRole('button', { name: 'Zoom Out', exact: true }).click();
     await page.getByRole('button', { name: 'Zoom Out', exact: true }).click();
     const local = await frame.locator('p').first().evaluate(el => {

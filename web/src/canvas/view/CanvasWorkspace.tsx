@@ -382,10 +382,11 @@ function Workspace({ canvasId }: { canvasId: string }) {
     const current = currentDoc?.layouts.find(l => l.id === DEFAULT_LAYOUT_ID)?.entries ?? {};
     // A measurement queued by the provisional 640px card can arrive after HTML settles at
     // 880px. Only an explicit resize gesture may replace the report's chosen width.
-    const widthOf = (n: ThreadNodeType): number => {
-      const html = currentDoc?.messages.some(m => m.threadId === n.id && m.parts.some(p => p.kind === 'html'));
+    const widthOf = (n: ThreadNodeType, source = currentDoc): number => {
+      const html = source?.messages.some(m => m.threadId === n.id && m.parts.some(p => p.kind === 'html'));
       const explicitResize = changes.some(c => c.type === 'dimensions' && c.id === n.id && (c.resizing === true || gesture && c.resizing === false));
-      return html && !explicitResize ? (current[n.id]?.w ?? HTML_W) : (n.width ?? NODE_W);
+      const chosen = source?.layouts.find(l => l.id === DEFAULT_LAYOUT_ID)?.entries[n.id]?.w;
+      return html && !explicitResize ? (chosen ?? HTML_W) : (n.width ?? NODE_W);
     };
     const moved = next.filter(n => {
       const was = current[n.id];
@@ -397,7 +398,7 @@ function Workspace({ canvasId }: { canvasId: string }) {
 
     applyGeometry(d => {
       for (const n of moved) {
-        setGeometry(d, n.id, { x: n.position.x, y: n.position.y, w: widthOf(n), h: n.height ?? NODE_H });
+        setGeometry(d, n.id, { x: n.position.x, y: n.position.y, w: widthOf(n, d), h: n.height ?? NODE_H });
         const was = current[n.id];
         const automatic = changes.some(c => c.type === 'dimensions' && c.id === n.id && !c.resizing);
         if (was && automatic && (n.height ?? NODE_H) > was.h && d.messages.some(m => m.threadId === n.id && m.parts.some(p => p.kind === 'html'))) {
