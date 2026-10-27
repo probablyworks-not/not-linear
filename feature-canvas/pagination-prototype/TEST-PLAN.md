@@ -65,3 +65,8 @@ Next engineering work: implement an explicit DOM fragmentation adapter with sour
 - Added real engine checks in production-smoke.mjs; integration-gates.mjs now runs those checks. The earlier failing experiment remains in legacy-integration-gates.mjs for comparison.
 - Canvas browser regressions exercise pre-token shimmer, streamed blocks, reduced motion, completion cleanup/short final height, cross-page selection/branch/reload, zoom coordinates, panning, source highlights, canvas isolation, and idle observer teardown.
 - Native desktop real providers, physical trackpad/pinch, microphone and native dialogs are not represented by the browser mocks; record these separately when manually verified.
+
+
+## Verification recorded before desktop delivery
+
+Production engine stress suite passes, 833 unit tests pass, and all 19 canvas browser regressions pass. The initial complete browser run was 292/295 with a subsequently corrected request-timing assertion plus two non-canvas UI timing failures (Modes/Notes). Both non-canvas cases passed against the previous commit and showed mixed results on targeted current reruns; no claim that the broad suite was fully green is made from that run. A complete confirmation run follows; private RUNS.md retains the exact commands and logs. No new runtime dependencies or schema changes.
