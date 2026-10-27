@@ -145,6 +145,9 @@ export function HtmlFrame({ part, messageId, fullPage, highlights, paginated = f
   const ref = useRef<HTMLIFrameElement>(null);
   const srcDoc = withSelectionBridge(part.html, fullPage, paginated, streamHtml !== undefined);
   const [layout, setLayout] = useState<{ height: number; pages: { top: number; height: number }[]; fallback?: string; oversized?: boolean } | null>(null);
+  const requestLayout = useCallback(() => {
+    if (paginated) ref.current?.contentWindow?.postMessage({ __nlHtmlCommand: 'paginate' }, '*');
+  }, [paginated]);
   const streamRef = useRef(streamHtml);
   useEffect(() => { streamRef.current = streamHtml; }, [streamHtml]);
   const publishStream = useCallback(() => {
@@ -225,12 +228,13 @@ export function HtmlFrame({ part, messageId, fullPage, highlights, paginated = f
     const clear = () => frame?.contentWindow?.postMessage({ __nlHtmlCommand: 'clear' }, '*');
     window.addEventListener('message', onMessage);
     window.addEventListener('nl-clear-html-selection', clear);
+    requestLayout();
     return () => {
       window.removeEventListener('message', onMessage);
       window.removeEventListener('nl-clear-html-selection', clear);
       if (frame) htmlAnchors.remove(frame);
     };
-  }, [messageId, part.id, paginated]);
+  }, [messageId, part.id, paginated, requestLayout]);
 
   const pages = paginated ? layout?.pages ?? [] : [];
   const mask = pages.length ? {
@@ -246,7 +250,7 @@ export function HtmlFrame({ part, messageId, fullPage, highlights, paginated = f
       <div className={fullPage ? 'h-full min-h-0' : 'relative'}>
         <iframe
           ref={ref} data-part={part.id} title={part.title || 'Generated HTML'} sandbox="allow-scripts" srcDoc={srcDoc}
-          onLoad={() => { paint(); publishStream(); }}
+          onLoad={() => { paint(); publishStream(); requestLayout(); }}
           style={{ height: fullPage ? '100%' : paginated ? layout?.height ?? 640 : 480, width: fullPage ? '100%' : 880, maxWidth: '100%', ...mask }}
           className={`block min-h-0 bg-cv-card ${pages.length ? '' : 'rounded-lg border border-cv-edge'}`}
         />

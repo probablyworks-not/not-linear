@@ -39,6 +39,16 @@ try {
  await page.setViewportSize({width:1000,height:1600});assert.equal(await frame.evaluate(()=>window.init),1);
  ({report}=await run('<div style="position:fixed;top:0">Fixed layout</div>'));
  assert.ok(report.fallback);assert.equal(report.height,640);
+ // A late parent listener must recover the one-time initial report, including WebKit ordering.
+ await page.setContent('<iframe sandbox="allow-scripts" style="width:880px;height:640px"></iframe>');
+ await page.locator('iframe').evaluate((el, html) => el.srcdoc = html, '<p>Late parent handshake</p>' + script);
+ const lateFrame = page.frames().find(f => f.parentFrame());
+ await lateFrame.waitForLoadState();
+ await lateFrame.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+ await page.evaluate(() => { window.reports=[]; addEventListener('message', e => { if(e.data.type==='pagination') reports.push(e.data); }); });
+ await page.locator('iframe').evaluate(el => el.contentWindow.postMessage({__nlHtmlCommand:'paginate'}, '*'));
+ await page.waitForFunction(()=>window.reports.length>0);
+ assert.ok(await page.evaluate(()=>reports.at(-1).pages.length>0));
  // A script that sizes itself from innerHeight must settle in the bounded fallback.
  await page.setContent('<script>window.reports=[];addEventListener("message",e=>{if(e.data.type==="pagination"){reports.push(e.data);document.querySelector("iframe").style.height=e.data.height+"px"}})</script><iframe sandbox="allow-scripts" style="width:880px;height:640px"></iframe>');
  await page.locator('iframe').evaluate((el, html) => el.srcdoc = html, '<div id="responsive"></div><script>function fit(){document.querySelector("#responsive").style.height=(innerHeight+20)+"px"}fit();addEventListener("resize",fit)</script>' + script);

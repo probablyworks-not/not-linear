@@ -214,6 +214,13 @@ export function installHtmlPagination() {
     } finally { observe(); }
   }
   function schedule() { if (!scheduled && !disposed) scheduled = requestAnimationFrame(layout); }
+  // The initial child rAF may beat React's effect listener (notably in WKWebView).
+  // Always answer a parent handshake, even when measurements have not changed.
+  window.addEventListener('message', event => {
+    if (event.source === parent && event.data?.__nlHtmlCommand === 'paginate') {
+      lastReport = ''; schedule();
+    }
+  });
   window.addEventListener('nl-pagination-reset', () => { observer.disconnect(); restore(); observe(); });
   window.addEventListener('nl-stream-update', () => { layoutChanges = 0; burstAt = 0; schedule(); });
   window.addEventListener('resize', () => { if (innerWidth !== lastWidth) { lastWidth = innerWidth; unstable = false; layoutChanges = 0; schedule(); } });

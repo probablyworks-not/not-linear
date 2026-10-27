@@ -53,3 +53,9 @@ Notable changes to notlinear. Newest first.
 - Files changed: `web/src/canvas/view/CanvasWorkspace.tsx`, `web/tests/e2e/web-canvas.spec.ts`, generated changelog fallback.
 - Geometry callbacks queued before HTML settles now resolve the chosen report width from the document at write time. A stale provisional closure cannot overwrite the committed 880px width. Browser assertions wait for React Flow to apply the settled layout rather than sampling an intermediate render frame.
 - Behavior changes: delayed automatic measurements preserve the chosen width; explicit resizing remains supported. Persistence fields remain unchanged.
+
+## 2026-10-27 · Codex · Recover iframe section measurements after desktop loading
+
+- Files changed: `PartView.tsx`, `html-pagination.js`, pagination production stress harness, generated changelog fallback.
+- Added a parent/iframe pagination handshake on listener setup and frame load. The iframe resends unchanged measurements on request, so an initial post sent before React attaches its listener cannot leave the desktop at the placeholder height.
+- Behavior changes: section measurement reliably initializes after a late parent listener; no persistence changes.
