@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useRef } from 'react';
+import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { highlightCodeIn, renderMarkdown, renderMermaidIn } from '../../lib/markdown';
 import type { CanvasPart } from '../types';
 import { structureReply } from './structure-reply';
@@ -120,7 +120,8 @@ const Markdownish = memo(function Markdownish({
 
 interface NlHtmlPartMessage {
   __nlHtmlPart: true;
-  type: 'selection' | 'wheel' | 'anchors' | 'escape';
+  type: 'selection' | 'wheel' | 'anchors' | 'escape' | 'pagination';
+  height?: number; pages?: { top: number; height: number }[]; fallback?: string; oversized?: boolean;
   marks?: { id: string; rect: { left: number; top: number; width: number; height: number } }[];
   text?: string;
   occurrence?: number;
@@ -138,11 +139,18 @@ const isNlHtmlPartMessage = (data: unknown): data is NlHtmlPartMessage =>
   !!data && typeof data === 'object' && (data as { __nlHtmlPart?: unknown }).__nlHtmlPart === true;
 
 /** A stable preview or full-reader viewport. The HTML document scrolls inside its sandbox. */
-function HtmlFrame({ part, messageId, fullPage, highlights }: {
-  part: Extract<CanvasPart, { kind: 'html' }>; messageId: string; fullPage?: boolean; highlights?: readonly TextHighlight[];
+export function HtmlFrame({ part, messageId, fullPage, highlights, paginated = false, streamHtml }: {
+  part: Extract<CanvasPart, { kind: 'html' }>; messageId: string; fullPage?: boolean; highlights?: readonly TextHighlight[]; paginated?: boolean; streamHtml?: string;
 }) {
   const ref = useRef<HTMLIFrameElement>(null);
-  const srcDoc = withSelectionBridge(part.html, fullPage);
+  const srcDoc = withSelectionBridge(part.html, fullPage, paginated, streamHtml !== undefined);
+  const [layout, setLayout] = useState<{ height: number; pages: { top: number; height: number }[]; fallback?: string; oversized?: boolean } | null>(null);
+  const streamRef = useRef(streamHtml);
+  useEffect(() => { streamRef.current = streamHtml; }, [streamHtml]);
+  const publishStream = useCallback(() => {
+    if (streamRef.current !== undefined) ref.current?.contentWindow?.postMessage({ __nlHtmlCommand: 'stream', html: streamRef.current }, '*');
+  }, []);
+  useEffect(publishStream, [streamHtml, publishStream]);
   const paint = useCallback(() => {
     const palette = getComputedStyle(document.documentElement);
     const marks = (highlights ?? []).map(h => {
@@ -163,7 +171,14 @@ function HtmlFrame({ part, messageId, fullPage, highlights }: {
   useEffect(() => {
     const onMessage = (ev: MessageEvent): void => {
       if (ev.source !== ref.current?.contentWindow || !isNlHtmlPartMessage(ev.data)) return;
-      if (ev.data.type === 'escape') {
+      if (ev.data.type === 'pagination' && paginated) {
+        const { height, pages, fallback, oversized } = ev.data;
+        if (typeof height !== 'number' || !Number.isFinite(height) || height < 1 || height > 100000 || !Array.isArray(pages) || pages.length > 201 || pages.some(p => !Number.isFinite(p.top) || !Number.isFinite(p.height) || p.top < 0 || p.height < 1 || p.top + p.height > height + 1)) return;
+        setLayout(previous => {
+          const next = { height, pages, fallback, oversized };
+          return JSON.stringify(previous) === JSON.stringify(next) ? previous : next;
+        });
+      } else if (ev.data.type === 'escape') {
         document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
       } else if (ev.data.type === 'anchors' && Array.isArray(ev.data.marks)) {
         if (ref.current) htmlAnchors.update(ref.current, ev.data.marks);
@@ -215,15 +230,31 @@ function HtmlFrame({ part, messageId, fullPage, highlights }: {
       window.removeEventListener('nl-clear-html-selection', clear);
       if (frame) htmlAnchors.remove(frame);
     };
-  }, [messageId, part.id]);
+  }, [messageId, part.id, paginated]);
 
+  const pages = paginated ? layout?.pages ?? [] : [];
+  const mask = pages.length ? {
+    maskImage: pages.map(() => 'linear-gradient(black,black)').join(','),
+    maskSize: pages.map(p => `100% ${p.height}px`).join(','),
+    maskPosition: pages.map(p => `0 ${p.top}px`).join(','),
+    maskRepeat: 'no-repeat',
+  } : {};
   return (
-    <iframe
-      ref={ref} data-part={part.id} title={part.title || 'Generated HTML'} sandbox="allow-scripts" srcDoc={srcDoc}
-      onLoad={paint}
-      style={{ height: fullPage ? '100%' : 480, width: fullPage ? '100%' : 880, maxWidth: '100%' }}
-      className="block min-h-0 rounded-lg border border-cv-edge bg-cv-card"
-    />
+    <div className={fullPage ? 'h-full min-h-0' : 'relative'} data-testid={paginated ? 'html-sections' : undefined}>
+      {layout?.fallback && paginated && <p role="status" className="mb-2 text-xs text-text-3">This layout uses a scrollable section to preserve its formatting and interactions.</p>}
+      {layout?.oversized && paginated && <p role="status" className="mb-2 text-xs text-text-3">An interactive chart or complex layout is kept together in a taller section.</p>}
+      <div className={fullPage ? 'h-full min-h-0' : 'relative'}>
+        <iframe
+          ref={ref} data-part={part.id} title={part.title || 'Generated HTML'} sandbox="allow-scripts" srcDoc={srcDoc}
+          onLoad={() => { paint(); publishStream(); }}
+          style={{ height: fullPage ? '100%' : paginated ? layout?.height ?? 640 : 480, width: fullPage ? '100%' : 880, maxWidth: '100%', ...mask }}
+          className={`block min-h-0 bg-cv-card ${pages.length ? '' : 'rounded-lg border border-cv-edge'}`}
+        />
+        {pages.map((p, i) => <div key={i} data-testid="html-section" aria-label={`Answer section ${i + 1}`}
+          className="pointer-events-none absolute inset-x-0 rounded-lg border border-cv-edge"
+          style={{ top: p.top, height: p.height }} />)}
+      </div>
+    </div>
   );
 }
 
@@ -231,8 +262,8 @@ function HtmlFrame({ part, messageId, fullPage, highlights }: {
 // once per thread content-change in `CanvasWorkspace` — so a plain property lookup here hands
 // `Markdownish` the same array reference across renders when nothing about this part's highlights
 // changed, rather than a fresh `.filter()` result every time.
-export function PartView({ part, messageId, highlightsByPart, onBlockPick, fullPage }: {
-  part: CanvasPart; messageId: string; fullPage?: boolean; highlightsByPart?: Record<string, readonly TextHighlight[]>; onBlockPick?: BlockPickHandler;
+export function PartView({ part, messageId, highlightsByPart, onBlockPick, fullPage, paginated }: {
+  part: CanvasPart; messageId: string; fullPage?: boolean; paginated?: boolean; highlightsByPart?: Record<string, readonly TextHighlight[]>; onBlockPick?: BlockPickHandler;
 }) {
   if (part.state === 'failed') {
     return (
@@ -262,7 +293,7 @@ export function PartView({ part, messageId, highlightsByPart, onBlockPick, fullP
       // `allow-same-origin` is withheld, so the document still executes in an opaque, isolated
       // origin with no access to the app's cookies, storage, or DOM. Same boundary as
       // ArtifactDetail otherwise. The declared network policy lands with the HTML surface in C5.
-      return <HtmlFrame part={part} messageId={messageId} fullPage={fullPage} highlights={highlightsByPart?.[part.id]} />;
+      return <HtmlFrame part={part} messageId={messageId} fullPage={fullPage} paginated={paginated} highlights={highlightsByPart?.[part.id]} />;
     case 'attachment':
       return (
         <div data-part={part.id} className="flex items-center gap-2 rounded-lg border border-cv-edge bg-cv-card-inset px-2.5 py-1.5 text-xs text-text-2">

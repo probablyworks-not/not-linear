@@ -1,3 +1,5 @@
+import { streamingScript } from './html-stream.js';
+import { paginationScript } from './html-pagination.js';
 // The iframe remains an opaque sandbox. Only selection, wheel and mark geometry cross it.
 // Its viewport has a fixed size: document layout never determines the iframe's own dimensions.
 const BRIDGE_SCRIPT = `<script>(function(){
@@ -6,7 +8,7 @@ function segments(root){
   var text='', runs=[];
   function newline(){if(text && !text.endsWith('\\n'))text+='\\n';}
   function visit(node){
-    if(node.nodeType===1 && node.matches('script,style,button,template,head'))return;
+    if(node.nodeType===1 && node.matches('script,style,button,template,head,[data-nl-page-gap]'))return;
     if(node.nodeType===3){var start=text.length;text+=node.data;runs.push({node:node,start:start,end:text.length});return;}
     if(node.nodeType===1 && node.tagName==='BR'){newline();return;}
     node.childNodes.forEach(visit);
@@ -71,6 +73,7 @@ var markFrame=0;
 function scheduleMarks(){if(!markFrame)markFrame=requestAnimationFrame(function(){markFrame=0;reportMarks();});}
 window.addEventListener('scroll',scheduleMarks,true);
 window.addEventListener('resize',scheduleMarks);
+window.addEventListener('nl-pagination-layout',scheduleMarks);
 if(document.fonts){document.fonts.addEventListener('loadingdone',scheduleMarks);document.fonts.ready.then(scheduleMarks);}
 window.addEventListener('wheel',function(e){
   var scroll=e.target.nodeType===1?e.target:e.target.parentElement;
@@ -90,8 +93,8 @@ window.addEventListener('wheel',function(e){
 },{passive:false});
 })();</` + `script>`;
 
-export function withSelectionBridge(html: string, fullPage = false): string {
+export function withSelectionBridge(html: string, fullPage = false, paginated = false, streaming = false): string {
   const readerStyle = fullPage ? '<style>body{box-sizing:border-box;max-width:880px;margin-inline:auto!important;padding:24px}img,svg,canvas{max-width:100%}</style>' : '';
-  const bridge = readerStyle + BRIDGE_SCRIPT;
+  const bridge = readerStyle + BRIDGE_SCRIPT + (paginated ? paginationScript : '') + (streaming ? streamingScript : '');
   return /<\/body>/i.test(html) ? html.replace(/<\/body>/i, `${bridge}</body>`) : html + bridge;
 }
