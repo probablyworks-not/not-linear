@@ -165,7 +165,70 @@ test.describe('the canvas loop', () => {
     await expect(page.getByTestId('canvas-save-state')).toHaveText('Saved');
   });
 
-  test('HTML viewport settles and wheel gestures pan the canvas at the document edge', async ({ page }) => {
+  test('HTML generation shows completed sections and a reduced-motion shimmer then settles', async ({ page }) => {
+    await seed(page);
+    await page.addInitScript(() => {
+      const original = window.fetch.bind(window);
+      window.fetch = async (input, init) => {
+        const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+        if (!url.includes('api.anthropic.com')) return original(input, init);
+        const encoder = new TextEncoder();
+        return new Response(new ReadableStream({ start(controller) {
+          const send = (event: unknown) => controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`));
+          send({ type: 'message_start', message: { usage: { input_tokens: 1 } } });
+          send({ type: 'content_block_start', index: 0, content_block: { type: 'text' } });
+          (window as unknown as { beginHtml: () => void }).beginHtml = () => send({ type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: '<!doctype html><html><body><p>First completed passage</p>' } });
+          (window as unknown as { finishHtml: () => void }).finishHtml = () => {
+            send({ type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: '<p>Final passage</p></body></html>' } });
+            send({ type: 'message_delta', delta: { stop_reason: 'end_turn' }, usage: { output_tokens: 1 } });
+            controller.close();
+          };
+        } }), { headers: { 'content-type': 'text/event-stream' } });
+      };
+    });
+    await openProject(page); await newCanvas(page); await ask(page, 'render as html');
+    const live = page.getByTestId('live-html');
+    await expect(live).toBeVisible();
+    await expect(live.locator('[aria-busy="true"]')).toBeVisible();
+    await page.evaluate(() => (window as unknown as { beginHtml: () => void }).beginHtml());
+    await expect(page.frameLocator('[data-testid="live-html"] iframe').locator('p')).toHaveText('First completed passage');
+    await expect(live.locator('[aria-busy="true"]')).toBeVisible();
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    expect(await live.locator('.nl-html-pending').evaluate(el => getComputedStyle(el, '::before').animationName)).toBe('none');
+    await page.evaluate(() => (window as unknown as { finishHtml: () => void }).finishHtml());
+    await expect(live).toHaveCount(0);
+    await expect(page.frameLocator('.react-flow iframe').locator('p').last()).toHaveText('Final passage');
+    await expect(page.locator('.nl-html-pending')).toHaveCount(0);
+    await expect(page.getByTestId('canvas-save-state')).toHaveText('Saved');
+    expect(await page.locator('.react-flow iframe').evaluate(el => (el as HTMLIFrameElement).offsetHeight)).toBeLessThan(640);
+  });
+
+  test('a selection across an HTML section boundary survives branching and reload', async ({ page }) => {
+    const html = '<style>#report>p{font:24px/2 system-ui}</style><main id="report"><p>' + 'Repeated <b>formatted</b> passage &amp; source. '.repeat(180) + '</p></main>';
+    await seed(page, html); await openProject(page); await newCanvas(page); await ask(page, 'render as html');
+    const frame = page.frameLocator('.react-flow iframe');
+    await expect(frame.locator('[data-nl-page-gap]').first()).toBeAttached();
+    await expect.poll(() => page.locator('.react-flow__node').first().evaluate(el => (el as HTMLElement).offsetWidth)).toBe(880);
+    const quote = await frame.locator('p').evaluate(el => {
+      const gap = el.querySelector('[data-nl-page-gap]')!;
+      const before = gap.previousSibling as Text, after = gap.nextSibling as Text;
+      const range = document.createRange();
+      range.setStart(before, Math.max(0, before.length - 8)); range.setEnd(after, Math.min(after.length, 12));
+      const selection = getSelection()!; selection.removeAllRanges(); selection.addRange(range);
+      document.dispatchEvent(new Event('selectionchange'));
+      return range.cloneContents().textContent!;
+    });
+    await expect(page.getByTestId('add-source')).toBeVisible();
+    await page.getByTestId('add-source').click();
+    await expect(page.getByTestId('context-chips')).toContainText(quote.trim());
+    await ask(page, 'explain that passage');
+    await expect(page.getByTestId('canvas-save-state')).toHaveText('Saved');
+    await page.reload();
+    await expect(page.frameLocator('.react-flow iframe').first().locator('mark').first()).toBeAttached();
+    await expect(page.getByTestId('canvas-output-detail')).toHaveCount(0);
+  });
+
+  test('HTML sections settle and wheel gestures pan the canvas', async ({ page }) => {
     const html = '<!doctype html><html><body style="margin:8px;min-height:100vh"><p>alpha <b>beta</b> &amp; gamma</p>' + '<p>Long HTML document</p>'.repeat(100) + '</body></html>';
     await seed(page, html);
     await openProject(page); await newCanvas(page); await ask(page, 'render as html');
@@ -174,7 +237,8 @@ test.describe('the canvas loop', () => {
     await expect(page.getByTestId('canvas-save-state')).toHaveText('Saved');
     const frame = page.frameLocator('.react-flow iframe');
     await expect(frame.locator('p').first()).toHaveText('alpha beta & gamma');
-    expect(await iframe.evaluate(el => (el as HTMLElement).offsetHeight)).toBe(480);
+    expect(await iframe.evaluate(el => (el as HTMLElement).offsetHeight)).toBeGreaterThan(640);
+    expect(await page.getByTestId('html-section').count()).toBeGreaterThan(1);
     expect(await iframe.locator('xpath=ancestor::*[contains(@class, "react-flow__node")][1]').evaluate(el => (el as HTMLElement).offsetWidth)).toBe(880);
     await page.getByRole('button', { name: 'Zoom Out', exact: true }).click();
     await page.getByRole('button', { name: 'Zoom Out', exact: true }).click();
@@ -195,27 +259,34 @@ test.describe('the canvas loop', () => {
     await page.mouse.wheel(0, 240);
     await expect.poll(() => page.locator('.react-flow__viewport').getAttribute('style')).not.toBe(before);
     await expect(page.getByTestId('canvas-save-state')).toHaveText('Saved');
-    expect(await iframe.evaluate(el => (el as HTMLElement).offsetHeight)).toBe(480);
+    expect(await iframe.evaluate(el => (el as HTMLElement).offsetHeight)).toBeGreaterThan(640);
+    expect(await page.getByTestId('html-section').count()).toBeGreaterThan(1);
     await page.reload();
     await expect(page.locator('.react-flow iframe')).toBeVisible();
     await expect(page.getByTestId('canvas-save-state')).toHaveText('Saved');
   });
 
-  test('full-page HTML reader preserves formatted selection, marks and the canvas camera', async ({ page }) => {
+  test('paginated HTML stays inside the canvas through selection, branching and reload', async ({ page }) => {
     const html = '<!doctype html><html><head><title>alpha beta &amp; gamma</title></head><body><p>alpha <b>beta</b> &amp; gamma</p>' + '<p>Reading content</p>'.repeat(60) + '</body></html>';
     await seed(page, html);
     await openProject(page); await newCanvas(page); await ask(page, 'render as html');
     await expect(page.locator('.react-flow iframe')).toBeVisible();
     await expect(page.getByTestId('canvas-save-state')).toHaveText('Saved');
+    let previousViewport: string | null = null;
+    await expect.poll(async () => {
+      const next = await page.locator('.react-flow__viewport').getAttribute('style');
+      const settled = next === previousViewport; previousViewport = next; return settled;
+    }).toBe(true);
     const viewport = await page.locator('.react-flow__viewport').getAttribute('style');
-    await page.getByTestId('view-output').click();
+    await expect(page.getByTestId('view-output')).toHaveCount(0);
     const reader = page.getByTestId('canvas-output-detail');
-    await expect(reader).toHaveCSS('height', `${page.viewportSize()!.height}px`);
-    const iframe = reader.locator('iframe');
-    const frame = page.frameLocator('[data-testid="canvas-output-detail"] iframe');
+    await expect(reader).toHaveCount(0);
+    const iframe = page.locator('.react-flow iframe');
+    const frame = page.frameLocator('.react-flow iframe');
     const paragraph = frame.locator('p').first();
     await expect(paragraph).toHaveText('alpha beta & gamma');
-    expect((await iframe.boundingBox())!.height).toBeGreaterThan(600);
+    expect(await iframe.evaluate(el => (el as HTMLElement).offsetHeight)).toBeGreaterThan(640);
+    expect(await page.getByTestId('html-section').count()).toBeGreaterThan(1);
     await page.screenshot({ path: test.info().outputPath('canvas-full-page-reader.png') });
     await paragraph.evaluate(el => {
       const r = document.createRange(); r.selectNodeContents(el);
@@ -230,10 +301,7 @@ test.describe('the canvas loop', () => {
     await ask(page, 'why?');
     await page.reload();
     await expect(page.frameLocator('.react-flow iframe').first().locator('mark')).toHaveCount(3);
-    await page.getByTestId('view-output').first().click();
-    const fullFrame = page.frameLocator('[data-testid="canvas-output-detail"] iframe');
-    await fullFrame.locator('p').first().click();
-    await page.keyboard.press('Escape');
+    await expect(page.getByTestId('html-section').first()).toBeVisible();
     await expect(page.getByTestId('canvas-output-detail')).toHaveCount(0);
   });
 
@@ -422,6 +490,8 @@ test.describe('the canvas loop', () => {
     await ask(page, 'what does it do?');
     // Scoped: the sidebar's thread rows carry `data-thread` too.
     await expect(page.getByTestId('canvas-workspace').locator('[data-thread]')).toHaveCount(2);
+    // The branch card is created before the asynchronous provider request is sent.
+    await expect.poll(() => requests.length).toBe(2);
     // the branch carried the excerpt and the ancestor exchange
     const last = requests.at(-1)!;
     expect(last.messages.at(-1)!.content).toContain('> sprocket');

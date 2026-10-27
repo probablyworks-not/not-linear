@@ -1,3 +1,4 @@
+import { makeRoomForReport } from './section-layout';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Background, Controls, MiniMap, Panel, ReactFlow, ReactFlowProvider,
@@ -193,17 +194,18 @@ function Workspace({ canvasId }: { canvasId: string }) {
     else toast(res.status === 'unchanged' ? 'No change since the last save' : `Saved to Artifacts${res.version && res.version > 1 ? ` (v${res.version})` : ''}`);
   }, [apply]);
 
-  // Grows only (never shrinks) while a thread is auto-growing; recorded separately from persisted
+  // HTML fits its paginated content (including shrinking after generation); prose grows while active.
+  // Recorded separately from persisted
   // geometry so a page reload always starts from the last settled, persisted size. Width only
   // actually moves anything for a `hasHtml` thread (see the node builder below) — for every other
   // thread it's tracked the same way but never read.
-  const onContentSize = useCallback((threadId: string, size: { width: number; height: number }) => {
+  const onContentSize = useCallback((threadId: string, size: { width: number; height: number }, fit = false) => {
     const targetH = Math.max(NODE_H, size.height + 64 /* header + padding chrome */);
     const targetW = Math.max(NODE_W, size.width); // scrollWidth already includes body padding.
     setAutoSizes(prev => {
       const cur = prev[threadId];
-      if (cur && targetH <= cur.height && targetW <= cur.width) return prev;
-      return { ...prev, [threadId]: { width: Math.max(targetW, cur?.width ?? 0), height: Math.max(targetH, cur?.height ?? 0) } };
+      if (cur && (fit ? targetH === cur.height : targetH <= cur.height) && targetW <= cur.width) return prev;
+      return { ...prev, [threadId]: { width: Math.max(targetW, cur?.width ?? 0), height: fit ? targetH : Math.max(targetH, cur?.height ?? 0) } };
     });
   }, []);
 
@@ -327,7 +329,7 @@ function Workspace({ canvasId }: { canvasId: string }) {
           ? (geo?.w ?? HTML_W)
           : isActive ? Math.max(geo?.w ?? NODE_W, ACTIVE_W) : (geo?.w ?? NODE_W),
         height: hasHtml
-          ? Math.max(autoSize?.height ?? 0, geo?.h ?? NODE_H)
+          ? (autoSize?.height ?? geo?.h ?? NODE_H)
           : isActive && autoSize ? Math.max(autoSize.height, geo?.h ?? NODE_H) : (geo?.h ?? NODE_H),
         hidden: geo?.hidden,
         data,
@@ -376,18 +378,32 @@ function Workspace({ canvasId }: { canvasId: string }) {
     // change identity, so writing unconditionally here makes a loop: write → new document → new
     // nodes array → re-measure → write. The debounced writer then re-schedules forever, the write
     // never lands, and the header sits on "Saving…" over work that is not happening.
-    const current = useCanvasDoc.getState().doc?.layouts.find(l => l.id === DEFAULT_LAYOUT_ID)?.entries ?? {};
+    const currentDoc = useCanvasDoc.getState().doc;
+    const current = currentDoc?.layouts.find(l => l.id === DEFAULT_LAYOUT_ID)?.entries ?? {};
+    // A measurement queued by the provisional 640px card can arrive after HTML settles at
+    // 880px. Only an explicit resize gesture may replace the report's chosen width.
+    const widthOf = (n: ThreadNodeType): number => {
+      const html = currentDoc?.messages.some(m => m.threadId === n.id && m.parts.some(p => p.kind === 'html'));
+      const explicitResize = changes.some(c => c.type === 'dimensions' && c.id === n.id && (c.resizing === true || gesture && c.resizing === false));
+      return html && !explicitResize ? (current[n.id]?.w ?? HTML_W) : (n.width ?? NODE_W);
+    };
     const moved = next.filter(n => {
       const was = current[n.id];
       return !was
         || was.x !== n.position.x || was.y !== n.position.y
-        || was.w !== (n.width ?? NODE_W) || was.h !== (n.height ?? NODE_H);
+        || was.w !== widthOf(n) || was.h !== (n.height ?? NODE_H);
     });
     if (moved.length === 0) return;
 
     applyGeometry(d => {
       for (const n of moved) {
-        setGeometry(d, n.id, { x: n.position.x, y: n.position.y, w: n.width ?? NODE_W, h: n.height ?? NODE_H });
+        setGeometry(d, n.id, { x: n.position.x, y: n.position.y, w: widthOf(n), h: n.height ?? NODE_H });
+        const was = current[n.id];
+        const automatic = changes.some(c => c.type === 'dimensions' && c.id === n.id && !c.resizing);
+        if (was && automatic && (n.height ?? NODE_H) > was.h && d.messages.some(m => m.threadId === n.id && m.parts.some(p => p.kind === 'html'))) {
+          const entries = d.layouts.find(l => l.id === DEFAULT_LAYOUT_ID)?.entries;
+          if (entries) makeRoomForReport(entries, n.id);
+        }
       }
     });
   }, [nodes, applyGeometry, beginGesture, gesture]);
@@ -553,6 +569,7 @@ function Workspace({ canvasId }: { canvasId: string }) {
       canvasContext,
       clarifiedBlock,
     ].filter(Boolean).join('\n\n');
+    const liveMessages = new Set<string>();
     try {
       const result = await runCanvasTurn(
         {
@@ -570,6 +587,10 @@ function Workspace({ canvasId }: { canvasId: string }) {
             const hadHtml = new Set(d.messages.filter(m => m.parts.some(p => p.kind === 'html')).map(m => m.threadId));
             const result = fn(d);
             for (const m of d.messages) {
+              if (wantsHtml && m.threadId === threadId && m.provisional && m.author.kind === 'model') {
+                liveMessages.add(m.id);
+                if (liveText.getHtmlOf(m.id)() === undefined) liveText.setHtml(m.id, '');
+              }
               if (!hadHtml.has(m.threadId) && m.parts.some(p => p.kind === 'html')) {
                 setGeometry(d, m.threadId, { w: HTML_W });
                 hadHtml.add(m.threadId);
@@ -578,12 +599,9 @@ function Workspace({ canvasId }: { canvasId: string }) {
             return result;
           }, canvasId),
           onDelta: (messageId, soFar) => {
-            // An HTML reply streams its raw tags/CSS as text underneath — showing that live would
-            // balloon the node's measured content height (it's markup, not prose), which drags the
-            // "grow the active node to fit" + fitView camera logic into zooming out to fit a box
-            // that's about to shrink back to the fixed-height iframe the instant it settles. Show a
-            // small constant placeholder instead; `soFar` still reaches the document untouched below,
-            // so settle() and refresh-recovery both still see the real accumulated text.
+            // The inert HTML preview receives completed blocks through the message-local cache.
+            // Raw source still reaches persistence unchanged; scripts run only when settled.
+            if (wantsHtml) liveText.setHtml(messageId, soFar);
             liveText.set(messageId, wantsHtml ? 'Generating the HTML document…' : soFar);
             // Coalesced: a token is not worth a transaction, but a refresh must not lose the answer.
             streamWriter.schedule(messageId, () => useCanvasDoc.getState().apply(d => {
@@ -606,6 +624,7 @@ function Workspace({ canvasId }: { canvasId: string }) {
       // canvas simply sat there — which is indistinguishable from the app being broken.
       setSendError(e instanceof Error ? e.message : String(e));
     } finally {
+      for (const id of liveMessages) liveText.clear(id);
       setBusy(false);
       setStatus(null);
       abortRef.current = null;
@@ -709,11 +728,11 @@ function Workspace({ canvasId }: { canvasId: string }) {
             data-testid="canvas-selection-popover"
             className="fixed z-[180] -translate-x-1/2 rounded-full bg-ask px-1 py-1 text-ask-fg shadow-lg"
             style={{
-              left: selection.rect.left + selection.rect.width / 2,
+              left: Math.max(88, Math.min(window.innerWidth - 88, selection.rect.left + selection.rect.width / 2)),
               // Prefer floating above the selection; when there isn't room (near the top of a
               // card, or the top of the viewport), render below it instead of clamping to a fixed
               // y that ends up overlapping whatever text sits above the selection.
-              top: selection.rect.top - 40 >= 8 ? selection.rect.top - 40 : selection.rect.top + selection.rect.height + 8,
+              top: Math.max(8, Math.min(window.innerHeight - 48, selection.rect.top - 40 >= 8 ? selection.rect.top - 40 : selection.rect.top + selection.rect.height + 8)),
             }}
           >
             <button

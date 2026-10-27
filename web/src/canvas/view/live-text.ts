@@ -9,6 +9,7 @@
 // mid-stream finds the partial answer.
 
 const text = new Map<string, string>();
+const html = new Map<string, string>();
 const listeners = new Map<string, Set<() => void>>();
 
 const notify = (id: string): void => { listeners.get(id)?.forEach(fn => fn()); };
@@ -25,11 +26,13 @@ export const liveText = {
   getOf(id: string) {
     return (): string | undefined => text.get(id);
   },
+  getHtmlOf(id: string) { return (): string | undefined => html.get(id); },
+  setHtml(id: string, value: string): void { html.set(id, value); notify(id); },
   set(id: string, value: string): void { text.set(id, value); notify(id); },
-  clear(id: string): void { text.delete(id); notify(id); },
+  clear(id: string): void { text.delete(id); html.delete(id); notify(id); },
   clearAll(): void {
-    const ids = [...text.keys()];
-    text.clear();
+    const ids = [...new Set([...text.keys(), ...html.keys()])];
+    text.clear(); html.clear();
     for (const id of ids) notify(id);
   },
 };

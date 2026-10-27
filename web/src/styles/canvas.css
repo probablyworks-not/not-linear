@@ -60,3 +60,9 @@
 @media (prefers-reduced-motion: reduce) {
   .nl-ask-draw, .nl-ask-cursor { animation: none; }
 }
+
+/* Only the unfinished section animates. */
+.nl-html-pending { position:relative; isolation:isolate; overflow:hidden; min-height:180px; display:flex; align-items:center; justify-content:center; border:1px solid var(--cv-edge); border-radius:12px; background:var(--cv-card); color:var(--text-3); font-size:13px; }
+.nl-html-pending::before { content:''; position:absolute; z-index:-1; inset:-100%; background:linear-gradient(125deg,transparent 43%,color-mix(in srgb,var(--text-3) 12%,transparent) 50%,transparent 57%); transform:translateX(-35%); animation:nl-html-sweep 2.4s ease-in-out infinite; pointer-events:none; }
+@keyframes nl-html-sweep { to { transform:translateX(35%); } }
+@media(prefers-reduced-motion:reduce) { .nl-html-pending::before { animation:none; transform:none; } }

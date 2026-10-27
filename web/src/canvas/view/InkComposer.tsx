@@ -62,7 +62,7 @@ interface Props {
   skillsKey: string;
 }
 
-const W = 340, H = 92, PAD = 12;
+const W = 460, H = 240, PAD = 12;
 
 export function InkComposer({ canvasId, target, sources, onRemoveSource, onSend, busy, onStop, attachKey, files, skillsKey }: Props) {
   const [text, setText] = useState('');
@@ -79,6 +79,19 @@ export function InkComposer({ canvasId, target, sources, onRemoveSource, onSend,
   const [focused, setFocused] = useState(false);
   const wantsFocusRef = useRef(false);
   const expanded = !isIdleAsk || focused || text.trim().length > 0;
+  const boxRef = useRef<HTMLDivElement>(null);
+  const [boxSize, setBoxSize] = useState({ width: W, height: H });
+  useEffect(() => {
+    const el = boxRef.current;
+    if (!expanded || !el) return;
+    const measure = () => setBoxSize(previous => {
+      const next = { width: el.offsetWidth, height: el.offsetHeight };
+      return previous.width === next.width && previous.height === next.height ? previous : next;
+    });
+    measure();
+    const observer = new ResizeObserver(measure); observer.observe(el);
+    return () => observer.disconnect();
+  }, [expanded]);
   const openLauncher = (): void => { wantsFocusRef.current = true; setFocused(true); };
   useEffect(() => {
     if (expanded && wantsFocusRef.current) { ref.current?.focus(); wantsFocusRef.current = false; }
@@ -189,8 +202,8 @@ export function InkComposer({ canvasId, target, sources, onRemoveSource, onSend,
 
   const style = target.anchor
     ? {
-        left: Math.max(PAD, Math.min(target.anchor.x, window.innerWidth - W - PAD)),
-        top: Math.max(PAD, Math.min(target.anchor.y + PAD, window.innerHeight - H - PAD)),
+        left: Math.max(PAD, Math.min(target.anchor.x, window.innerWidth - boxSize.width - PAD)),
+        top: Math.max(PAD, Math.min(target.anchor.y + PAD, window.innerHeight - boxSize.height - PAD)),
       }
     : { left: '50%', bottom: 22, transform: 'translateX(-50%)' };
 
@@ -234,8 +247,8 @@ export function InkComposer({ canvasId, target, sources, onRemoveSource, onSend,
 
   return (
     <div
-      data-testid="ink-composer" data-target={target.key}
-      className="fixed z-[60] w-[460px] rounded-[18px] bg-ask p-3 text-ask-fg shadow-lg"
+      ref={boxRef} data-testid="ink-composer" data-target={target.key}
+      className="fixed z-[60] w-[460px] max-w-[calc(100vw-24px)] max-h-[calc(100vh-24px)] overflow-auto rounded-[18px] bg-ask p-3 text-ask-fg shadow-lg"
       style={style}
     >
       {target.label !== 'New question' && (

@@ -4,7 +4,7 @@ import { Download, Expand, GitBranch, Layers, MessageSquare, SquareDashedMousePo
 import type { CanvasMessage, CanvasThread, HighlightTone } from '../types';
 import type { TextHighlight } from '../anchors';
 import { cardWheel } from './wheel';
-import { PartView, type BlockPickHandler } from './PartView';
+import { HtmlFrame, PartView, type BlockPickHandler } from './PartView';
 import { liveText } from './live-text';
 import { renderMarkdown } from '../../lib/markdown';
 import { modelLabelFromId } from '../../chat/models';
@@ -35,7 +35,7 @@ export interface ThreadData extends Record<string, unknown> {
    * matters (a growing reply); width only moves a generated-HTML card (`CanvasWorkspace`'s
    * `hasHtml` branch) — a plain markdown card keeps its fixed reading-column width regardless of
    * what this reports. */
-  onContentSize?(threadId: string, size: { width: number; height: number }): void;
+  onContentSize?(threadId: string, size: { width: number; height: number }, fit?: boolean): void;
   /** Fires on any body resize/reflow, so a highlight-anchored edge can re-measure its mark. */
   onBodyResize?(threadId: string): void;
   /** A block's left-edge handle was picked (click, Cmd/Ctrl-click, or a drag through several). */
@@ -63,6 +63,11 @@ export const TONE_BG: Record<HighlightTone, string> = {
  */
 const LiveText = memo(function LiveText({ messageId }: { messageId: string }) {
   const text = useSyncExternalStore(liveText.subscribeTo(messageId), liveText.getOf(messageId));
+  const html = useSyncExternalStore(liveText.subscribeTo(messageId), liveText.getHtmlOf(messageId));
+  if (html !== undefined) return <div data-testid="live-html">
+    <HtmlFrame part={{ id: `${messageId}-stream`, kind: 'html', state: 'ready', html: '<!doctype html><html><head></head><body></body></html>' }} messageId={messageId} paginated streamHtml={html} />
+    <div className="nl-html-pending mt-6" role="status" aria-busy="true"><span>Building your next section…</span></div>
+  </div>;
   if (text === undefined) return null;
   // Same renderer as the finished part (PartView/Markdownish), so a reply reads the same mid-stream
   // as it does once PartView takes over — only highlight.js/mermaid wait for the DOM to settle.
@@ -87,8 +92,8 @@ export const ThreadNode = memo(function ThreadNode({ data, selected, width, heig
   // answered or skipped. Only the active thread ever has one, so this read is cheap elsewhere.
   const clarifyQuestions = useChatStore(s => s.live[thread.id]?.clarify);
 
-  // Fit HTML cards around the stable iframe viewport. The document itself scrolls internally;
-  // its intrinsic height/width never feeds back into the surrounding card geometry.
+  // Fit HTML cards around the page stack. Width stays independent of content measurements;
+  // the iframe normalizes its logical viewport before reporting section geometry.
   const hasHtml = messages.some(m => m.parts.some(p => p.kind === 'html'));
   const autoGrow = active || hasHtml;
 
@@ -105,7 +110,7 @@ export const ThreadNode = memo(function ThreadNode({ data, selected, width, heig
     if (!el) return;
     const report = () => onContentSize(thread.id, {
       width: Math.ceil(el.scrollWidth / 8) * 8, height: Math.ceil(el.scrollHeight / 8) * 8,
-    });
+    }, !!el.querySelector('[data-testid="html-sections"]'));
     report();
     const ro = new ResizeObserver(report);
     ro.observe(el);
@@ -151,7 +156,7 @@ export const ThreadNode = memo(function ThreadNode({ data, selected, width, heig
       <header className="flex flex-none items-center gap-2 border-b border-cv-divider px-3 py-2">
         <Icon size={13} aria-hidden className="flex-none text-text-3" />
         <span className="min-w-0 flex-1 truncate font-mono text-xs uppercase tracking-widest text-text-3">{thread.title}</span>
-        {latestOutput && (
+        {latestOutput && !latestOutput.parts.some(p => p.kind === 'html') && (
           <button type="button" data-testid="view-output" onClick={() => onViewOutput(latestOutput.id)}
             title="Read the full answer" className="nodrag flex flex-none items-center gap-1 rounded-md border border-cv-edge px-1.5 py-0.5 text-xs text-text-2 hover:text-accent">
             <Expand size={12} aria-hidden /> View full
@@ -206,16 +211,16 @@ export const ThreadNode = memo(function ThreadNode({ data, selected, width, heig
               {m.provisional ? ' · working' : ''}
             </div>
             {m.provisional ? <LiveText messageId={m.id} /> : m.parts.map(p => (
-              <PartView key={p.id} part={p} messageId={m.id} highlightsByPart={highlightsByMessage[m.id]} onBlockPick={onBlockPick} />
+              <PartView key={p.id} part={p} messageId={m.id} highlightsByPart={highlightsByMessage[m.id]} onBlockPick={onBlockPick} paginated />
             ))}
             {!m.provisional && m.author.kind === 'model' && (
               <div className="mt-1.5 flex items-center gap-1.5">
-                <button
+                {!m.parts.some(p => p.kind === 'html') && <button
                   type="button" data-testid="view-message-output" onClick={() => onViewOutput(m.id)}
                   className="nodrag flex items-center gap-1 rounded-md border border-cv-edge px-1.5 py-0.5 text-xs text-text-3 hover:text-text"
                 >
                   <Expand size={11} aria-hidden /> View full
-                </button>
+                </button>}
                 <button
                   type="button" data-testid="save-output" onClick={() => onSaveOutput(m.id)}
                   className="nodrag flex items-center gap-1 rounded-md border border-cv-edge px-1.5 py-0.5 text-xs text-text-3 hover:text-text"
