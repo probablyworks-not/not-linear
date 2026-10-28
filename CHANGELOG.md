@@ -87,3 +87,9 @@ Assistant and Canvas markdown use readable system-font body text, distinct headi
 - Behavior changes: 16px main/Canvas body, 15px branch body (16px expanded), 72ch prose measure, larger headings, theme-aware list accents.
 - Files changed: `web/src/styles/chat.css`, `CHANGELOG.md`. Adapted from bdfa96e to the current web layout; deleted legacy documentation remains deleted.
 - Verification: Original implementation checked visually in three themes and a narrow branch reader; desktop adaptation checked using current styles and build. Full provider/native smoke remains pending.
+
+
+## 2026-10-28 · Codex · Tighten reading-view whitespace
+- Files changed: `web/src/styles/chat.css`, `CHANGELOG.md`.
+- Behavior changes: Reduce paragraph, heading, list and divider margins; body line-height 1.65; smaller expanded-reader padding. A heading after a divider no longer adds a second border/padding gap. Text sizes and reading width retained.
+- Verification: CSS diff whitespace check and production build; provider/native interaction smoke pending. No functions, state or persistence changed.
