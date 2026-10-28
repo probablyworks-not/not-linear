@@ -10,11 +10,11 @@ import { emptyDoc } from '../../src/canvas/types';
 // actually selectable (React Flow sets user-select:none on nodes — the C0 spike's first defect),
 // and that the whole loop holds together.
 
-type Req = { messages: { role: string; content: string }[]; system: string };
+type Req = { messages: { role: string; content: string }[]; system: string; tools?: { name: string }[] };
 
-async function seed(page: Page, response = 'A widget has a sprocket and a flange.'): Promise<Req[]> {
+async function seed(page: Page, response = 'A widget has a sprocket and a flange.', folderPath = ''): Promise<Req[]> {
   const requests: Req[] = [];
-  await page.addInitScript(() => {
+  await page.addInitScript(({ folderPath }) => {
     localStorage.setItem('nl_api_keys', JSON.stringify({ anthropic: 'sk-test' }));
     const open = indexedDB.open('notlinear', 1);
     open.onupgradeneeded = () => { if (!open.result.objectStoreNames.contains('kv')) open.result.createObjectStore('kv', { keyPath: 'key' }); };
@@ -27,13 +27,13 @@ async function seed(page: Page, response = 'A widget has a sprocket and a flange
         store.put({ key: 'state', value: {
           threads: { 'doc-main': { kind: 'doc', title: 'Main', stream: '', docContent: '<p><br></p>', highlights: [], branchSnapshots: {}, branchRecents: {} } },
           current: 'doc-main', dynamic: [], deletedThreads: [], chatCount: 1,
-          projects: { p1: { id: 'p1', name: 'Research', rules: '', files: [], path: '', updatedAt: Date.now() } },
+          projects: { p1: { id: 'p1', name: 'Research', rules: '', files: [], path: folderPath, updatedAt: Date.now() } },
           projectCount: 1, prefs: { model: 'opus' },
         } });
       };
       tx.oncomplete = () => db.close();
     };
-  });
+  }, { folderPath });
   await page.route('https://api.anthropic.com/v1/messages', async (route: Route) => {
     const body = JSON.parse(route.request().postData() ?? '{}') as Req;
     requests.push(body);
@@ -731,4 +731,22 @@ test.describe('the canvas loop', () => {
     await page.getByTestId('output-detail-close').click();
     await expect(page.getByTestId('canvas-output-detail')).toHaveCount(0);
   });
+});
+
+
+test('a project Canvas sends linked repository evidence and folder tools to the provider', async ({ page }) => {
+  const requests = await seed(page, 'Orion orchestrates Vega.', '/fixture/agents-repo');
+  await page.route('**/__notlinear_scan_project', async route => {
+    expect(route.request().postDataJSON()).toEqual({ path: '/fixture/agents-repo' });
+    await route.fulfill({ json: { ok: true, contextFiles: [
+      { present: true, filename: 'agents.ts', relativePath: 'src/agents.ts', text: 'Orion orchestrates Vega in the repository.' },
+    ] } });
+  });
+  await openProject(page); await newCanvas(page); await ask(page, 'Explain the repository agents');
+  await expect(page.locator('.react-flow [data-part]').filter({ hasText: 'Orion orchestrates Vega.' })).toBeVisible();
+  expect(requests).toHaveLength(1);
+  expect(requests[0]!.system).toContain('src/agents.ts');
+  expect(requests[0]!.system).toContain('Orion orchestrates Vega in the repository.');
+  expect(requests[0]!.tools?.map(t => t.name)).toEqual(expect.arrayContaining(['list_project_files', 'read_project_file']));
+  await expect(page.getByTestId('canvas-status')).not.toBeVisible();
 });

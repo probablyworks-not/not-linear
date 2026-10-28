@@ -652,3 +652,8 @@ Definition of done for the v1 gate: the declared C0–C4 scope works in Notlinea
 regression and recovery checks, reuses the established UI system through tokens, and leaves a tested
 shared-data boundary that a future separate Agents interface could read. A prototype that merely
 matches the screenshots is not done.
+
+
+### 2026-10-28 implementation correction — linked project folders
+
+C4's folder retrieval/tool-loop requirement was not actually wired into Canvas execution. The Canvas execution service now calls the shared project retrieval helper with the explicit project and passes existing tools plus a root-bound runner into `runTurn`. Cancellation reaches scan/ranking. Rules/uploads/manual Canvas context remain unchanged. The existing manifest still records snapshot/rule identifiers: do not interpret it as frozen provenance for all retrieved files or tool calls. Expanded provenance/budget disclosure is a follow-up, not completed by this repair. See bug #072 and RUNS for verification.

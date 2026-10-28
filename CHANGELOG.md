@@ -73,3 +73,8 @@ Notable changes to notlinear. Newest first.
 - Removed the blanket foreground/background override that erased CSS chart fills. HTML guidance now requests a cohesive palette, proportional quantitative charts, axes/units/labels and honest illustrative-data labeling.
 - Behavior changes: HTML preserves authored colors and matching foregrounds, including existing answers; light defaults, compact paragraph spacing and readable selections/highlights remain. Newly generated charts use the revised guidance; stored answers are not regenerated. Product Manager mode still supplies its audience/job/success framing.
 - Verification: seven HTML unit tests and an isolated Chromium rendering check pass. Full native/provider smoke not run.
+
+
+## 2026-10-28 · Codex · Fix Canvas access to linked project folders
+
+Canvas replies can retrieve relevant repository files and use read-only folder browsing tools. Behavior changes: linked-folder context is now available to Canvas questions. Files: Canvas execution, shared project retrieval, regression tests and documentation. No storage migration.

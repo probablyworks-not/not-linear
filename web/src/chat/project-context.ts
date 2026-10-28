@@ -39,6 +39,8 @@ export interface FolderEnv {
   deepseekKey?: string;
   /** The global ranking default from Settings (`prefs.rankingLlm`). */
   globalMode: string;
+  /** Optional caller cancellation, shared by scan and ranking requests. */
+  signal?: AbortSignal;
 }
 
 const scanCache = new Map<string, { scan: Scan; fetchedAt: number }>();
@@ -47,20 +49,22 @@ const rankingCache = new Map<string, { indices: number[]; fetchedAt: number }>()
 /** Test seam: these caches live for the page session. */
 export function clearProjectContextCaches(): void { scanCache.clear(); keywordCache.clear(); rankingCache.clear(); }
 
-async function fetchProjectScan(pid: string, path: string): Promise<Scan | null> {
+async function fetchProjectScan(pid: string, path: string, signal?: AbortSignal): Promise<Scan | null> {
   if (!path) return null;
-  const hit = scanCache.get(pid);
+  signal?.throwIfAborted();
+  const cacheKey = JSON.stringify([pid, path]);
+  const hit = scanCache.get(cacheKey);
   if (hit && Date.now() - hit.fetchedAt < SCAN_CACHE_TTL_MS) return hit.scan;
   try {
     const res = await loggedFetch('/__notlinear_scan_project', {
-      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ path }),
+      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ path }), signal,
     }, { provider: 'notlinear', label: 'scan_project' });
     if (!res.ok) return null;
     const scan = await res.json() as Scan;
     if (!scan.ok) return null;
-    scanCache.set(pid, { scan, fetchedAt: Date.now() });
+    scanCache.set(cacheKey, { scan, fetchedAt: Date.now() });
     return scan;
-  } catch { return null; }
+  } catch { signal?.throwIfAborted(); return null; }
 }
 
 const STOP_WORDS = new Set([
@@ -79,8 +83,11 @@ export function extractKeywords(text: string): string[] {
   )].slice(0, 20);
 }
 
-async function deepseekJson(key: string, body: Record<string, unknown>): Promise<string | null> {
+async function deepseekJson(key: string, body: Record<string, unknown>, signal?: AbortSignal): Promise<string | null> {
+  signal?.throwIfAborted();
   const controller = new AbortController();
+  const abort = () => controller.abort();
+  signal?.addEventListener('abort', abort, { once: true });
   const timer = setTimeout(() => controller.abort(), RANKING_TIMEOUT_MS);
   try {
     const res = await loggedFetch('https://api.deepseek.com/v1/chat/completions', {
@@ -91,10 +98,10 @@ async function deepseekJson(key: string, body: Record<string, unknown>): Promise
     if (!res.ok) { await readLoggedErrorPayload(res, { provider: 'deepseek', label: 'chat:context-ranking' }); return null; }
     const data = await res.json() as { choices?: Array<{ message?: { content?: string } }> };
     return data.choices?.[0]?.message?.content?.trim() || '[]';
-  } catch { return null; } finally { clearTimeout(timer); }
+  } catch { signal?.throwIfAborted(); return null; } finally { clearTimeout(timer); signal?.removeEventListener('abort', abort); }
 }
 
-async function generateSearchKeywords(query: string, mode: string, key: string | undefined): Promise<string[]> {
+async function generateSearchKeywords(query: string, mode: string, key: string | undefined, signal?: AbortSignal): Promise<string[]> {
   if (!key || mode === 'none' || mode === 'keywords') return extractKeywords(query);
   const cacheKey = query.trim().toLowerCase().slice(0, 200);
   const hit = keywordCache.get(cacheKey);
@@ -105,7 +112,7 @@ async function generateSearchKeywords(query: string, mode: string, key: string |
       { role: 'system', content: 'Extract 10–15 precise search keywords from the user query that would help find relevant documentation or code files. Include technical terms, synonyms, and related concepts. Return ONLY a JSON array of strings, e.g. ["authentication","jwt","session","token"].' },
       { role: 'user', content: query },
     ],
-  });
+  }, signal);
   if (text === null) return extractKeywords(query);
   try {
     const match = text.match(/\[[\s\S]*?\]/);
@@ -116,7 +123,7 @@ async function generateSearchKeywords(query: string, mode: string, key: string |
   } catch { return extractKeywords(query); }
 }
 
-async function rankFilesWithDeepSeek(candidates: ScannedFile[], query: string, pid: string, mode: string, key: string | undefined): Promise<ScannedFile[]> {
+async function rankFilesWithDeepSeek(candidates: ScannedFile[], query: string, pid: string, mode: string, key: string | undefined, signal?: AbortSignal): Promise<ScannedFile[]> {
   if (!key || mode === 'none' || mode === 'keywords') return candidates;
   const cacheKey = `${pid}::${query.trim().toLowerCase().slice(0, 100)}`;
   const hit = rankingCache.get(cacheKey);
@@ -128,7 +135,7 @@ async function rankFilesWithDeepSeek(candidates: ScannedFile[], query: string, p
       { role: 'system', content: 'You are a file relevance ranker. Given a user query and numbered files with snippets, return a JSON array of file indices ranked by relevance (most relevant first). Return ONLY valid JSON like [2,0,4]. Include only relevant files. If none are relevant, return [].' },
       { role: 'user', content: `Query: "${query}"\n\nFiles:\n${fileList}` },
     ],
-  });
+  }, signal);
   if (text === null) return candidates;
   try {
     const match = text.match(/\[[\d,\s]*\]/);
@@ -142,13 +149,13 @@ async function rankFilesWithDeepSeek(candidates: ScannedFile[], query: string, p
 /** The relevant files of a project's linked folder for this question, as a context block plus the names used. */
 export async function buildProjectFolderContext(pid: string | undefined, query: string, rankingMode: RankingMode | string | undefined, env: FolderEnv): Promise<FolderContext> {
   if (!pid || !env.path) return { contextBlock: '', sources: [], mode: 'none' };
-  const scan = await fetchProjectScan(pid, env.path);
+  const scan = await fetchProjectScan(pid, env.path, env.signal);
   if (!scan) return { contextBlock: '', sources: [], mode: 'none' };
   const mode = rankingMode && rankingMode !== 'inherit' ? rankingMode : (env.globalMode || 'none');
   const allFiles = (scan.contextFiles || scan.markdownFiles || []).filter(f => f.present && f.text);
   if (!allFiles.length) return { contextBlock: '', sources: [], mode };
 
-  const keywords = await generateSearchKeywords(query, mode, env.deepseekKey);
+  const keywords = await generateSearchKeywords(query, mode, env.deepseekKey, env.signal);
   let candidates = keywords.length
     ? allFiles
       .map(f => {
@@ -161,7 +168,7 @@ export async function buildProjectFolderContext(pid: string | undefined, query: 
     : allFiles.slice(0, 30);
   if (!candidates.length) candidates = allFiles.slice(0, 30);
 
-  const top = (await rankFilesWithDeepSeek(candidates, query, pid, mode, env.deepseekKey)).slice(0, PROJECT_FOLDER_MAX_FILES);
+  const top = (await rankFilesWithDeepSeek(candidates, query, JSON.stringify([pid, env.path]), mode, env.deepseekKey, env.signal)).slice(0, PROJECT_FOLDER_MAX_FILES);
   if (!top.length) return { contextBlock: '', sources: [], mode };
 
   const parts = top.map(f => {

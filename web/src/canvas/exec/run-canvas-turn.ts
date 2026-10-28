@@ -1,4 +1,8 @@
 import { runTurn, type RunTurnDeps } from '../../chat/run-turn';
+import { buildProjectFolderContext } from '../../chat/project-context';
+import { availableTools, FOLDER_TOOL_HINT } from '../../providers/tool-specs';
+import { executeTool } from '../../tools/tool-runners';
+import { toolEnv } from '../../tools/env';
 import { planModel } from '../../chat/models';
 import { buildSystemPrompt } from '../../chat/system-prompt';
 import { userContentFor } from '../../chat/user-content';
@@ -86,6 +90,8 @@ export interface CanvasTurnResult {
  * interrupted message with its partial content, never an empty one (AC-08).
  */
 export async function runCanvasTurn(input: CanvasTurnInput, hooks: CanvasTurnHooks): Promise<CanvasTurnResult> {
+  // Capture the project at submission; a later tab switch must never change tool authority.
+  const project = input.project ? { ...input.project, files: [...input.project.files] } : undefined;
   const now = Date.now();
   const plan = planModel(input.modelPref, !!input.prefs.thinking);
 
@@ -115,7 +121,7 @@ export async function runCanvasTurn(input: CanvasTurnInput, hooks: CanvasTurnHoo
     // C10. Disclosure only — the rules' *text* already reaches the model through the system
     // prompt (`buildSystemPrompt` below takes `input.project` directly); this is what makes the
     // Context Islands' Rules tab say "inherited" truthfully instead of always reading empty.
-    const inheritedRules = input.project?.rules?.trim() ? ['project-rules'] : [];
+    const inheritedRules = project?.rules?.trim() ? ['project-rules'] : [];
     const context = resolveContext(d, input.threadId, { inheritedRules });
     d.manifests.push(manifestFor(runId, context.manifest, now));
     const msg = addMessage(d, {
@@ -131,6 +137,7 @@ export async function runCanvasTurn(input: CanvasTurnInput, hooks: CanvasTurnHoo
   if (!created) return { status: 'failed', runId, messageId: null, text: '', error: 'This canvas is no longer open.' };
 
   const { messageId, partId, messages } = created;
+  const query = messages.filter(m => m.role === 'user').at(-1)?.content;
   // The attachments belong to the question that was just sent — always the last message
   // `resolveContext` produced, since it walks the ancestor chain ending at this thread's own,
   // newest-first-by-seq turn. Swapping its `content` here (rather than threading attachments
@@ -175,14 +182,29 @@ export async function runCanvasTurn(input: CanvasTurnInput, hooks: CanvasTurnHoo
   };
 
   try {
+    const folderRoot = project?.path || '';
+    const env = toolEnv();
+    // Use an explicit project, never a synthetic chat id: Canvas is in its own database.
+    if (folderRoot) hooks.onStatus('Reading project files…');
+    const folder = await buildProjectFolderContext(project?.id, typeof query === 'string' ? query : '', 'inherit', {
+      path: folderRoot, deepseekKey: env.apiKeys.deepseek,
+      globalMode: input.prefs.rankingLlm || 'none', signal: controller.signal,
+    });
+    controller.signal.throwIfAborted();
+    hooks.onStatus(null);
+    const tools = availableTools({ apiKeys: env.apiKeys, searxngUrl: env.searxngUrl, folder: !!folderRoot });
+    const toolRunner = (name: string, args: Record<string, unknown>, signal: AbortSignal) =>
+      executeTool(name, args, signal, { folderRoot });
+    const extraContext = [input.extraContext, folder.contextBlock, folderRoot ? FOLDER_TOOL_HINT : ''].filter(Boolean).join('\n\n');
     const systemPrompt = buildSystemPrompt({
-      prefs: input.prefs, project: input.project, apiKeys: readApiKeys(), extraContext: input.extraContext ?? '',
+      prefs: input.prefs, project, apiKeys: env.apiKeys, extraContext,
     });
     const turnInput = {
       messagesFor: () => messages,
       systemPrompt,
       plan,
       signal: controller.signal,
+      tools, toolRunner,
     };
 
     for await (const { ev, plan: used } of runTurn(turnInput, depsFactory())) {
@@ -208,7 +230,7 @@ export async function runCanvasTurn(input: CanvasTurnInput, hooks: CanvasTurnHoo
     // A provider that ends without `done` or `error` is a bug in the provider. Say so.
     return await settle('unknown', { error: 'The response ended unexpectedly. Retry to get a fresh answer.' });
   } catch (e) {
-    return await settle('failed', { error: e instanceof Error ? e.message : String(e) });
+    return await settle(controller.signal.aborted ? 'cancelled' : 'failed', { error: e instanceof Error ? e.message : String(e) });
   }
 }
 
