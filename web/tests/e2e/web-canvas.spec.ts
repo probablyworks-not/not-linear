@@ -308,9 +308,9 @@ test.describe('the canvas loop', () => {
     expect(await marks.first().evaluate(el => getComputedStyle(el).backgroundColor)).not.toBe('rgb(255, 255, 255)');
   });
 
-  test('dark authored HTML uses readable light paper and compact sections after reload', async ({ page }) => {
+  test('authored HTML preserves chart colors and readable selections after reload', async ({ page }) => {
     await page.emulateMedia({ colorScheme: 'dark' });
-    const html = '<style>body,p,b{background:#111!important;color:#ddd!important;-webkit-text-fill-color:#ddd!important}p{font:24px/2 system-ui}</style><p id="contrast">Readable <b>formatted</b> &amp; repeated text.</p>' + '<p>Continuation passage</p>'.repeat(65);
+    const html = '<style>body{background:white;color:#172033}b{color:#7c3aed!important}p{font:24px/2 system-ui}.chart-bar{height:20px;background:#2563eb!important}</style><div class="chart-bar" style="width:30px"></div><div class="chart-bar" style="width:80px"></div><div class="chart-bar" style="width:160px"></div><p id="contrast">Readable <b>formatted</b> &amp; repeated text.</p>' + '<p>Continuation passage</p>'.repeat(65);
     const requests = await seed(page, html);
     await openProject(page); await newCanvas(page); await ask(page, 'render as html');
     for (let i = 0; i < 2; i++) {
@@ -319,13 +319,14 @@ test.describe('the canvas loop', () => {
       expect(await frame.locator('#contrast b').evaluate(el => {
         const style = getComputedStyle(el), selected = getComputedStyle(el, '::selection');
         return [style.color, style.webkitTextFillColor, style.backgroundColor, selected.color];
-      })).toEqual(['rgb(0, 0, 0)', 'rgb(0, 0, 0)', 'rgb(255, 255, 255)', 'rgb(0, 0, 0)']);
+      })).toEqual(['rgb(124, 58, 237)', 'rgb(124, 58, 237)', 'rgba(0, 0, 0, 0)', 'rgb(0, 0, 0)']);
+      expect(await frame.locator('.chart-bar').evaluateAll(els => els.map(el => [getComputedStyle(el).backgroundColor, el.getBoundingClientRect().width]))).toEqual([['rgb(37, 99, 235)', 30], ['rgb(37, 99, 235)', 80], ['rgb(37, 99, 235)', 160]]);
       await expect.poll(() => frame.locator('[data-nl-page-gap]').count()).toBeGreaterThan(0);
       expect(await frame.locator('[data-nl-page-gap]').evaluateAll(els => els.every(el => el.getBoundingClientRect().height === 8))).toBe(true);
       await expect(page.getByTestId('canvas-save-state')).toHaveText('Saved');
       if (i === 0) await page.reload();
     }
-    expect(requests[0]!.system).toContain('white backgrounds and black text throughout');
+    expect(requests[0]!.system).toContain('a cohesive color palette');
   });
 
   test('linear reading view selections can become a branch', async ({ page }) => {

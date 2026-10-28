@@ -66,3 +66,10 @@ Notable changes to notlinear. Newest first.
 - Existing and new HTML use white paper and black text. Native selections and saved highlights retain readable black text; SVG/canvas paint is preserved. Streaming preserves the reading policy through head updates.
 - Behavior changes: fixed light HTML appearance regardless of app/OS theme; section gaps reduced from 24px to 8px and paragraph margins to 0.65em. HTML generation guidance requests the same palette/spacing, replacing dark-mode guidance at the user's request. Shared system-prompt/tool guidance and branch context are unchanged. Stored source offsets and schemas remain unchanged.
 - Verification: browser contrast, highlight/reload, streaming, chart paint and gap regressions; command results and native-check limitations in project notes. Live-provider before/after comparison not run; prompt composition checked using mocked responses.
+
+## 2026-10-28 · Codex · Preserve Canvas HTML colors and guide meaningful charts
+
+- Files changed: `web/src/canvas/view/html-reading.js`, `web/src/canvas/exec/html-trigger.ts`, `web/tests/e2e/web-canvas.spec.ts`, generated changelog fallback, FEATURES.md and project memory.
+- Removed the blanket foreground/background override that erased CSS chart fills. HTML guidance now requests a cohesive palette, proportional quantitative charts, axes/units/labels and honest illustrative-data labeling.
+- Behavior changes: HTML preserves authored colors and matching foregrounds, including existing answers; light defaults, compact paragraph spacing and readable selections/highlights remain. Newly generated charts use the revised guidance; stored answers are not regenerated. Product Manager mode still supplies its audience/job/success framing.
+- Verification: seven HTML unit tests and an isolated Chromium rendering check pass. Full native/provider smoke not run.

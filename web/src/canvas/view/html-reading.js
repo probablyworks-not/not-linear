@@ -3,18 +3,11 @@
 export function installHtmlReading() {
   const style = document.createElement('style');
   style.dataset.nlReading = '';
-  // The isolated document intentionally uses the user's fixed paper/ink palette,
-  // independent of the surrounding app theme. Preserve chart/media paint data.
+  // Keep authored chart fills, accents and matching foregrounds intact. Only
+  // supply a light default canvas and a consistent, readable selection palette.
   style.textContent = `
-    :root { color-scheme: light !important; --nl-paper: white; --nl-ink: black; --nl-selection: #b8d8ff; }
-    html, body { background: var(--nl-paper) !important; color: var(--nl-ink) !important; }
-    :where(body, body *):not(svg, svg *, canvas, img, video, picture, mark, [data-nl-page-gap]) {
-      background-color: var(--nl-paper) !important;
-      background-image: none !important;
-      color: var(--nl-ink) !important;
-      -webkit-text-fill-color: var(--nl-ink) !important;
-      text-shadow: none !important;
-    }
+    :root { color-scheme: light; --nl-paper: white; --nl-ink: black; --nl-selection: #b8d8ff; }
+    html, body { background: var(--nl-paper); color: var(--nl-ink); }
     mark[data-snapshot-id], mark[data-snapshot-id] * {
       color: var(--nl-ink) !important;
       -webkit-text-fill-color: var(--nl-ink) !important;
@@ -24,16 +17,6 @@ export function installHtmlReading() {
     p { margin-block: .65em !important; }
   `;
   function apply() {
-    // Stylesheets cannot override inline !important declarations. Clear only
-    // competing presentation declarations, keeping geometry and media intact.
-    document.querySelectorAll('body, body *').forEach(el => {
-      if (el.closest('svg,canvas,img,video,picture') || !el.style) return;
-      const properties = ['color', '-webkit-text-fill-color', 'text-shadow'];
-      if (!el.closest('mark[data-snapshot-id]')) properties.push('background', 'background-color', 'background-image');
-      properties.forEach(property => {
-        if (el.style.getPropertyPriority(property) === 'important') el.style.removeProperty(property);
-      });
-    });
     document.head.append(style);
   }
   apply();
