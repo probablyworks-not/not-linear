@@ -10,10 +10,16 @@ describe('wantsHtmlReply', () => {
     expect(wantsHtmlReply('show it in html with a table')).toBe(true);
     expect(wantsHtmlReply('can you render this as HTML?')).toBe(true);
     expect(wantsHtmlReply('give me an html version')).toBe(true);
+    expect(wantsHtmlReply('Explain this with improved reading')).toBe(true);
+    expect(wantsHtmlReply('IMPROVED READING')).toBe(true);
+    expect(wantsHtmlReply('HTML')).toBe(true);
+    expect(wantsHtmlReply('Explain this, HTML')).toBe(true);
   });
 
   it('does not match an ordinary question', () => {
     expect(wantsHtmlReply('what does this mean?')).toBe(false);
+    expect(wantsHtmlReply('How does this works?')).toBe(false);
+    expect(wantsHtmlReply('Explain that in text')).toBe(false);
     expect(wantsHtmlReply('summarize the last three messages')).toBe(false);
     expect(wantsHtmlReply('is this related to HTML5 or XML parsing')).toBe(false);
   });

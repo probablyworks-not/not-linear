@@ -67,6 +67,11 @@ Notable changes to notlinear. Newest first.
 - Behavior changes: fixed light HTML appearance regardless of app/OS theme; section gaps reduced from 24px to 8px and paragraph margins to 0.65em. HTML generation guidance requests the same palette/spacing, replacing dark-mode guidance at the user's request. Shared system-prompt/tool guidance and branch context are unchanged. Stored source offsets and schemas remain unchanged.
 - Verification: browser contrast, highlight/reload, streaming, chart paint and gap regressions; command results and native-check limitations in project notes. Live-provider before/after comparison not run; prompt composition checked using mocked responses.
 
+
+## 2026-10-28 · Codex · Fix Canvas access to linked project folders
+
+Canvas replies can retrieve relevant repository files and use read-only folder browsing tools. Behavior changes: linked-folder context is now available to Canvas questions. Files: Canvas execution, shared project retrieval, regression tests and documentation. No storage migration.
+
 ## 2026-10-28 · Codex · Preserve Canvas HTML colors and guide meaningful charts
 
 - Files changed: `web/src/canvas/view/html-reading.js`, `web/src/canvas/exec/html-trigger.ts`, `web/tests/e2e/web-canvas.spec.ts`, generated changelog fallback, FEATURES.md and project memory.
@@ -75,9 +80,12 @@ Notable changes to notlinear. Newest first.
 - Verification: seven HTML unit tests and an isolated Chromium rendering check pass. Full native/provider smoke not run.
 
 
-## 2026-10-28 · Codex · Fix Canvas access to linked project folders
+## 2026-10-28 · Codex · Continue Canvas HTML after provider output limits
 
-Canvas replies can retrieve relevant repository files and use read-only folder browsing tools. Behavior changes: linked-folder context is now available to Canvas questions. Files: Canvas execution, shared project retrieval, regression tests and documentation. No storage migration.
+- Files changed: `web/src/canvas/exec/run-canvas-turn.ts`, canvas execution/browser regressions, generated changelog fallback, `BUGS.md`, `FEATURES.md`, and project memory.
+- Canvas now continues a token-limited HTML reply in the same message instead of silently treating its partial table/document as complete.
+- Behavior changes: HTML replies can make up to three additional generation requests (with corresponding latency/token cost). Continuations use the provider that answered, retain the same Stop control, and total usage. Exhaustion reports incomplete output while retaining partial content. Ordinary text replies and storage schemas are unchanged.
+- Verification: deterministic reproduction failed before the fix; unit/type/lint and browser results recorded in RUNS.md. Live-provider/native smoke remains pending.
 
 
 ## 2026-10-28 · Codex · Improve chat and Canvas reading typography
@@ -89,7 +97,35 @@ Assistant and Canvas markdown use readable system-font body text, distinct headi
 - Verification: Original implementation checked visually in three themes and a narrow branch reader; desktop adaptation checked using current styles and build. Full provider/native smoke remains pending.
 
 
+## 2026-10-28 · Codex · Contain HTML horizontal scrolling in Canvas
+- Files changed: `web/src/canvas/view/html-bridge.ts`, `web/tests/canvas/html-bridge.test.ts`, `BUGS.md`, project memory.
+- Behavior changes: horizontal gestures over horizontally scrollable HTML stay in that region at its boundaries instead of panning the canvas background. Pinch zoom and vertical handoff remain available.
+- Verification: 16 targeted tests and TypeScript pass; exact screenshot/desktop reproduction and full manual smoke pending.
+
+
 ## 2026-10-28 · Codex · Tighten reading-view whitespace
 - Files changed: `web/src/styles/chat.css`, `CHANGELOG.md`.
 - Behavior changes: Reduce paragraph, heading, list and divider margins; body line-height 1.65; smaller expanded-reader padding. A heading after a divider no longer adds a second border/padding gap. Text sizes and reading width retained.
 - Verification: CSS diff whitespace check and production build; provider/native interaction smoke pending. No functions, state or persistence changed.
+
+
+## 2026-10-28 · Codex · Default Canvas follow-ups to text
+- Files changed: `web/src/canvas/exec/html-trigger.ts`, `web/src/canvas/view/CanvasWorkspace.tsx`, trigger/browser regressions, generated changelog fallback, `BUGS.md`, `FEATURES.md`, project memory.
+- Behavior changes: ordinary Canvas replies explicitly request text/Markdown, even after earlier HTML requests. “Improved reading” now opts the current reply into the HTML preview, alongside the standalone word HTML. Existing stored replies are unchanged.
+- Observed: generated changelog fallback was already stale; regenerated from the complete current changelog.
+- Verification: automated results in project RUNS.md; real-provider output comparison and native smoke remain pending.
+
+
+### 2026-10-28 · Codex · Compact hover CTA on desktop canvas
+- Files changed: web/src/canvas/view/InkComposer.tsx; rebuilt web/dist; project memory and FEATURES.md.
+- Behavior changes: idle launcher is a 76px logo tile, hover expands to a graphite pill with lighter “what’s up?” helper and mic/attachment preview; mouse leave collapses it. Existing hover typing/caret, click-to-edit, voice, attachments and send behavior retained.
+
+
+2026-10-28 · Codex · Smaller static canvas CTA · Files: web/src/canvas/view/InkComposer.tsx and project docs. Behavior changes: idle tile reduced from 76px to 64px, logo from 36px to 30px, preview narrowed to 274px. Removed looping stroke animation from the logo; hover/typing handlers unchanged.
+
+
+## 2026-10-28 · Codex · Complete Canvas reliability verification and reader streaming
+- Files changed: Canvas execution, selection, reading/card views and composer; Canvas regressions; pagination stress harness; generated changelog fallback; reliability report and private project memory. Includes reviewed desktop draft changes for HTML continuation, text-default follow-ups, branch reading/minimizing, element selection and compact composer.
+- Behavior changes: Reading View now uses the same live renderer as cards, including progressive HTML and the diagonal pending shimmer before the first token. Inspector colors use the existing document palette. Existing source documents, saved schemas and database versions are unchanged.
+- Verification: Reading View missing-shimmer regression reproduced before the fix. Final automated and desktop results are recorded in feature-canvas/RELIABILITY.md. Refreshed the stale bundled changelog and updated the stress harness to the current authored-color policy.
+- Observed: Physical trackpad/pinch, microphone permission/capture and real-provider fallback cannot be certified by mocked browser tests. Agents remain excluded.

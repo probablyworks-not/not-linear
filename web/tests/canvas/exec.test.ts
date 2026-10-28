@@ -218,3 +218,74 @@ describe('the canvas uses the same execution path as chat', () => {
     expect((await getCanvas(canvasId))!.runs[0]!.provider).toBe('claude');
   });
 });
+
+
+describe('canvas HTML completion', () => {
+  beforeEach(() => { resetCanvasDbForTests(`canvas-html-${Math.random()}`); });
+  afterEach(() => { setCanvasDepsForTests(null); });
+
+  it('continues a token-limited document in the same message and totals usage', async () => {
+    const requests: ChatRequest[] = [];
+    const chunks = ['<!doctype html><html><body><table><tr><td>Oil', '</td></tr></table></body></html>'];
+    useProvider({ id: 'claude', async *stream(req: ChatRequest) {
+      requests.push({ ...req, messages: [...req.messages] });
+      const n = requests.length - 1;
+      yield { t: 'delta', text: chunks[n]! };
+      yield { t: 'done', text: chunks[n]!, usage: { inputTokens: 10, outputTokens: 5, stopReason: n ? 'end_turn' : 'max_tokens' } };
+    } } as unknown as ChatProvider);
+    const { canvasId, threadId } = await seedCanvas();
+    const seen: string[] = [];
+    const res = await runCanvasTurn({ threadId, submissionId: 'html', modelPref: 'opus', prefs, wantsHtml: true }, hooksFor(canvasId, seen));
+    expect(requests).toHaveLength(2);
+    expect(requests[1]!.messages.at(-2)).toEqual({ role: 'assistant', content: chunks[0] });
+    expect(res.status).toBe('completed');
+    expect(res.text).toBe(chunks.join(''));
+    expect(res.usage).toMatchObject({ inputTokens: 20, outputTokens: 10 });
+    expect(seen.at(-1)).toBe(chunks.join(''));
+    const doc = (await getCanvas(canvasId))!;
+    expect(doc.messages.filter(m => m.author.kind === 'model')).toHaveLength(1);
+    expect(doc.messages.at(-1)!.parts[0]).toMatchObject({ kind: 'html', html: chunks.join('') });
+  });
+
+  it('bounds continuation and reports incomplete HTML without discarding it', async () => {
+    let calls = 0;
+    useProvider({ id: 'claude', async *stream() {
+      calls++;
+      yield { t: 'done', text: '<p>partial', usage: { inputTokens: 1, outputTokens: 1, stopReason: 'max_tokens' } };
+    } } as unknown as ChatProvider);
+    const { canvasId, threadId } = await seedCanvas();
+    const res = await runCanvasTurn({ threadId, submissionId: 'html', modelPref: 'opus', prefs, wantsHtml: true }, hooksFor(canvasId));
+    expect(calls).toBe(4);
+    expect(res.status).toBe('failed');
+    expect(res.error).toMatch(/incomplete/i);
+    expect(res.text).toBe('<p>partial'.repeat(4));
+  });
+
+  it('honors Stop between HTML chunks and preserves the partial document', async () => {
+    let calls = 0;
+    let controller: AbortController;
+    useProvider({ id: 'claude', async *stream() {
+      calls++;
+      yield { t: 'done', text: '<html><body>partial', usage: { inputTokens: 1, outputTokens: 1, stopReason: 'max_tokens' } };
+    } } as unknown as ChatProvider);
+    const { canvasId, threadId } = await seedCanvas();
+    const res = await runCanvasTurn({ threadId, submissionId: 'html', modelPref: 'opus', prefs, wantsHtml: true }, {
+      ...hooksFor(canvasId), register: c => { controller = c; },
+      onStatus: label => { if (label?.includes('Completing')) controller.abort(); },
+    });
+    expect(calls).toBe(1);
+    expect(res.status).toBe('cancelled');
+    expect(res.text).toBe('<html><body>partial');
+  });
+
+  it('does not automatically continue ordinary text replies', async () => {
+    let calls = 0;
+    useProvider({ id: 'claude', async *stream() {
+      calls++;
+      yield { t: 'done', text: 'partial', usage: { inputTokens: 1, outputTokens: 1, stopReason: 'max_tokens' } };
+    } } as unknown as ChatProvider);
+    const { canvasId, threadId } = await seedCanvas();
+    await runCanvasTurn({ threadId, submissionId: 'text', modelPref: 'opus', prefs }, hooksFor(canvasId));
+    expect(calls).toBe(1);
+  });
+});

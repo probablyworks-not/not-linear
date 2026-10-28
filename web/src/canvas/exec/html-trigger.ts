@@ -1,11 +1,13 @@
 // Explicit opt-in only: HTML rendering never kicks in from inferred intent, only when the prompt
 // itself asks for it. A plain regex, not a model call — zero latency/cost, tune the phrase list
 // from real usage rather than reaching for a classifier.
-const HTML_TRIGGER = /\b(as html|in html|an html|to html|html version|html page|html report|html table|render(?:ed)? (?:as|in) html|generate\b.*\bhtml)\b/i;
+const HTML_TRIGGER = /\b(improved\s+reading|html)\b/i;
 
 export function wantsHtmlReply(prompt: string): boolean {
   return HTML_TRIGGER.test(prompt);
 }
+
+export const TEXT_REPLY_INSTRUCTIONS = `For this reply, answer in ordinary text with Markdown formatting where useful. Do not generate an HTML document or wrap your answer in an HTML code block. Earlier HTML requests and HTML answers in the conversation apply only to those earlier turns; do not inherit their output format. Explain the highlighted passage or answer the current question directly.`;
 
 // The base system prompt (system-prompt.ts) already tells the model to wrap an HTML reply in a
 // ```html fenced block, because elsewhere that fence becomes a downloadable file card. For the

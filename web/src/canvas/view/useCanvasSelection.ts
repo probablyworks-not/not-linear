@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { htmlSelectionBus } from './html-selection-bus';
-import { contentText, quoteOccurrence, sourceRange } from './selection-source';
+import { contentText, htmlElementRange, quoteOccurrence, sourceRange } from './selection-source';
 
 // Reading a text selection that lands inside a canvas card, and saying exactly where it came from.
 // The offsets are taken against the *part's* text, not the rendered DOM, because the part text is
@@ -146,7 +146,7 @@ export function useCanvasSelection(partTextOf: (partId: string) => string | null
       const sel = htmlSelectionBus.get();
       if (!sel) { commit(null); return; }
       const text = partTextOf(sel.partId);
-      const mapped = text ? sourceRange(text, sel.quote, sel.occurrence ?? 0, true) : null;
+      const mapped = text ? (sel.element ? htmlElementRange(text, sel.element.tag, sel.element.index) : sourceRange(text, sel.quote, sel.occurrence ?? 0, true)) : null;
       commit({
         messageId: sel.messageId, partId: sel.partId, quote: sel.quote,
         start: mapped?.start ?? -1, end: mapped?.end, rect: sel.rect, inCanvasPane: sel.inCanvasPane,

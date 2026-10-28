@@ -140,7 +140,7 @@ test.afterEach(async ({ page }) => {
 test.describe('the canvas loop', () => {
 
   test('formatted selection freezes readable context and restores multi-node marks', async ({ page }) => {
-    await seed(page, 'alpha **beta** gamma');
+    await seed(page, 'alpha **beta** gamma\n\n' + Array.from({length: 80}, (_, i) => `Paragraph ${i}`).join('\n\n'));
     await openProject(page); await newCanvas(page); await ask(page, 'explain');
     const paragraph = page.locator('.react-flow [data-part] p').filter({ hasText: 'alpha beta gamma' });
     await expect(paragraph).toBeVisible();
@@ -163,6 +163,60 @@ test.describe('the canvas loop', () => {
     await page.reload();
     await expect(page.locator('.react-flow mark[data-snapshot-id]')).toHaveCount(3);
     await expect(page.getByTestId('canvas-save-state')).toHaveText('Saved');
+  });
+
+  test('improved reading previews HTML but an ordinary child question requests text', async ({ page }) => {
+    const requests = await seed(page, '<!doctype html><html><body><p>A widget has a sprocket.</p></body></html>');
+    await openProject(page); await newCanvas(page); await ask(page, 'Explain widgets with improved reading');
+    const paragraph = page.frameLocator('.react-flow iframe').locator('p').first();
+    await expect(paragraph).toHaveText('A widget has a sprocket.');
+    expect(requests[0]!.system).toContain('Reply with ONLY the complete, self-contained HTML document');
+    await paragraph.evaluate(el => {
+      const range = document.createRange(); range.selectNodeContents(el);
+      const selection = window.getSelection()!; selection.removeAllRanges(); selection.addRange(range);
+      document.dispatchEvent(new Event('selectionchange'));
+    });
+    await page.getByTestId('add-source').click();
+    await page.route('https://api.anthropic.com/v1/messages', async route => {
+      requests.push(route.request().postDataJSON() as Req);
+      const events = [
+        { type: 'message_start', message: { usage: { input_tokens: 7 } } },
+        { type: 'content_block_start', index: 0, content_block: { type: 'text' } },
+        { type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: 'The sprocket transfers motion.' } },
+        { type: 'message_delta', delta: { stop_reason: 'end_turn' }, usage: { output_tokens: 9 } },
+      ];
+      await route.fulfill({ status: 200, headers: { 'content-type': 'text/event-stream' }, body: events.map(e => `data: ${JSON.stringify(e)}\n\n`).join('') });
+    });
+    await ask(page, 'How does this works?');
+    await expect(page.locator('.react-flow [data-part]')).toContainText(['The sprocket transfers motion.']);
+    expect(requests[1]!.messages.some(m => m.content.includes('improved reading'))).toBe(true);
+    expect(requests[1]!.system).toContain('answer in ordinary text with Markdown formatting');
+    expect(requests[1]!.system).not.toContain('Reply with ONLY the complete, self-contained HTML document');
+    await expect(page.locator('.react-flow iframe')).toHaveCount(1);
+  });
+
+  test('token-limited HTML continues to the final table row and survives reload', async ({ page }) => {
+    await seed(page);
+    let calls = 0;
+    await page.route('https://api.anthropic.com/v1/messages', async route => {
+      calls++;
+      const text = calls === 1
+        ? '<!doctype html><html><body><table><tr><td>Upstream</td></tr><tr><td>Oil'
+        : ' marketing companies</td><td>Complete final row</td></tr></table></body></html>';
+      const events = [
+        { type: 'message_start', message: { usage: { input_tokens: 7 } } },
+        { type: 'content_block_start', index: 0, content_block: { type: 'text' } },
+        { type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text } },
+        { type: 'message_delta', delta: { stop_reason: calls === 1 ? 'max_tokens' : 'end_turn' }, usage: { output_tokens: 9 } },
+      ];
+      await route.fulfill({ status: 200, headers: { 'content-type': 'text/event-stream' }, body: events.map(e => `data: ${JSON.stringify(e)}\n\n`).join('') });
+    });
+    await openProject(page); await newCanvas(page); await ask(page, 'render as html');
+    const cells = () => page.frameLocator('.react-flow iframe').locator('td');
+    await expect(cells()).toHaveText(['Upstream', 'Oil marketing companies', 'Complete final row']);
+    expect(calls).toBe(2);
+    await page.reload();
+    await expect(cells()).toHaveText(['Upstream', 'Oil marketing companies', 'Complete final row']);
   });
 
   test('HTML generation shows completed sections and a reduced-motion shimmer then settles', async ({ page }) => {
@@ -190,6 +244,10 @@ test.describe('the canvas loop', () => {
     const live = page.getByTestId('live-html');
     await expect(live).toBeVisible();
     await expect(live.locator('[aria-busy="true"]')).toBeVisible();
+    await page.getByTestId('canvas-reading-toggle').click();
+    await expect(page.getByTestId('canvas-reading').getByTestId('live-html')).toBeVisible();
+    await page.getByRole('button', { name: 'Back to the canvas' }).click();
+    await expect(live).toBeVisible();
     await page.evaluate(() => (window as unknown as { beginHtml: () => void }).beginHtml());
     await expect(page.frameLocator('[data-testid="live-html"] iframe').locator('p')).toHaveText('First completed passage');
     await expect(live.locator('[aria-busy="true"]')).toBeVisible();
@@ -329,21 +387,134 @@ test.describe('the canvas loop', () => {
     expect(requests[0]!.system).toContain('a cohesive color palette');
   });
 
+  test('new branches minimize other branches and can be reopened', async ({ page }) => {
+    await seed(page, 'First source.\n\nSecond source.');
+    await openProject(page); await newCanvas(page); await ask(page, 'explain');
+    const select = async (text: string) => {
+      await page.locator('.react-flow [data-part] p').filter({ hasText: text }).first().evaluate(el => {
+        const range = document.createRange(); range.selectNodeContents(el);
+        const selection = window.getSelection()!; selection.removeAllRanges(); selection.addRange(range);
+        document.dispatchEvent(new Event('selectionchange'));
+      });
+      await page.getByTestId('add-source').click();
+    };
+    await select('First source.'); await ask(page, 'first question');
+    await expect(page.locator('.react-flow [data-thread]')).toHaveCount(2);
+    await expect(page.getByTestId('canvas-save-state')).toHaveText('Saved');
+    await select('Second source.'); await ask(page, 'second question');
+    await expect(page.locator('.react-flow [data-thread]')).toHaveCount(3);
+    const first = page.locator('.react-flow [data-thread]').nth(1);
+    await expect(first.getByRole('button', { name: 'Expand branch' })).toBeVisible();
+    await expect(first).not.toContainText('first question');
+    await expect(page.getByTestId('canvas-save-state')).toHaveText('Saved');
+    await page.getByRole('button', { name: 'Fit View', exact: true }).click();
+    await first.locator('header').click();
+    await expect(first).toContainText('first question');
+    await expect(first.getByText('View full')).toHaveCount(0);
+    await first.getByRole('button', { name: 'Minimize branch' }).click();
+    await expect(first.getByRole('button', { name: 'Expand branch' })).toBeVisible();
+    await expect(page.getByTestId('canvas-save-state')).toHaveText('Saved');
+    await page.reload();
+    await expect(page.locator('.react-flow [data-thread]').nth(1)).toContainText('first question');
+  });
+
+  test('HTML elements can be selected and drilled into for a branch', async ({ page }) => {
+    await seed(page, '<!doctype html><html><body><section><h2>Evidence</h2><p id="detail">A specific detail</p></section></body></html>');
+    await openProject(page); await newCanvas(page); await ask(page, 'render as html');
+    const frame = page.frameLocator('.react-flow iframe').first();
+    await expect(frame.locator('#detail')).toBeVisible();
+    await frame.locator('#detail').click();
+    await expect(page.getByTestId('add-source')).toBeVisible();
+    await frame.locator('#detail').dblclick();
+    await expect(frame.getByRole('navigation', { name: 'Selected element hierarchy' })).toBeVisible();
+    await page.getByTestId('add-source').click();
+    await expect(page.getByTestId('context-chips')).toContainText('A specific detail');
+    await ask(page, 'explain this');
+    await expect(page.locator('.react-flow [data-thread]')).toHaveCount(2);
+  });
+
+  test('an HTML image can be selected as a branch source', async ({ page }) => {
+    await seed(page, '<!doctype html><html><body><section><h2>Diagram</h2><img alt="System diagram" width="160" height="100"></section></body></html>');
+    await openProject(page); await newCanvas(page); await ask(page, 'render as html');
+    const frame = page.frameLocator('.react-flow iframe').first();
+    await frame.getByAltText('System diagram').click();
+    await page.getByTestId('add-source').click();
+    await expect(page.getByTestId('context-chips')).toContainText('System diagram');
+    await ask(page, 'What is this?');
+    await expect(page.locator('.react-flow [data-thread]')).toHaveCount(2);
+    await expect(page.getByTestId('canvas-save-state')).toHaveText('Saved');
+    await page.reload();
+    await expect(page.locator('.react-flow [data-thread]')).toHaveCount(2);
+    await expect(page.locator('.react-flow [data-thread]').last()).toContainText('System diagram');
+  });
+
   test('linear reading view selections can become a branch', async ({ page }) => {
     await seed(page, 'alpha **beta** gamma');
     await openProject(page); await newCanvas(page); await ask(page, 'explain');
     await expect(page.locator('.react-flow [data-part] strong')).toHaveText('beta');
     await page.getByTestId('canvas-reading-toggle').click();
+    await page.getByTestId('canvas-reading').evaluate(el => { el.scrollTop = 200; });
+    const readingScroll = await page.getByTestId('canvas-reading').evaluate(el => el.scrollTop);
     await page.getByTestId('canvas-reading').locator('[data-part] p').filter({ hasText: 'alpha beta gamma' }).evaluate(el => {
       const r = document.createRange(); r.selectNodeContents(el);
       const sel = window.getSelection()!; sel.removeAllRanges(); sel.addRange(r);
       document.dispatchEvent(new Event('selectionchange'));
     });
     await page.getByTestId('add-source').click();
-    await expect(page.getByTestId('canvas-reading')).toHaveCount(0);
+    await expect(page.getByTestId('canvas-reading')).toBeVisible();
     await expect(page.getByTestId('context-chips')).toContainText('alpha beta gamma');
     await ask(page, 'why?');
-    await expect(page.locator('.react-flow [data-thread]')).toHaveCount(2);
+    await expect(page.getByTestId('reading-branch')).toContainText('why?');
+    expect(await page.getByTestId('canvas-reading').evaluate(el => el.scrollTop)).toBe(readingScroll);
+    await page.getByRole('button', { name: 'Minimize' }).click();
+    await expect(page.getByTestId('reading-branch')).toHaveCount(0);
+    await page.getByRole('complementary', { name: 'Branches' }).getByRole('button').first().click();
+    await expect(page.getByTestId('reading-branch')).toContainText('why?');
+    expect(await page.getByTestId('canvas-reading').evaluate(el => el.scrollTop)).toBe(readingScroll);
+    await expect(page.getByTestId('canvas-save-state')).toHaveText('Saved');
+    await page.reload();
+    await page.getByTestId('canvas-reading-toggle').click();
+    await page.getByRole('complementary', { name: 'Branches' }).getByRole('button').first().click();
+    await expect(page.getByTestId('reading-branch')).toContainText('why?');
+  });
+
+  test('switching branches while a reply is pending keeps the source in place', async ({ page }) => {
+    await seed(page, 'First passage.\n\nSecond passage.\n\n' + Array.from({ length: 70 }, (_, i) => `Paragraph ${i}`).join('\n\n'));
+    await openProject(page); await newCanvas(page); await ask(page, 'explain');
+    await page.getByTestId('canvas-reading-toggle').click();
+    const reader = page.getByTestId('canvas-reading');
+    const select = async (text: string) => {
+      await reader.locator('[data-part] p').filter({ hasText: text }).evaluate(el => {
+        const r = document.createRange(); r.selectNodeContents(el);
+        const sel = window.getSelection()!; sel.removeAllRanges(); sel.addRange(r);
+        document.dispatchEvent(new Event('selectionchange'));
+      });
+      await page.getByTestId('add-source').click();
+    };
+    await select('First passage.'); await ask(page, 'first question');
+    await expect(page.getByTestId('reading-branch')).toContainText('first question');
+    await expect(page.getByTestId('canvas-save-state')).toHaveText('Saved');
+    await page.route('https://api.anthropic.com/v1/messages', async route => {
+      await new Promise(resolve => setTimeout(resolve, 1500));
+      const events = [
+        { type: 'message_start', message: { usage: { input_tokens: 1 } } },
+        { type: 'content_block_start', index: 0, content_block: { type: 'text' } },
+        { type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: 'Delayed answer' } },
+        { type: 'message_delta', delta: { stop_reason: 'end_turn' }, usage: { output_tokens: 1 } },
+      ];
+      await route.fulfill({ status: 200, headers: { 'content-type': 'text/event-stream' }, body: events.map(e => `data: ${JSON.stringify(e)}\n\n`).join('') });
+    });
+    await reader.evaluate(el => { el.scrollTop = 200; });
+    const scroll = await reader.evaluate(el => el.scrollTop);
+    await select('Second passage.'); await ask(page, 'second question');
+    const branches = page.getByRole('complementary', { name: 'Branches' });
+    await expect(branches.locator('button[aria-pressed]')).toHaveCount(2);
+    await branches.locator('button[aria-pressed]').first().click();
+    await expect(page.getByTestId('reading-branch')).toContainText('first question');
+    await expect(page.getByTestId('canvas-save-state')).toHaveText('Saved');
+    await branches.locator('button[aria-pressed]').nth(1).click();
+    await expect(page.getByTestId('reading-branch')).toContainText('Delayed answer');
+    expect(await reader.evaluate(el => el.scrollTop)).toBe(scroll);
   });
 
   test('a populated canvas settles while idle and stops observing after leaving', async ({ page }) => {

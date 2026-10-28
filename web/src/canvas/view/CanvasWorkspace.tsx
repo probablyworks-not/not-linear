@@ -22,7 +22,7 @@ import { saveOutputToArtifacts } from '../save-output';
 import { toast } from '../../ui/toast';
 import { useAppStore } from '../../state/app-store';
 import { canvasTurnDeps, newSubmissionId, runCanvasTurn } from '../exec/run-canvas-turn';
-import { HTML_REPLY_INSTRUCTIONS, wantsHtmlReply } from '../exec/html-trigger';
+import { HTML_REPLY_INSTRUCTIONS, TEXT_REPLY_INSTRUCTIONS, wantsHtmlReply } from '../exec/html-trigger';
 import { planModel } from '../../chat/models';
 import { awaitAnswers, renderClarifyBlock, runClarify, shouldClarify } from '../../chat/clarify';
 import { buildClarifyBrief } from '../../chat/clarify-brief';
@@ -90,6 +90,11 @@ function Workspace({ canvasId }: { canvasId: string }) {
   const setViewport = useCallback((v: Viewport) => saveViewport(v, canvasId), [saveViewport, canvasId]);
 
   const [reading, setReading] = useState(false);
+  const [readingBranch, setReadingBranch] = useState<string | null>(null);
+  const [minimizedBranches, setMinimizedBranches] = useState<Set<string>>(() => new Set());
+  const toggleBranchMinimized = useCallback((id: string) => setMinimizedBranches(previous => {
+    const next = new Set(previous); if (next.has(id)) next.delete(id); else next.add(id); return next;
+  }), []);
   const [contextOpen, setContextOpen] = useState(false);
   const [detailMessageId, setDetailMessageId] = useState<string | null>(null);
   const [pickedSources, setPickedRaw] = useState<string[]>([]);
@@ -235,7 +240,6 @@ function Workspace({ canvasId }: { canvasId: string }) {
       setPicked(p => (additive ? [...p, made.id] : [made.id]));
       placePick(rect);
       setDetailMessageId(null);
-      setReading(false);
     });
   }, [partTextOf, apply, placePick, setPicked]);
 
@@ -281,6 +285,7 @@ function Workspace({ canvasId }: { canvasId: string }) {
         .filter((s): s is SourceSnapshot => !!s)
         .map(s => ({ id: s.id, label: s.label, status: resolveAnchor(s, doc).status, highlightTone: s.highlightTone }));
       const isActive = thread.id === activeThreadId;
+      const minimized = thread.kind !== 'root' && minimizedBranches.has(thread.id);
       const autoSize = autoSizes[thread.id];
       const messages = doc.messages.filter(m => m.threadId === thread.id).sort((a, b) => a.seq - b.seq);
       // HTML uses a fixed preview viewport. Fit the card height around it without deriving
@@ -303,7 +308,7 @@ function Workspace({ canvasId }: { canvasId: string }) {
       // onContentSize/onBodyResize/onBlockPick/onPickWhole) are already stable via useCallback/
       // useState setters, so they don't need to be part of it — JSON.stringify drops them
       // (functions aren't serializable).
-      const sig = JSON.stringify([thread, messages, sources, highlightsByMessage, isActive, autoSize, wholeTone]);
+      const sig = JSON.stringify([thread, messages, sources, highlightsByMessage, isActive, autoSize, wholeTone, minimized]);
       const cached = cache.get(thread.id);
       const data: ThreadNodeType['data'] = cached && cached.sig === sig ? cached.data : {
         thread,
@@ -313,6 +318,8 @@ function Workspace({ canvasId }: { canvasId: string }) {
         onSaveOutput: (id: string) => { void onSaveOutput(id); },
         onViewOutput: setDetailMessageId,
         active: isActive,
+        minimized,
+        onToggleMinimized: toggleBranchMinimized,
         onContentSize,
         onBodyResize,
         onBlockPick: pickBlock,
@@ -328,14 +335,14 @@ function Workspace({ canvasId }: { canvasId: string }) {
         width: hasHtml
           ? (geo?.w ?? HTML_W)
           : isActive ? Math.max(geo?.w ?? NODE_W, ACTIVE_W) : (geo?.w ?? NODE_W),
-        height: hasHtml
+        height: minimized ? 44 : hasHtml
           ? (autoSize?.height ?? geo?.h ?? NODE_H)
           : isActive && autoSize ? Math.max(autoSize.height, geo?.h ?? NODE_H) : (geo?.h ?? NODE_H),
         hidden: geo?.hidden,
         data,
       };
     });
-  }, [doc, onSaveOutput, activeThreadId, autoSizes, onContentSize, onBodyResize, pickBlock, pickWhole, nodeDataCache]);
+  }, [doc, onSaveOutput, activeThreadId, autoSizes, onContentSize, onBodyResize, pickBlock, pickWhole, nodeDataCache, minimizedBranches, toggleBranchMinimized]);
 
   const activeOrHovered = targetThread ?? hoverThreadId;
   const edges = useMemo<Edge[]>(() => {
@@ -388,17 +395,18 @@ function Workspace({ canvasId }: { canvasId: string }) {
       const chosen = source?.layouts.find(l => l.id === DEFAULT_LAYOUT_ID)?.entries[n.id]?.w;
       return html && !explicitResize ? (chosen ?? HTML_W) : (n.width ?? NODE_W);
     };
+    const heightOf = (n: ThreadNodeType) => minimizedBranches.has(n.id) ? (current[n.id]?.h ?? NODE_H) : (n.height ?? NODE_H);
     const moved = next.filter(n => {
       const was = current[n.id];
       return !was
         || was.x !== n.position.x || was.y !== n.position.y
-        || was.w !== widthOf(n) || was.h !== (n.height ?? NODE_H);
+        || was.w !== widthOf(n) || was.h !== heightOf(n);
     });
     if (moved.length === 0) return;
 
     applyGeometry(d => {
       for (const n of moved) {
-        setGeometry(d, n.id, { x: n.position.x, y: n.position.y, w: widthOf(n, d), h: n.height ?? NODE_H });
+        setGeometry(d, n.id, { x: n.position.x, y: n.position.y, w: widthOf(n, d), h: heightOf(n) });
         const was = current[n.id];
         const automatic = changes.some(c => c.type === 'dimensions' && c.id === n.id && !c.resizing);
         if (was && automatic && (n.height ?? NODE_H) > was.h && d.messages.some(m => m.threadId === n.id && m.parts.some(p => p.kind === 'html'))) {
@@ -407,7 +415,7 @@ function Workspace({ canvasId }: { canvasId: string }) {
         }
       }
     });
-  }, [nodes, applyGeometry, beginGesture, gesture]);
+  }, [nodes, applyGeometry, beginGesture, gesture, minimizedBranches]);
 
   const snapshots = useMemo(
     () => (doc ? pickedSources.map(id => doc.snapshots.find(s => s.id === id)).filter((s): s is SourceSnapshot => !!s) : []),
@@ -420,7 +428,6 @@ function Workspace({ canvasId }: { canvasId: string }) {
     if (made) {
       setPicked(p => [...p, made.id]);
       setDetailMessageId(null);
-      setReading(false);
       const anchorPoint = { x: selection.rect.left + selection.rect.width / 2, y: selection.rect.top };
       // Reading View and the Output Detail overlay render the same content as a plain scrolling
       // panel, outside the ReactFlow pane entirely — a screen->flow conversion of a selection made
@@ -492,6 +499,12 @@ function Workspace({ canvasId }: { canvasId: string }) {
       useAttachments.getState().clear(attachKey);
     }
 
+    const newBranch = snapshots.length > 0;
+    if (newBranch) {
+      const current = useCanvasDoc.getState().doc;
+      setMinimizedBranches(new Set((current?.threads ?? []).filter(t => t.kind !== 'root' && t.id !== threadId).map(t => t.id)));
+    }
+    if (reading) setReadingBranch(threadId);
     setActiveThreadId(threadId);
     userFramedRef.current = false;
     setBusy(true);
@@ -562,13 +575,13 @@ function Workspace({ canvasId }: { canvasId: string }) {
     }
 
     const extraContext = [
-      wantsHtml ? HTML_REPLY_INSTRUCTIONS : '',
       isBranch
         ? 'This is a branch reply to a scoped follow-up question on a highlighted quote. Default to the shortest answer that fully answers it — 1-3 sentences for a definitional or clarifying question ("what does this mean", "why"). Only write multiple paragraphs, a list, or sections if the question itself explicitly asks for elaboration, a how-to, or a comparison.'
         : '',
       renderSkillsBlock(picked),
       canvasContext,
       clarifiedBlock,
+      wantsHtml ? HTML_REPLY_INSTRUCTIONS : TEXT_REPLY_INSTRUCTIONS,
     ].filter(Boolean).join('\n\n');
     const liveMessages = new Set<string>();
     try {
@@ -631,7 +644,7 @@ function Workspace({ canvasId }: { canvasId: string }) {
       abortRef.current = null;
       setActiveThreadId(null);
     }
-  }, [apply, snapshots, targetThread, prefs, projects, project, attachKey, doc, pickFlowY, skillsKey, setPicked, canvasId]);
+  }, [apply, snapshots, targetThread, prefs, projects, project, attachKey, doc, pickFlowY, skillsKey, setPicked, canvasId, reading]);
 
   // A thread's grown height/width are only a floor once it settles (goes inactive) — persisted
   // the same way drag/resize geometry is, on gesture end rather than on every delta. Read the
@@ -663,7 +676,7 @@ function Workspace({ canvasId }: { canvasId: string }) {
   // for the rest of this turn: the camera stops following until the next send.
   const onMoveStart = useCallback((event: unknown) => { if (event) userFramedRef.current = true; }, []);
   useEffect(() => {
-    if (!activeThreadId || userFramedRef.current) return;
+    if (reading || !activeThreadId || userFramedRef.current) return;
     const n = nodes.find(x => x.id === activeThreadId);
     if (!n) return;
     const vp = rf.getViewport();
@@ -676,7 +689,7 @@ function Workspace({ canvasId }: { canvasId: string }) {
       rf.fitView({ nodes: [{ id: activeThreadId }], padding: 0.15, duration: 350, maxZoom: 1 });
     });
     return () => cancelAnimationFrame(raf);
-  }, [activeThreadId, autoSizes, nodes, rf]);
+  }, [activeThreadId, autoSizes, nodes, rf, reading]);
 
   // Stop is best effort: it cannot reverse work the provider has already done, and whatever text
   // arrived stays on the card.
@@ -756,7 +769,11 @@ function Workspace({ canvasId }: { canvasId: string }) {
           onToggleContext={() => setContextOpen(v => !v)}
         />
         {selectionPopover}
-        <ReadingView doc={doc} onBlockPick={pickBlock} onBack={() => setReading(false)} onShowOnCanvas={showOnCanvas} />
+        <ReadingView doc={doc} onBlockPick={pickBlock} onBack={() => setReading(false)} onShowOnCanvas={showOnCanvas}
+          activeBranch={readingBranch} onSelectBranch={id => { setReadingBranch(id); setTargetThread(id); }} />
+        {(snapshots.length > 0 || targetThread) && <InkComposer key={target.key} canvasId={canvasId} target={target} sources={snapshots}
+          onRemoveSource={id => setPicked(p => p.filter(x => x !== id))} onSend={send} busy={busy} onStop={stop}
+          attachKey={attachKey} files={files} skillsKey={skillsKey} />}
         {detailMessageId && (
           <OutputDetailView
             doc={doc} messageId={detailMessageId} onClose={() => setDetailMessageId(null)}
@@ -796,7 +813,10 @@ function Workspace({ canvasId }: { canvasId: string }) {
             nodeTypes={nodeTypes}
             edgeTypes={edgeTypes}
             onNodesChange={onNodesChange}
-            onNodeClick={(_, n) => setTargetThread(n.id)}
+            onNodeClick={(_, n) => {
+              if (minimizedBranches.has(n.id)) toggleBranchMinimized(n.id);
+              setTargetThread(n.id);
+            }}
             onPaneClick={() => { setTargetThread(null); setPicked([]); setPickScreenAnchor(null); setPickFlowAnchor(null); setPickFlowY(null); }}
             onNodeMouseEnter={(_, n) => setHoverThreadId(n.id)}
             onNodeMouseLeave={() => setHoverThreadId(null)}
@@ -819,7 +839,7 @@ function Workspace({ canvasId }: { canvasId: string }) {
               pannable zoomable ariaLabel="Canvas minimap" style={{ width: 200, height: 120 }}
               nodeColor={minimapNodeColor} nodeStrokeColor={minimapNodeColor}
             />
-            <Panel position="bottom-left">
+            <Panel position="bottom-left" style={{ marginBottom: 120 }}>
               <button
                 type="button" data-testid="canvas-links-toggle" aria-pressed={linksVisible}
                 onClick={() => setLinksVisible(v => !v)}

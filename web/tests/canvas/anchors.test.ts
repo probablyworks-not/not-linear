@@ -96,3 +96,13 @@ describe('anchor resolution', () => {
     expect(resolveAnchor(snap, d).status).toBe('changed');
   });
 });
+
+describe('non-text HTML source anchors', () => {
+  it('locates real image tags without counting comments, scripts, or templates', async () => {
+    const { htmlElementRange } = await import('../../src/canvas/view/selection-source');
+    const source = '<!-- <img alt="wrong"> --><template><img alt="hidden"></template><img alt="one"><img alt="two">';
+    const range = htmlElementRange(source, 'img', 1);
+    expect(range && source.slice(range.start, range.end)).toBe('<img alt="two">');
+    expect(htmlElementRange(source, 'img', 5)).toBeNull();
+  });
+});

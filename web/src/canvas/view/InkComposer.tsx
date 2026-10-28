@@ -68,7 +68,7 @@ export function InkComposer({ canvasId, target, sources, onRemoveSource, onSend,
   const [text, setText] = useState('');
   const [loaded, setLoaded] = useState(false);
   const ref = useRef<HTMLTextAreaElement>(null);
-  const skills = useSkillPicker(text, setText, ref, sources.length ? 'Ask about the selected source…' : 'Ask anything…');
+  const skills = useSkillPicker(text, setText, ref, sources.length ? 'Ask about the selected source…' : 'what’s up?');
 
   // The idle, collapsed "Ask" launcher only stands in for the default, un-anchored "new question"
   // composer — one that's scoped to a selected source or a reply thread is already an answer to
@@ -212,32 +212,35 @@ export function InkComposer({ canvasId, target, sources, onRemoveSource, onSend,
       <button
         type="button" data-testid="ink-launcher" onClick={openLauncher}
         onMouseEnter={() => setHovered(true)} onMouseLeave={() => setHovered(false)}
-        aria-label="Ask" title="Ask — or just start typing"
-        className="fixed z-[60] flex h-[52px] items-center gap-0 overflow-hidden rounded-[18px] bg-ask px-[9px] text-ask-fg shadow-lg"
+        aria-label="Write a message" title="what’s up? — start typing"
+        className={clsx(
+          'fixed z-[60] flex h-[64px] max-w-[calc(100vw-24px)] items-center overflow-hidden rounded-[22px] border border-ask-divider bg-ask px-[10px] text-ask-fg shadow-lg transition-[width,box-shadow] duration-200 motion-reduce:transition-none',
+          preview ? 'w-[274px] ring-[6px] ring-ask-divider' : 'w-[64px]',
+        )}
         style={style}
       >
-        <span aria-hidden className="grid h-[34px] w-[34px] flex-none place-items-center">
-          <svg width="22" height="22" viewBox="11 8.25 18 18" fill="none" stroke="currentColor" strokeWidth={1.5}>
-            <path className="nl-ask-draw" pathLength={1} d="M21.75 14.6252L13.7442 21.7451" />
-            <line className="nl-ask-draw" pathLength={1} y1="-0.75" x2="13.1029" y2="-0.75" style={{ animationDelay: '0.25s' }} transform="matrix(0.973066 0.230525 -0.111169 0.993801 13.5 22.5002)" />
-            <line className="nl-ask-draw" pathLength={1} y1="-0.75" x2="9.53419" y2="-0.75" style={{ animationDelay: '0.5s' }} transform="matrix(-0.808595 -0.588365 0.324933 -0.945737 21.96 14.6089)" />
+        <span aria-hidden className="grid h-[42px] w-[42px] flex-none place-items-center">
+          <svg width="30" height="30" viewBox="11 8.25 18 18" fill="none" stroke="currentColor" strokeWidth={1.5}>
+            <path pathLength={1} d="M21.75 14.6252L13.7442 21.7451" />
+            <line pathLength={1} y1="-0.75" x2="13.1029" y2="-0.75" transform="matrix(0.973066 0.230525 -0.111169 0.993801 13.5 22.5002)" />
+            <line pathLength={1} y1="-0.75" x2="9.53419" y2="-0.75" transform="matrix(-0.808595 -0.588365 0.324933 -0.945737 21.96 14.6089)" />
           </svg>
         </span>
-        <span className="font-sans text-[15px] font-semibold tracking-[-0.01em]">Ask</span>
-        <span className="ml-2 flex items-center whitespace-nowrap font-mono text-xs text-ask-hint">
-          type anything<span aria-hidden className="nl-ask-cursor ml-[3px] inline-block h-[13px] w-[1.5px] bg-ask-hint" />
-        </span>
+        <span aria-hidden className={clsx(
+          'overflow-hidden whitespace-nowrap text-left font-sans text-[16px] font-light text-ask-hint transition-[width,opacity] duration-200',
+          preview ? 'ml-3 w-[110px] opacity-100' : 'w-0 opacity-0',
+        )}>what’s up?</span>
         <span
           aria-hidden
           className={clsx(
             'flex items-center gap-1 overflow-hidden transition-[width,opacity] duration-150 ease-out',
-            preview ? 'ml-1.5 w-[60px] opacity-100' : 'w-0 opacity-0',
+            preview ? 'ml-1.5 w-[88px] opacity-100' : 'w-0 opacity-0',
           )}
         >
-          <span className="grid h-[28px] w-[28px] flex-none place-items-center rounded-full text-ask-hint">
+          <span className="grid h-[40px] w-[40px] flex-none place-items-center rounded-[14px] border border-ask-divider bg-ask-chip text-ask-fg">
             <Mic size={14} />
           </span>
-          <span className="grid h-[28px] w-[28px] flex-none place-items-center rounded-full text-ask-hint">
+          <span className="grid h-[40px] w-[40px] flex-none place-items-center rounded-[14px] border border-ask-divider bg-ask-chip text-ask-fg">
             <Paperclip size={14} />
           </span>
         </span>

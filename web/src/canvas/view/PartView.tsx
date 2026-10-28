@@ -125,6 +125,7 @@ interface NlHtmlPartMessage {
   marks?: { id: string; rect: { left: number; top: number; width: number; height: number } }[];
   text?: string;
   occurrence?: number;
+  element?: { tag: string; index: number };
   rect?: { left: number; top: number; width: number; height: number };
   deltaX?: number;
   deltaY?: number;
@@ -192,7 +193,7 @@ export function HtmlFrame({ part, messageId, fullPage, highlights, paginated = f
         const sx = frame && ref.current?.offsetWidth ? frame.width / ref.current.offsetWidth : 1;
         const sy = frame && ref.current?.offsetHeight ? frame.height / ref.current.offsetHeight : 1;
         htmlSelectionBus.emit({
-          messageId, partId: part.id, quote: text, occurrence: ev.data.occurrence,
+          messageId, partId: part.id, quote: text, occurrence: ev.data.occurrence, element: ev.data.element,
           rect: { left: (ev.data.rect.left + (ref.current?.clientLeft ?? 0)) * sx + (frame?.left ?? 0), top: (ev.data.rect.top + (ref.current?.clientTop ?? 0)) * sy + (frame?.top ?? 0), width: ev.data.rect.width * sx, height: ev.data.rect.height * sy },
           inCanvasPane: !!ref.current?.closest('.react-flow'),
         });

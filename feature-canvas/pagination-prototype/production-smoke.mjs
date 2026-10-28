@@ -81,13 +81,13 @@ try {
  assert.equal(await streaming.locator('#third').count(),0);
  await streaming.evaluate(()=>getSelection().removeAllRanges());
  await streaming.waitForSelector('#third');
- // Existing dark answers and inline styles must remain readable in OS dark mode,
- // including WebKit text-fill, saved marks, streaming head replacement and charts.
+ // Preserve authored colors and matching foregrounds in OS dark mode, while
+ // keeping selections and saved marks readable through streaming updates.
  await page.emulateMedia({colorScheme:'dark'});
  ({frame}=await run('<style>body,p,b{background:#111!important;color:#ddd!important;-webkit-text-fill-color:#ddd!important}</style><p id="contrast" style="color:gray!important">Readable <b>formatted</b> &amp; linked text</p><mark data-snapshot-id="saved" style="background:rgb(255,220,140)">Saved <b>quote</b></mark><svg><rect fill="red" width="20" height="20"/></svg>'));
- assert.equal(await frame.locator('#contrast').evaluate(el=>getComputedStyle(el).color),'rgb(0, 0, 0)');
+ assert.equal(await frame.locator('#contrast').evaluate(el=>getComputedStyle(el).color),'rgb(128, 128, 128)');
  const colors = await frame.locator('#contrast b').evaluate(el=>{const s=getComputedStyle(el), selected=getComputedStyle(el,'::selection');return {color:s.color,fill:s.webkitTextFillColor,bg:s.backgroundColor,selected:selected.color,selectionBg:selected.backgroundColor}});
- assert.deepEqual(colors,{color:'rgb(0, 0, 0)',fill:'rgb(0, 0, 0)',bg:'rgb(255, 255, 255)',selected:'rgb(0, 0, 0)',selectionBg:'rgb(184, 216, 255)'});
+ assert.deepEqual(colors,{color:'rgb(221, 221, 221)',fill:'rgb(221, 221, 221)',bg:'rgb(17, 17, 17)',selected:'rgb(0, 0, 0)',selectionBg:'rgb(184, 216, 255)'});
  assert.equal(await frame.locator('mark').evaluate(el=>getComputedStyle(el).backgroundColor),'rgb(255, 220, 140)');
  assert.equal(await frame.locator('mark b').evaluate(el=>getComputedStyle(el).color),'rgb(0, 0, 0)');
  assert.equal(await frame.locator('rect').evaluate(el=>getComputedStyle(el).fill),'rgb(255, 0, 0)');
@@ -98,7 +98,7 @@ try {
  for(const id of ['one','two']) {
    await page.locator('iframe').evaluate((el,id)=>el.contentWindow.postMessage({__nlHtmlCommand:'stream',html:`<style>p{color:white!important;background:black!important}</style><p id="${id}">Readable stream</p>`},'*'),id);
    await lightStream.waitForSelector('#'+id);
-   assert.equal(await lightStream.locator('p').evaluate(el=>getComputedStyle(el).color),'rgb(0, 0, 0)');
+   assert.equal(await lightStream.locator('p').evaluate(el=>getComputedStyle(el).color),'rgb(255, 255, 255)');
    assert.equal(await lightStream.locator('style[data-nl-reading]').count(),1);
  }
  assert.deepEqual(errors,[]);

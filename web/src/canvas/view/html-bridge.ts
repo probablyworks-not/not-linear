@@ -9,7 +9,7 @@ function segments(root){
   var text='', runs=[];
   function newline(){if(text && !text.endsWith('\\n'))text+='\\n';}
   function visit(node){
-    if(node.nodeType===1 && node.matches('script,style,button,template,head,[data-nl-page-gap]'))return;
+    if(node.nodeType===1 && node.matches('script,style,button,template,head,[data-nl-page-gap],[data-nl-inspector]'))return;
     if(node.nodeType===3){var start=text.length;text+=node.data;runs.push({node:node,start:start,end:text.length});return;}
     if(node.nodeType===1 && node.tagName==='BR'){newline();return;}
     node.childNodes.forEach(visit);
@@ -31,7 +31,59 @@ function reportSelection(){
   post({type:'selection', text:text, occurrence:occurrence, rect:{left:r.left, top:r.top, width:r.width, height:r.height}});
 }
 document.addEventListener('selectionchange', reportSelection);
-window.addEventListener('keydown',function(e){if(e.key==='Escape'){e.preventDefault();post({type:'escape'});}});
+// Element inspection stays inside the opaque sandbox; the host receives only the selected text.
+var inspected = null, previousOutline = '', crumb = null;
+function clearInspection(){
+  if(inspected)inspected.style.outline=previousOutline;
+  inspected=null;
+  if(crumb){crumb.remove();crumb=null;}
+}
+function showCrumbs(el){
+  if(crumb)crumb.remove();
+  crumb=document.createElement('div'); crumb.dataset.nlInspector='';
+  crumb.setAttribute('role','navigation'); crumb.setAttribute('aria-label','Selected element hierarchy');
+  crumb.style.cssText='position:fixed;top:8px;left:8px;z-index:2147483647;display:flex;gap:4px;padding:5px;background:var(--nl-paper);color:var(--nl-ink);border:1px solid currentColor;border-radius:6px;font:12px sans-serif';
+  candidates(el).reverse().forEach(function(item){
+    var button=document.createElement('button'); button.type='button'; button.textContent=item.getAttribute('aria-label') || item.tagName.toLowerCase();
+    button.style.cssText='cursor:pointer;font:inherit;color:inherit;background:none;border:0;padding:2px';
+    button.addEventListener('click',function(e){e.stopPropagation();chooseElement(item);}); crumb.appendChild(button);
+  });
+  document.body.appendChild(crumb);
+}
+function candidates(target){
+  var result=[], el=target;
+  while(el && el !== document.body){
+    if(el.nodeType===1 && /^(ARTICLE|SECTION|DIV|P|LI|H[1-6]|TR|TD|TH|BLOCKQUOTE|PRE|FIGURE)$/.test(el.tagName) && cleanText(el).trim() || el.nodeType===1 && /^(IMG|SVG|CANVAS)$/.test(el.tagName.toUpperCase()))result.push(el);
+    el=el.parentElement;
+  }
+  return result;
+}
+function chooseElement(el){
+  if(!el)return;
+  if(inspected)inspected.style.outline=previousOutline;
+  inspected=el; previousOutline=el.style.outline; el.style.outline='2px solid var(--nl-selection)';
+  var text=cleanText(el).trim(), tag=el.tagName.toLowerCase(), nonText=!text && /^(img|svg|canvas)$/.test(tag), before=document.createRange();
+  if(nonText) text=(el.getAttribute('alt') || el.getAttribute('aria-label') || el.getAttribute('title') || tag).trim();
+  before.selectNodeContents(document.body); before.setEndBefore(el);
+  var prefix=cleanText(before.cloneContents()), occurrence=0, at=0;
+  while((at=prefix.indexOf(text,at))>=0){occurrence++;at+=text.length;}
+  var r=el.getBoundingClientRect();
+  showCrumbs(el);
+  post({type:'selection',text:text,occurrence:occurrence,element:nonText ? {tag:tag,index:Array.from(document.querySelectorAll(tag)).indexOf(el)} : undefined,rect:{left:r.left,top:r.top,width:r.width,height:r.height}});
+}
+document.addEventListener('click',function(e){
+  if(e.detail>1 || e.target.closest('a,button,input,textarea,select,[contenteditable]') || window.getSelection().toString().trim())return;
+  var list=candidates(e.target); if(!list.length)return;
+  var parent=/^(IMG|SVG|CANVAS)$/.test(e.target.tagName.toUpperCase()) ? e.target : list.find(function(el){return /^(ARTICLE|SECTION)$/.test(el.tagName);});
+  setTimeout(function(){chooseElement(parent || list[Math.min(1,list.length-1)]);},0);
+});
+document.addEventListener('dblclick',function(e){
+  if(e.target.closest('a,button,input,textarea,select,[contenteditable],[data-nl-inspector]'))return;
+  var list=candidates(e.target), index=list.indexOf(inspected);
+  if(index>0){window.getSelection().removeAllRanges();setTimeout(function(){chooseElement(list[index-1]);},0);}
+});
+
+window.addEventListener('keydown',function(e){if(e.key==='Escape'){e.preventDefault();if(inspected){var chain=candidates(inspected), parent=chain[1];if(parent)chooseElement(parent);else {clearInspection();post({type:'selection',text:''});}}else post({type:'escape'});}});
 function reportMarks(){
   var seen = {}, marks = [];
   document.querySelectorAll('mark[data-snapshot-id]').forEach(function(mark){
@@ -67,7 +119,7 @@ function paint(marks){
 }
 window.addEventListener('message',function(e){
   if(e.source!==parent || !e.data || !e.data.__nlHtmlCommand)return;
-  if(e.data.__nlHtmlCommand==='clear'){window.getSelection().removeAllRanges();return;}
+  if(e.data.__nlHtmlCommand==='clear'){window.getSelection().removeAllRanges();clearInspection();return;}
   if(e.data.__nlHtmlCommand==='marks' && Array.isArray(e.data.marks))paint(e.data.marks);
 });
 var markFrame=0;
@@ -83,7 +135,14 @@ window.addEventListener('wheel',function(e){
       var style=getComputedStyle(scroll);
       if(scroll===document.scrollingElement || /auto|scroll/.test(style.overflow+style.overflowY+style.overflowX)){
         var canY=e.deltaY<0?scroll.scrollTop>0:e.deltaY>0&&scroll.scrollTop+scroll.clientHeight<scroll.scrollHeight-1;
-        var canX=e.deltaX<0?scroll.scrollLeft>0:e.deltaX>0&&scroll.scrollLeft+scroll.clientWidth<scroll.scrollWidth-1;
+        var horizontal=/auto|scroll/.test(style.overflowX) || scroll===document.scrollingElement;
+        var hasX=horizontal && scroll.scrollWidth>scroll.clientWidth+1;
+        // Keep horizontal gestures in their HTML scroller even at its boundary.
+        if(hasX && e.deltaX && Math.abs(e.deltaX)>=Math.abs(e.deltaY)){
+          var unit=e.deltaMode===1?16:e.deltaMode===2?scroll.clientWidth:1;
+          e.preventDefault();scroll.scrollLeft+=e.deltaX*unit;return;
+        }
+        var canX=horizontal && (e.deltaX<0?scroll.scrollLeft>0:e.deltaX>0&&scroll.scrollLeft+scroll.clientWidth<scroll.scrollWidth-1);
         if(canY||canX)return;
       }
       scroll=scroll.parentElement;

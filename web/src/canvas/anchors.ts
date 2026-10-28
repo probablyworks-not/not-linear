@@ -46,6 +46,8 @@ export function highlightsByMessage(doc: CanvasDoc): Record<string, Record<strin
   const out: Record<string, Record<string, TextHighlight[]>> = {};
   for (const s of doc.snapshots) {
     if (s.anchor.kind !== 'text') continue;
+    // A non-text HTML element is anchored by its opening tag; its label is not visible text.
+    if (/^<(?:img|svg|canvas)(?:\s|\/|>)/i.test(s.anchor.quote)) continue;
     const byPart = (out[s.anchor.messageId] ??= {});
     (byPart[s.anchor.partId] ??= []).push({ id: s.id, partId: s.anchor.partId, quote: s.content, start: s.anchor.start, tone: s.highlightTone ?? 'blue' });
   }

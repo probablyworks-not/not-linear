@@ -207,25 +207,61 @@ export async function runCanvasTurn(input: CanvasTurnInput, hooks: CanvasTurnHoo
       tools, toolRunner,
     };
 
-    for await (const { ev, plan: used } of runTurn(turnInput, depsFactory())) {
-      if (ev.t === 'delta') {
-        text += ev.text;
-        hooks.onDelta(messageId, text);
-      } else if (ev.t === 'status') {
-        hooks.onStatus(ev.label || null);
-      } else if (ev.t === 'done') {
-        text = ev.text || text;
-        const usage: RunUsage | undefined = ev.usage && {
-          inputTokens: ev.usage.inputTokens,
-          outputTokens: ev.usage.outputTokens,
-          ...(ev.usage.cacheHitTokens !== undefined ? { cacheHitTokens: ev.usage.cacheHitTokens } : {}),
-        };
-        void used;
-        return await settle('completed', usage ? { usage } : {});
-      } else if (ev.t === 'error') {
-        // Aborted is not a failure: the user asked it to stop, and what arrived is theirs.
-        return await settle(ev.kind === 'aborted' ? 'cancelled' : 'failed', { error: ev.message });
+    // HTML is a document, so a token-limited chunk must be continued before it is complete.
+    // Keep this local to Canvas: ordinary chat retains its explicit Continue affordance.
+    let activePlan = plan;
+    const totals: RunUsage = { inputTokens: 0, outputTokens: 0 };
+    let hasUsage = false;
+    for (let attempt = 0; attempt <= 3; attempt++) {
+      controller.signal.throwIfAborted();
+      const prefix = text;
+      let chunk = '';
+      let continueHtml = false;
+      const deps = depsFactory();
+      for await (const { ev, plan: used } of runTurn({ ...turnInput, plan: activePlan }, {
+        ...deps, canFallBackToDeepSeek: attempt === 0 && deps.canFallBackToDeepSeek,
+      })) {
+        if (ev.t === 'delta') {
+          chunk += ev.text;
+          text = prefix + chunk;
+          hooks.onDelta(messageId, text);
+        } else if (ev.t === 'status') {
+          hooks.onStatus(ev.label || null);
+        } else if (ev.t === 'done') {
+          chunk = ev.text || chunk;
+          const finalText = prefix + chunk;
+          if (finalText !== text) hooks.onDelta(messageId, finalText);
+          text = finalText;
+          if (ev.usage) {
+            hasUsage = true;
+            totals.inputTokens += ev.usage.inputTokens;
+            totals.outputTokens += ev.usage.outputTokens;
+            if (ev.usage.cacheHitTokens !== undefined) {
+              totals.cacheHitTokens = (totals.cacheHitTokens ?? 0) + ev.usage.cacheHitTokens;
+            }
+          }
+          const usage = hasUsage ? { usage: { ...totals } } : {};
+          const incomplete = input.wantsHtml && ev.usage?.stopReason === 'max_tokens';
+          if (!incomplete) return await settle('completed', usage);
+          if (attempt === 3 || !chunk.trim()) {
+            return await settle('failed', { ...usage, error: 'The HTML document is incomplete after generation stopped. Partial content has been kept; retry to generate a complete document.' });
+          }
+          // Continue with the provider that actually answered, including after Claude fallback.
+          activePlan = used;
+          messages.push(
+            { role: 'assistant', content: chunk },
+            { role: 'user', content: 'Continue the incomplete HTML document exactly from where you stopped. Output only the remaining HTML, ending with </html>. Do not repeat previous content, restart the document, or add Markdown fences.' },
+          );
+          hooks.onStatus('Completing the HTML document…');
+          continueHtml = true;
+          break;
+        } else if (ev.t === 'error') {
+          return await settle(ev.kind === 'aborted' ? 'cancelled' : 'failed', {
+            error: ev.message, ...(hasUsage ? { usage: { ...totals } } : {}),
+          });
+        }
       }
+      if (!continueHtml) break;
     }
     // A provider that ends without `done` or `error` is a bug in the provider. Say so.
     return await settle('unknown', { error: 'The response ended unexpectedly. Retry to get a fresh answer.' });

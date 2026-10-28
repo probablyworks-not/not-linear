@@ -23,3 +23,35 @@ describe('withSelectionBridge', () => {
     expect(out.indexOf('__nlHtmlPart')).toBeLessThan(out.indexOf('</HTML>'));
   });
 });
+
+describe('HTML horizontal wheel ownership', () => {
+  it('scrolls the HTML region and never forwards its horizontal boundary gesture', () => {
+    const out = withSelectionBridge('<body></body>');
+    const source = out.match(/<script>\(function\(\)\{\nfunction post[\s\S]*?<\/script>/)![0];
+    const scroller = document.createElement('div');
+    scroller.style.overflowX = 'auto';
+    Object.defineProperties(scroller, { scrollWidth: { value: 900 }, clientWidth: { value: 300 } });
+    document.body.append(scroller);
+    const messages: unknown[] = [];
+    const original = window.postMessage;
+    window.postMessage = ((message: unknown) => { messages.push(message); }) as typeof window.postMessage;
+    window.eval(source.replace(/^<script>|<\/script>$/g, ''));
+    try {
+      const wheel = (dx: number, ctrlKey = false) => {
+        const event = new WheelEvent('wheel', { bubbles: true, cancelable: true, deltaX: dx, ctrlKey });
+        scroller.dispatchEvent(event);
+        return event;
+      };
+      expect(wheel(80).defaultPrevented).toBe(true);
+      expect(scroller.scrollLeft).toBe(80);
+      scroller.scrollLeft = 600;
+      wheel(80);
+      expect(messages.filter((m: any) => m.type === 'wheel')).toHaveLength(0);
+      wheel(80, true);
+      expect(messages.filter((m: any) => m.type === 'wheel')).toHaveLength(1);
+    } finally {
+      window.postMessage = original;
+      scroller.remove();
+    }
+  });
+});

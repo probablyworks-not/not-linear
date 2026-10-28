@@ -1,12 +1,11 @@
-import { memo, useEffect, useRef, useSyncExternalStore } from 'react';
+import { memo, useEffect, useRef } from 'react';
 import { Handle, NodeResizer, Position, type Node, type NodeProps } from '@xyflow/react';
-import { Download, Expand, GitBranch, Layers, MessageSquare, SquareDashedMousePointer } from 'lucide-react';
+import { Download, Expand, GitBranch, Layers, MessageSquare, Minus, Plus, SquareDashedMousePointer } from 'lucide-react';
 import type { CanvasMessage, CanvasThread, HighlightTone } from '../types';
 import type { TextHighlight } from '../anchors';
 import { cardWheel } from './wheel';
-import { HtmlFrame, PartView, type BlockPickHandler } from './PartView';
-import { liveText } from './live-text';
-import { renderMarkdown } from '../../lib/markdown';
+import { PartView, type BlockPickHandler } from './PartView';
+import { LiveReply } from './LiveReply';
 import { modelLabelFromId } from '../../chat/models';
 import { ClarifyCard } from '../../chat/ClarifyCard';
 import { resolveClarify } from '../../chat/clarify';
@@ -31,6 +30,8 @@ export interface ThreadData extends Record<string, unknown> {
    * a thread holding a generated-HTML reply auto-grows permanently instead (see `autoGrow` below),
    * since that content is never meant to scroll inside its own card. */
   active?: boolean;
+  minimized?: boolean;
+  onToggleMinimized?(id: string): void;
   /** Reports this node's natural (unclipped) content size while auto-growing, in px. Height always
    * matters (a growing reply); width only moves a generated-HTML card (`CanvasWorkspace`'s
    * `hasHtml` branch) — a plain markdown card keeps its fixed reading-column width regardless of
@@ -61,18 +62,7 @@ export const TONE_BG: Record<HighlightTone, string> = {
  * The streaming tail. Subscribes to one message id, so a token re-renders this and nothing else —
  * not the card around it, and certainly not the scene.
  */
-const LiveText = memo(function LiveText({ messageId }: { messageId: string }) {
-  const text = useSyncExternalStore(liveText.subscribeTo(messageId), liveText.getOf(messageId));
-  const html = useSyncExternalStore(liveText.subscribeTo(messageId), liveText.getHtmlOf(messageId));
-  if (html !== undefined) return <div data-testid="live-html">
-    <HtmlFrame part={{ id: `${messageId}-stream`, kind: 'html', state: 'ready', html: '<!doctype html><html><head></head><body></body></html>' }} messageId={messageId} paginated streamHtml={html} />
-    <div className="nl-html-pending mt-6" role="status" aria-busy="true"><span>Building your next section…</span></div>
-  </div>;
-  if (text === undefined) return null;
-  // Same renderer as the finished part (PartView/Markdownish), so a reply reads the same mid-stream
-  // as it does once PartView takes over — only highlight.js/mermaid wait for the DOM to settle.
-  return <div data-testid="live-text" className="nl-md" dangerouslySetInnerHTML={{ __html: renderMarkdown(text) }} />;
-});
+
 
 const STATUS_TITLE = {
   ok: 'The source still reads as it did',
@@ -83,7 +73,7 @@ const STATUS_TITLE = {
 export const ThreadNode = memo(function ThreadNode({ data, selected, width, height }: NodeProps<ThreadNodeType>) {
   const {
     thread, messages, sources, highlightsByMessage, onSaveOutput, onViewOutput, active,
-    onContentSize, onBodyResize, onBlockPick, onPickWhole, wholeTone,
+    onContentSize, onBodyResize, onBlockPick, onPickWhole, wholeTone, minimized, onToggleMinimized,
   } = data;
   const headerRef = useRef<HTMLButtonElement>(null);
   const Icon = KIND_ICON[thread.kind];
@@ -95,7 +85,7 @@ export const ThreadNode = memo(function ThreadNode({ data, selected, width, heig
   // Fit HTML cards around the page stack. Width stays independent of content measurements;
   // the iframe normalizes its logical viewport before reporting section geometry.
   const hasHtml = messages.some(m => m.parts.some(p => p.kind === 'html'));
-  const autoGrow = active || hasHtml;
+  const autoGrow = !minimized && (active || hasHtml);
 
   // While auto-growing, the body renders unclipped so it has a natural size, and a ResizeObserver
   // reports that size up so the workspace can grow the node (and the camera) to match — rather
@@ -128,7 +118,7 @@ export const ThreadNode = memo(function ThreadNode({ data, selected, width, heig
     const ro = new ResizeObserver(report);
     ro.observe(el);
     return () => ro.disconnect();
-  }, [onBodyResize, thread.id]);
+  }, [onBodyResize, thread.id, minimized]);
 
   // React Flow's pane checks for the `nowheel` class before it ever looks at `ctrlKey`, so a plain
   // CSS-class opt-out (the old approach here) swallows pinch/ctrl+scroll zoom too, not just plain
@@ -149,20 +139,21 @@ export const ThreadNode = memo(function ThreadNode({ data, selected, width, heig
       className="flex h-full w-full flex-col overflow-hidden rounded-xl border border-cv-edge bg-cv-card shadow-md"
       aria-label={thread.title}
     >
-      <NodeResizer minWidth={260} minHeight={160} isVisible={!!selected} />
+      <NodeResizer minWidth={260} minHeight={160} isVisible={!!selected && !minimized} />
       <Handle type="target" position={Position.Left} />
       <Handle type="source" position={Position.Right} />
 
       <header className="flex flex-none items-center gap-2 border-b border-cv-divider px-3 py-2">
         <Icon size={13} aria-hidden className="flex-none text-text-3" />
         <span className="min-w-0 flex-1 truncate font-mono text-xs uppercase tracking-widest text-text-3">{thread.title}</span>
-        {latestOutput && !latestOutput.parts.some(p => p.kind === 'html') && (
+        {thread.kind !== 'root' && <button type="button" className="nodrag flex h-7 w-7 flex-none items-center justify-center rounded-md border border-cv-edge bg-cv-card-inset text-text hover:text-accent focus-visible:outline focus-visible:outline-2" aria-label={minimized ? 'Expand branch' : 'Minimize branch'} onClick={e => { e.stopPropagation(); onToggleMinimized?.(thread.id); }}>{minimized ? <Plus size={17} strokeWidth={2.5} /> : <Minus size={17} strokeWidth={2.5} />}</button>}
+        {thread.kind === 'root' && !minimized && latestOutput && !latestOutput.parts.some(p => p.kind === 'html') && (
           <button type="button" data-testid="view-output" onClick={() => onViewOutput(latestOutput.id)}
             title="Read the full answer" className="nodrag flex flex-none items-center gap-1 rounded-md border border-cv-edge px-1.5 py-0.5 text-xs text-text-2 hover:text-accent">
             <Expand size={12} aria-hidden /> View full
           </button>
         )}
-        {onPickWhole && (
+        {!minimized && onPickWhole && (
           <button
             ref={headerRef} type="button" data-testid="pick-whole-card" title="Select this whole card"
             onClick={() => onPickWhole(thread.id, headerRef.current?.getBoundingClientRect() ?? { left: 0, top: 0, width: 0, height: 0 })}
@@ -176,7 +167,7 @@ export const ThreadNode = memo(function ThreadNode({ data, selected, width, heig
         </span>
       </header>
 
-      {sources.length > 0 && (
+      {!minimized && sources.length > 0 && (
         <div className="flex flex-none flex-wrap gap-1 border-b border-cv-divider px-3 py-1.5">
           {sources.map(s => (
             <span
@@ -199,7 +190,7 @@ export const ThreadNode = memo(function ThreadNode({ data, selected, width, heig
         (not a `nowheel` class — see its comment) lets the card scroll its own overflow instead of
         panning the world, without also blocking pinch/ctrl+scroll zoom.
       */}
-      <div
+      {!minimized && <div
         ref={bodyRef}
         className={`nodrag select-text px-3.5 py-3 [-webkit-user-select:text] ${wholeTone ? TONE_BG[wholeTone] : ''} ${
           autoGrow ? 'overflow-visible' : 'min-h-0 flex-1 overflow-auto'}`}
@@ -210,12 +201,12 @@ export const ThreadNode = memo(function ThreadNode({ data, selected, width, heig
               {m.author.kind === 'human' ? 'You' : m.author.kind === 'model' ? modelLabelFromId(m.author.model) : m.author.agentId}
               {m.provisional ? ' · working' : ''}
             </div>
-            {m.provisional ? <LiveText messageId={m.id} /> : m.parts.map(p => (
+            {m.provisional ? <LiveReply messageId={m.id} /> : m.parts.map(p => (
               <PartView key={p.id} part={p} messageId={m.id} highlightsByPart={highlightsByMessage[m.id]} onBlockPick={onBlockPick} paginated />
             ))}
             {!m.provisional && m.author.kind === 'model' && (
               <div className="mt-1.5 flex items-center gap-1.5">
-                {!m.parts.some(p => p.kind === 'html') && <button
+                {thread.kind === 'root' && !m.parts.some(p => p.kind === 'html') && <button
                   type="button" data-testid="view-message-output" onClick={() => onViewOutput(m.id)}
                   className="nodrag flex items-center gap-1 rounded-md border border-cv-edge px-1.5 py-0.5 text-xs text-text-3 hover:text-text"
                 >
@@ -241,7 +232,7 @@ export const ThreadNode = memo(function ThreadNode({ data, selected, width, heig
             />
           </div>
         ) : null}
-      </div>
+      </div>}
     </article>
   );
 });

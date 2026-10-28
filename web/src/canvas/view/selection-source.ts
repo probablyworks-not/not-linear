@@ -104,3 +104,16 @@ export function sourceRange(source: string, quote: string, occurrence = 0, html 
   if (start === undefined || end === undefined || start < 0 || end <= start) return null;
   return { start, end };
 }
+
+/** Locate an inert element's opening tag in the original source. Count only real tags, skipping
+ * comments and script/style bodies; the iframe reports an ordinal, never an executable selector. */
+export function htmlElementRange(source: string, tag: string, index: number): { start: number; end: number } | null {
+  if (!/^(img|svg|canvas)$/.test(tag) || !Number.isInteger(index) || index < 0 || index > 10000) return null;
+  const tokens = /<!--[\s\S]*?-->|<script\b[^>]*>[\s\S]*?<\/script\s*>|<style\b[^>]*>[\s\S]*?<\/style\s*>|<template\b[^>]*>[\s\S]*?<\/template\s*>|<(?:(?:"[^"]*")|(?:'[^']*')|[^'">])*>/gi;
+  let count = 0;
+  for (const token of source.matchAll(tokens)) {
+    if (!new RegExp(`^<${tag}(?:\\s|/|>)`, 'i').test(token[0])) continue;
+    if (count++ === index) return { start: token.index!, end: token.index! + token[0].length };
+  }
+  return null;
+}
