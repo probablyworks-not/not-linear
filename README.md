@@ -44,7 +44,7 @@ Another copy is probably running (or something else holds port 8765). Either ope
 
 Double-click `Notlinear.app` (built from `launchers/`). It starts the same local server and opens Notlinear in its own window, so you never need to open the URL yourself. A lighter alternative is `launchers/Notlinear.command`, which starts the server and opens your default browser.
 
-The launchers contain the repo path hard-coded (`/Users/yash/Downloads/notlinear`). If you move the folder, rebuild with `launchers/build-macos-app.command`.
+Build a self-contained development app with `launchers/build-macos-app.command` after setting `NOTLINEAR_PYTHON_FRAMEWORK` to a python.org framework version directory. The new builder bundles the runtime and app resources; the checked-in legacy app binary is not rebuilt in place. See [macOS release guide](docs/MACOS_RELEASE.md) for commands, data locations, and the remaining public-release gates. The free beta is not notarized by Apple and still needs internet for CDN assets. If macOS blocks the first launch, follow [Apple’s per-app approval instructions](https://support.apple.com/102445). The app checks for newer published GitHub releases and offers a manual DMG download; it does not install updates automatically.
 
 ## Platform differences
 

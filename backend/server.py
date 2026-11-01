@@ -65,8 +65,10 @@ REPO_ROOT = APP_DIR.parent
 # the /__notlinear_runtime_logs handler in do_POST). Path is intentionally
 # root-relative and must not move without updating the frontend's fetch of
 # the same relative path (see AGENTS.md "Relative paths to root docs").
-LOGS_PATH = REPO_ROOT / "logs.md"
-FEEDBACK_DIR = REPO_ROOT / "feedback"
+PACKAGED = os.environ.get("NOTLINEAR_PACKAGED") == "1"
+DATA_ROOT = Path(os.environ.get("NOTLINEAR_DATA_DIR", str(REPO_ROOT))).expanduser().resolve()
+LOGS_PATH = DATA_ROOT / "logs.md"
+FEEDBACK_DIR = DATA_ROOT / "feedback"
 FEEDBACK_MEDIA_DIR = FEEDBACK_DIR / "media"
 FEEDBACK_PATH = FEEDBACK_DIR / "FEEDBACK.md"
 
@@ -485,7 +487,7 @@ def _feedback_append_entry(data):
 # handlers, both of which take a client-supplied relative path string.
 def _media_file_from_rel(rel):
     """Resolve a repo-relative path and require it to live inside feedback/media/."""
-    p = (REPO_ROOT / (rel or "")).resolve()
+    p = (DATA_ROOT / (rel or "")).resolve()
     FEEDBACK_MEDIA_DIR.mkdir(parents=True, exist_ok=True)
     # Security check: resolve() collapses any ".." segments, then this
     # prefix check confirms the resolved path still lands inside
@@ -536,6 +538,41 @@ def _feedback_parse_entries():
 # `/__notlinear_*` path is additive-only per AGENTS.md: existing endpoints
 # must not be renamed or have their request/response shape changed.
 class NotlinearHandler(SimpleHTTPRequestHandler):
+    def translate_path(self, path):
+        # Keep public URLs stable while packaged builds write outside the bundle.
+        original = Path(super().translate_path(path))
+        relative = original.relative_to(Path(self.directory))
+        if relative.parts and (relative.parts[0] == "feedback" or relative == Path("logs.md")):
+            target = (DATA_ROOT / relative).resolve()
+            if not target.is_relative_to(DATA_ROOT):
+                return str(DATA_ROOT / ".invalid-path")
+            return str(target)
+        return str(original)
+
+    def _reject_untrusted_request(self):
+        if not PACKAGED:
+            return False
+        hosts = {f"127.0.0.1:{self.server.server_port}", f"localhost:{self.server.server_port}"}
+        origin = self.headers.get("Origin")
+        if (self.headers.get("Host") not in hosts or
+                (origin is not None and origin not in {f"http://{host}" for host in hosts}) or
+                self.headers.get("Sec-Fetch-Site") == "cross-site"):
+            self._json(403, {"ok": False, "error": "Request must come from the local app"})
+            return True
+        return False
+
+    def do_HEAD(self):
+        if not self._reject_untrusted_request():
+            super().do_HEAD()
+
+    def do_GET(self):
+        if self._reject_untrusted_request():
+            return
+        if urlparse(self.path).path == "/__notlinear_health":
+            self._json(200, {"ok": True, "app": "notlinear", "pid": os.getpid()})
+            return
+        super().do_GET()
+
     def end_headers(self):
         # No build step and no versioned asset URLs (see CLAUDE.md) — always
         # revalidate so edited frontend files show up without guessing which
@@ -544,24 +581,27 @@ class NotlinearHandler(SimpleHTTPRequestHandler):
         super().end_headers()
 
     # Small helper used by nearly every /__notlinear_* handler below to send
-    # a JSON response with the right headers. CORS header is permissive
-    # (Access-Control-Allow-Origin: *) since this server only ever binds to
-    # 127.0.0.1 for a single local user — see the trust-boundary note on
-    # link_preview above for the same reasoning applied elsewhere.
+    # a JSON response with the right headers. Legacy development mode retains
+    # permissive CORS; packaged apps accept only their local origins and
+    # never grant cross-origin read access.
     def _json(self, code, obj):
         body = json.dumps(obj).encode("utf-8")
         self.send_response(code)
         self.send_header("content-type", "application/json")
         self.send_header("content-length", str(len(body)))
-        self.send_header("Access-Control-Allow-Origin", "*")
+        if not PACKAGED:
+            self.send_header("Access-Control-Allow-Origin", "*")
         self.end_headers()
         self.wfile.write(body)
 
     # Handles CORS preflight requests the browser sends before a POST with a
     # JSON content-type to any /__notlinear_* endpoint.
     def do_OPTIONS(self):
+        if self._reject_untrusted_request():
+            return
         self.send_response(200)
-        self.send_header("Access-Control-Allow-Origin", "*")
+        if not PACKAGED:
+            self.send_header("Access-Control-Allow-Origin", "*")
         self.send_header("Access-Control-Allow-Methods", "POST, OPTIONS")
         self.send_header("Access-Control-Allow-Headers", "Content-Type")
         self.end_headers()
@@ -574,6 +614,8 @@ class NotlinearHandler(SimpleHTTPRequestHandler):
     # be calling these paths, and none of them may be renamed — add new
     # endpoints as new `if` blocks instead of touching existing ones.
     def do_POST(self):
+        if self._reject_untrusted_request():
+            return
         path = self.path.split("?", 1)[0]
 
         # POST /__notlinear_pick_folder — shows a native
@@ -769,7 +811,7 @@ class NotlinearHandler(SimpleHTTPRequestHandler):
                         err = result.stderr.strip() or "screencapture failed — check Screen Recording permission in System Settings"
                         self._json(500, {"ok": False, "error": err})
                     return
-                self._json(200, {"ok": True, "path": str(shot_path.relative_to(REPO_ROOT))})
+                self._json(200, {"ok": True, "path": str(shot_path.relative_to(DATA_ROOT))})
             except Exception as exc:
                 self._json(500, {"ok": False, "error": str(exc)})
             return
@@ -816,7 +858,7 @@ class NotlinearHandler(SimpleHTTPRequestHandler):
                             self._json(200, {"ok": False, "cancelled": True,
                                              "error": "no recording captured — selection cancelled or Screen Recording permission missing"})
                             return
-                        self._json(200, {"ok": True, "path": str(rec_path.relative_to(REPO_ROOT))})
+                        self._json(200, {"ok": True, "path": str(rec_path.relative_to(DATA_ROOT))})
                     else:
                         self._json(400, {"ok": False, "error": "action must be start or stop"})
             except Exception as exc:
@@ -834,7 +876,7 @@ class NotlinearHandler(SimpleHTTPRequestHandler):
                 data = json.loads(self.rfile.read(length).decode("utf-8"))
                 target = _media_file_from_rel(data.get("path"))
                 target.write_bytes(base64.b64decode(data.get("base64") or ""))
-                self._json(200, {"ok": True, "path": str(target.relative_to(REPO_ROOT))})
+                self._json(200, {"ok": True, "path": str(target.relative_to(DATA_ROOT))})
             except Exception as exc:
                 self._json(500, {"ok": False, "error": str(exc)})
             return
@@ -878,7 +920,7 @@ class NotlinearHandler(SimpleHTTPRequestHandler):
                 body = self.rfile.read(length) if length else b"{}"
                 data = json.loads(body.decode("utf-8"))
                 fb_id = _feedback_append_entry(data)
-                self._json(200, {"ok": True, "id": fb_id, "path": str(FEEDBACK_PATH.relative_to(REPO_ROOT))})
+                self._json(200, {"ok": True, "id": fb_id, "path": str(FEEDBACK_PATH.relative_to(DATA_ROOT))})
             except Exception as exc:
                 self._json(500, {"ok": False, "error": str(exc)})
             return
@@ -940,6 +982,7 @@ def main():
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", default=8765, type=int)
     args = parser.parse_args()
+    DATA_ROOT.mkdir(parents=True, exist_ok=True)
     server = ThreadingHTTPServer((args.host, args.port), lambda *a, **kw: NotlinearHandler(*a, directory=str(REPO_ROOT), **kw))
     print(f"Serving Notlinear on http://{args.host}:{args.port}/frontend/index.html")
     server.serve_forever()

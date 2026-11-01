@@ -1,5 +1,10 @@
 #import <Cocoa/Cocoa.h>
 #import <WebKit/WebKit.h>
+#import "NotlinearUpdates.h"
+
+#ifndef NOTLINEAR_PORT
+#define NOTLINEAR_PORT 8765
+#endif
 
 // ---------------------------------------------------------------------------
 // File-picker message handler
@@ -18,6 +23,9 @@ static const long long kMaxPdfBytes  = 20 * 1024 * 1024;
 static const long long kMaxTextBytes =  2 * 1024 * 1024;
 
 - (void)userContentController:(WKUserContentController *)ucc didReceiveScriptMessage:(WKScriptMessage *)msg {
+    WKSecurityOrigin *origin = msg.frameInfo.securityOrigin;
+    if (!msg.frameInfo.mainFrame || ![origin.protocol isEqual:@"http"] ||
+        ![origin.host isEqual:@"127.0.0.1"] || origin.port != NOTLINEAR_PORT) return;
     NSDictionary *body = msg.body;
     if (![body isKindOfClass:[NSDictionary class]]) return;
 
@@ -163,18 +171,19 @@ static const long long kMaxTextBytes =  2 * 1024 * 1024;
 // ---------------------------------------------------------------------------
 // App delegate
 // ---------------------------------------------------------------------------
-@interface NotlinearAppDelegate : NSObject <NSApplicationDelegate, WKUIDelegate>
+@interface NotlinearAppDelegate : NSObject <NSApplicationDelegate, WKUIDelegate, WKNavigationDelegate>
 @property(nonatomic, strong) NSWindow *window;
 @property(nonatomic, strong) WKWebView *webView;
 @property(nonatomic, strong) NSTask *serverTask;
+@property(nonatomic, strong) NLUpdateChecker *updateChecker;
 @end
 
 @implementation NotlinearAppDelegate
 
 - (void)applicationDidFinishLaunching:(NSNotification *)notification {
     [self createMenu];
-    [self startServerIfNeeded];
     [self createWindow];
+    if (![self startServerIfNeeded]) return;
 
     // The dev server always serves fresh (Cache-Control: no-store), but this
     // WKWebView uses the persistent default data store so real app data
@@ -192,7 +201,7 @@ static const long long kMaxTextBytes =  2 * 1024 * 1024;
                                                 modifiedSince:[NSDate distantPast]
                                             completionHandler:^{
         dispatch_async(dispatch_get_main_queue(), ^{
-            [self loadNotlinear];
+            [self waitForServer:100];
         });
     }];
 }
@@ -207,53 +216,81 @@ static const long long kMaxTextBytes =  2 * 1024 * 1024;
     }
 }
 
-- (BOOL)isServerRunning {
-    NSTask *task = [[NSTask alloc] init];
-    task.launchPath = @"/usr/sbin/lsof";
-    task.arguments = @[@"-nP", @"-iTCP:8765", @"-sTCP:LISTEN"];
-    task.standardOutput = [NSPipe pipe];
-    task.standardError = [NSFileHandle fileHandleWithNullDevice];
-    @try {
-        [task launch];
-        [task waitUntilExit];
-        return task.terminationStatus == 0;
-    } @catch (NSException *exception) {
+- (void)showStartupError:(NSString *)message {
+    NSAlert *alert = [[NSAlert alloc] init];
+    alert.messageText = @"Notlinear could not start";
+    alert.informativeText = message;
+    alert.alertStyle = NSAlertStyleCritical;
+    [alert runModal];
+    [NSApp terminate:nil];
+}
+
+- (BOOL)startServerIfNeeded {
+    NSBundle *bundle = [NSBundle mainBundle];
+    NSString *resources = bundle.resourcePath;
+    NSString *server = [resources stringByAppendingPathComponent:@"app/backend/server.py"];
+    NSString *python = [resources stringByAppendingPathComponent:@"python/bin/python3"];
+    NSString *supportFolder = @"Library/Application Support/Notlinear";
+    if (NOTLINEAR_PORT != 8765) supportFolder = @"Library/Application Support/Notlinear Release QA";
+    NSString *data = [NSHomeDirectory() stringByAppendingPathComponent:supportFolder];
+    NSFileManager *fm = NSFileManager.defaultManager;
+    if (![fm isExecutableFileAtPath:python] || ![fm fileExistsAtPath:server]) {
+        [self showStartupError:@"The bundled runtime is missing. Rebuild or reinstall Notlinear."];
         return NO;
     }
-}
-
-- (void)killExistingServer {
-    NSTask *task = [[NSTask alloc] init];
-    task.launchPath = @"/usr/bin/pkill";
-    task.arguments = @[@"-f", @"notlinear_server.py"];
-    task.standardOutput = [NSFileHandle fileHandleWithNullDevice];
-    task.standardError = [NSFileHandle fileHandleWithNullDevice];
-    @try { [task launch]; [task waitUntilExit]; } @catch (NSException *e) {}
-    [NSThread sleepForTimeInterval:0.3];
-}
-
-- (void)startServerIfNeeded {
-    [self killExistingServer];
-
-    NSTask *task = [[NSTask alloc] init];
-    task.launchPath = @"/usr/bin/python3";
-    task.arguments = @[@"notlinear_server.py", @"--port", @"8765", @"--host", @"127.0.0.1"];
-    task.currentDirectoryPath = @"/Users/yash/Downloads/notlinear";
-    task.standardOutput = [NSFileHandle fileHandleWithNullDevice];
-    task.standardError = [NSFileHandle fileHandleWithNullDevice];
-
-    @try {
-        [task launch];
-        self.serverTask = task;
-        [NSThread sleepForTimeInterval:0.8];
-    } @catch (NSException *exception) {
-        NSAlert *alert = [[NSAlert alloc] init];
-        alert.messageText = @"Notlinear";
-        alert.informativeText = [NSString stringWithFormat:@"Could not start local server: %@", exception.reason];
-        alert.alertStyle = NSAlertStyleCritical;
-        [alert runModal];
+    NSError *error = nil;
+    if (![fm createDirectoryAtPath:data withIntermediateDirectories:YES attributes:nil error:&error]) {
+        [self showStartupError:error.localizedDescription];
+        return NO;
     }
+    NSString *logPath = [data stringByAppendingPathComponent:@"server.log"];
+    if (![fm fileExistsAtPath:logPath]) [fm createFileAtPath:logPath contents:nil attributes:nil];
+    NSFileHandle *log = [NSFileHandle fileHandleForWritingAtPath:logPath];
+    [log truncateFileAtOffset:0];
+    NSTask *task = [[NSTask alloc] init];
+    task.executableURL = [NSURL fileURLWithPath:python];
+    task.arguments = @[@"-I", @"-B", server, @"--port", [NSString stringWithFormat:@"%d", NOTLINEAR_PORT], @"--host", @"127.0.0.1"];
+    task.currentDirectoryURL = [NSURL fileURLWithPath:resources];
+    NSMutableDictionary *env = [NSProcessInfo.processInfo.environment mutableCopy];
+    env[@"NOTLINEAR_DATA_DIR"] = data;
+    env[@"NOTLINEAR_PACKAGED"] = @"1";
+    env[@"SSL_CERT_FILE"] = [resources stringByAppendingPathComponent:@"python/etc/openssl/cert.pem"];
+    task.environment = env;
+    task.standardOutput = log ?: NSFileHandle.fileHandleWithNullDevice;
+    task.standardError = log ?: NSFileHandle.fileHandleWithNullDevice;
+    if (![task launchAndReturnError:&error]) {
+        [self showStartupError:error.localizedDescription];
+        return NO;
+    }
+    self.serverTask = task;
+    return YES;
 }
+
+- (void)waitForServer:(NSInteger)attempts {
+    if (!self.serverTask.isRunning || attempts <= 0) {
+        [self showStartupError:@"The local server could not start. Port 8765 may already be in use. Quit other copies of Notlinear or its development server and try again. Details: ~/Library/Application Support/Notlinear/server.log"];
+        return;
+    }
+    NSURL *url = [NSURL URLWithString:[NSString stringWithFormat:@"http://127.0.0.1:%d/__notlinear_health", NOTLINEAR_PORT]];
+    NSMutableURLRequest *request = [NSMutableURLRequest requestWithURL:url];
+    request.timeoutInterval = 0.5;
+    request.cachePolicy = NSURLRequestReloadIgnoringLocalCacheData;
+    [[[NSURLSession sharedSession] dataTaskWithRequest:request completionHandler:
+        ^(NSData *data, NSURLResponse *response, NSError *error) {
+        NSDictionary *health = data ? [NSJSONSerialization JSONObjectWithData:data options:0 error:nil] : nil;
+        BOOL ready = [health isKindOfClass:NSDictionary.class] &&
+            [health[@"app"] isEqual:@"notlinear"] &&
+            [health[@"pid"] isKindOfClass:NSNumber.class] &&
+            [health[@"pid"] intValue] == self.serverTask.processIdentifier;
+        dispatch_async(dispatch_get_main_queue(), ^{
+            if (ready && self.serverTask.isRunning) [self loadNotlinear];
+            else dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 100 * NSEC_PER_MSEC),
+                dispatch_get_main_queue(), ^{ [self waitForServer:attempts - 1]; });
+        });
+    }] resume];
+}
+
+- (void)checkForUpdates:(id)sender { [self.updateChecker checkForUpdates:YES]; }
 
 - (void)createMenu {
     NSMenu *mainMenu = [[NSMenu alloc] initWithTitle:@""];
@@ -261,6 +298,8 @@ static const long long kMaxTextBytes =  2 * 1024 * 1024;
     NSMenuItem *appMenuItem = [[NSMenuItem alloc] initWithTitle:@"" action:nil keyEquivalent:@""];
     [mainMenu addItem:appMenuItem];
     NSMenu *appMenu = [[NSMenu alloc] initWithTitle:@"Notlinear"];
+    [appMenu addItemWithTitle:@"Check for Updates…" action:@selector(checkForUpdates:) keyEquivalent:@""];
+    [appMenu addItem:[NSMenuItem separatorItem]];
     [appMenu addItemWithTitle:@"Quit Notlinear" action:@selector(terminate:) keyEquivalent:@"q"];
     appMenuItem.submenu = appMenu;
 
@@ -320,6 +359,7 @@ static const long long kMaxTextBytes =  2 * 1024 * 1024;
 
     self.webView = [[NLWebView alloc] initWithFrame:NSZeroRect configuration:configuration];
     self.webView.UIDelegate = self;
+    self.webView.navigationDelegate = self;
     if (@available(macOS 13.3, *)) {
         self.webView.inspectable = YES;
     }
@@ -334,6 +374,7 @@ static const long long kMaxTextBytes =  2 * 1024 * 1024;
     self.window.contentView = self.webView;
     [self.window center];
     [self.window makeKeyAndOrderFront:nil];
+    self.updateChecker = [[NLUpdateChecker alloc] initWithWindow:self.window];
 }
 
 // WKUIDelegate fallback — kept for completeness, but the JS-side triggerFilePicker
@@ -355,6 +396,21 @@ static const long long kMaxTextBytes =  2 * 1024 * 1024;
     }
 }
 
+// Keep external pages outside the WebView that owns native capabilities.
+- (void)webView:(WKWebView *)webView decidePolicyForNavigationAction:(WKNavigationAction *)action
+    decisionHandler:(void (^)(WKNavigationActionPolicy))decisionHandler {
+    NSURL *url = action.request.URL;
+    BOOL webURL = [url.scheme isEqual:@"https"] || [url.scheme isEqual:@"http"];
+    BOOL local = [url.scheme isEqual:@"http"] && [url.host isEqual:@"127.0.0.1"] &&
+        url.port.integerValue == NOTLINEAR_PORT;
+    if (!action.targetFrame.mainFrame || local) {
+        decisionHandler(webURL || [url.scheme isEqual:@"about"] ? WKNavigationActionPolicyAllow : WKNavigationActionPolicyCancel);
+        return;
+    }
+    decisionHandler(WKNavigationActionPolicyCancel);
+    if (webURL) [[NSWorkspace sharedWorkspace] openURL:url];
+}
+
 // Open target="_blank" / window.open links in the default browser.
 // Without this, WKWebView silently drops the click and links appear dead.
 - (WKWebView *)webView:(WKWebView *)webView
@@ -362,18 +418,19 @@ createWebViewWithConfiguration:(WKWebViewConfiguration *)configuration
    forNavigationAction:(WKNavigationAction *)navigationAction
         windowFeatures:(WKWindowFeatures *)windowFeatures {
     NSURL *url = navigationAction.request.URL;
-    if (url) {
+    if ([url.scheme isEqual:@"https"] || [url.scheme isEqual:@"http"]) {
         [[NSWorkspace sharedWorkspace] openURL:url];
     }
     return nil;
 }
 
 - (void)loadNotlinear {
-    NSURL *url = [NSURL URLWithString:@"http://127.0.0.1:8765/notlinear.html"];
+    NSURL *url = [NSURL URLWithString:[NSString stringWithFormat:@"http://127.0.0.1:%d/frontend/index.html", NOTLINEAR_PORT]];
     NSURLRequest *request = [NSURLRequest requestWithURL:url
                                              cachePolicy:NSURLRequestReloadIgnoringLocalCacheData
                                          timeoutInterval:30.0];
     [self.webView loadRequest:request];
+    [self.updateChecker checkForUpdates:NO];
 }
 
 @end

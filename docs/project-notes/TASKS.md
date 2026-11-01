@@ -452,3 +452,45 @@ Each entry: **ID · Status · Goal · Context · Files likely involved · Accept
 - **Files likely involved:** `frontend/views/notes.js`, `frontend/styles/notes.css`, `docs/project-notes/{CHANGES,TASKS}.md`, `CHANGELOG.md`.
 - **Acceptance criteria:** Notes breadcrumb (and sidebar Notes header) opens an index; index lists top-level notes as cards with icon + block/subpage counts, subpages nested beneath; "New page" creates and opens a note; per-card add-subpage/delete work; clicking a card opens that page; empty state invites creating the first page; chat/branches and db schema untouched.
 - **Verification:** `node --check` clean; assets HTTP 200 on :8765. Human GUI smoke for breadcrumb→overview→open/create/delete pending (no headless browser available).
+
+
+## TASK-MAC-001 — Portable macOS app and development DMG
+- **Status:** In progress (build and targeted checks pass; native smoke blocked by occupied port 8765; clean-Mac smoke pending).
+- **Goal:** Run current features without a source checkout or installed Python.
+- **Context:** User authorized implementing the Mac download/update plan on 2026-11-01.
+- **Files likely involved:** `launchers/`, `scripts/build_macos.py`, `backend/server.py`, release docs, tests.
+- **Acceptance criteria:** Explicit payload, bundled runtime with no external non-system dependencies, bundle-relative launch, stable local origin and schemas, writable files outside bundle, verified DMG, clean-Mac app launch.
+- **Verification:** Runtime relocation, native compile, six server integration cases and signatures/DMG pass; full AGENTS smoke, GUI lifecycle, conflict handling and clean-Mac QA pending.
+
+## TASK-MAC-002 — Offline assets and backup/restore
+- **Status:** Todo.
+- **Goal:** Bundle pinned existing assets/licenses and provide full local-data backup/restore without changing schemas.
+- **Context:** CDN availability and safe upgrades are public-release blockers.
+- **Files likely involved:** Frontend assets, backup UI/native bridge, release scripts.
+- **Acceptance criteria:** Cold offline access to saved content; export/import both databases and relevant files; app replacement preserves storage.
+- **Verification:** Empty-cache offline boot, populated backup round-trip, browser→desktop import and upgrade smoke.
+
+## TASK-MAC-003 — Public-use hardening and onboarding
+- **Status:** Todo.
+- **Goal:** Provider setup/validation, Keychain migration, local-server/native-bridge restrictions, permission/error handling.
+- **Context:** Release to users beyond the developer machine.
+- **Files likely involved:** Native shell, backend, settings/onboarding.
+- **Acceptance criteria:** First-run setup works; keys stay out of logs/URLs; endpoint payloads remain compatible; native capabilities restricted appropriately.
+- **Verification:** Invalid key/network/permission failures, origin/navigation checks, Keychain migration, full smoke.
+
+## TASK-MAC-004 — Sparkle, signing and release hosting
+- **Status:** Superseded by TASK-MAC-005 for the free beta; paid signing and Sparkle deferred by user decision.
+- **Goal:** Signed/notarized DMG, update notifications and installation, download page, repeatable reviewed release workflow.
+- **Context:** User wants downloads plus automatic discovery of updates.
+- **Files likely involved:** Native Sparkle integration, release scripts/workflow, hosting configuration.
+- **Acceptance criteria:** Publish binaries before appcast; installed old build discovers and installs an update; data survives; actual downloaded artifact passes Gatekeeper.
+- **Verification:** Clean-Mac install, real old→new update with both populated databases, full smoke, signatures/notarization and final artifact checks.
+
+
+## TASK-MAC-005 — Free DMG, GitHub draft and website download path
+- **Status:** In progress (native checks, release/page tooling and verified DMG/feed/checksums implemented; draft PR/release being prepared).
+- **Goal:** Ship an unnotarized free DMG through probablyworks-not/not-linear Releases and notlinear.lol, with in-app release notifications and manual downloads.
+- **Context:** User declined paid membership and explicitly chose this route. No global security bypasses.
+- **Files likely involved:** Native updater/launcher, build/release scripts, packaged backend checks, release-site, docs and tests.
+- **Acceptance criteria:** Versioned verified DMG, SHA-256/feed/notes, source PR and draft release for review, clear first-launch instructions, app launch/periodic/manual checks, site download link pointing at actual published release. Preserve schemas/local origin and existing site.
+- **Verification:** Eight server tests, native feed validator, four page cases and isolated QA HTTP startup passed. Rendered GUI/provider/upgrade/clean-Mac smoke and Vercel website deployment pending.

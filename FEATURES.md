@@ -407,12 +407,25 @@ Bold/italic, inline code, markdown + auto-linked bare URLs, full GFM-style pipe 
 
 ---
 
+## macOS development packaging
+
+- `scripts/build_macos.py` builds an app containing the native window, frontend/backend, changelog, and relocated Python runtime; no system Python or source checkout is required to run it.
+- Supports architecture selection, version/build metadata, a separate QA bundle identifier, and an optional development DMG with an Applications shortcut. Apple Silicon build verified locally; Intel and minimum macOS support remain unverified.
+- Packaged logs and feedback live in `~/Library/Application Support/Notlinear/`; existing browser databases and local origin remain unchanged.
+- Launch waits for its own backend's health/PID, reports port conflicts, and never kills other servers.
+- Free beta distribution uses an ad-hoc-signed, unnotarized DMG; no paid Apple membership. Release staging verifies the image/signatures and generates SHA-256 checksums, a GitHub-hosted update feed, and installation notes. The optional upload creates a draft, never auto-publishes.
+- Native **Check for Updates…**, launch checks and six-hour checks show a newer published build with **Download Update / Later**. Downloads/installations remain manual; no data clearing/restart. Metadata URLs/hashes and architecture are validated, without sending user keys or chat content.
+- Packaged mode restricts local server Host/Origin, omits permissive CORS, confines native file/save messages to the main app frame, and opens external pages in the browser. Development defaults remain unchanged.
+- Static `/download/` page prepared for the existing notlinear.lol Vercel project; not yet deployed. GitHub Releases destination is probablyworks-not/not-linear.
+- Offline assets, Keychain, full backup/restore, rendered GUI/clean-Mac/upgrade QA and public publication remain pending. See `docs/MACOS_RELEASE.md`.
+
 ## 7. Backend endpoints (`backend/server.py`)
 
-Python stdlib only (`ThreadingHTTPServer`, `127.0.0.1:8765`), serves the whole repo statically with `Cache-Control: no-store, must-revalidate` (edits always show up fresh) and wide-open CORS. Several endpoints are **macOS-only** (shell out to `osascript`/`screencapture`) and fail/timeout on other platforms.
+Python stdlib only (`ThreadingHTTPServer`, `127.0.0.1:8765`), serves app resources with `Cache-Control: no-store, must-revalidate` (edits always show up fresh). Development keeps permissive CORS; packaged builds enforce local Host/Origin checks and omit permissive CORS. Several endpoints are **macOS-only** (shell out to `osascript`/`screencapture`) and fail/timeout on other platforms.
 
 | Endpoint | User-facing capability | Limits |
 |---|---|---|
+| `/__notlinear_health` (GET) | Launcher readiness: app identity and process ID | local-only; no credentials |
 | `/__notlinear_pick_folder` | Native folder-choose dialog | 120s timeout |
 | `/__notlinear_scan_project` | Recursive read-only scan used by chat Projects' linked-folder context (shallow top-level listing, README/CHANGELOG/BUGS/TASKS by stem, every markdown file, plus a code+config file list for LLM context) | listing capped at 500 entries; any single file read capped at 1MB (`tooBig` beyond that); markdown files capped at 200 (truncation flag); context files capped at 300 (own truncation flag); skips `.git`/`node_modules`/`dist`/etc.; all reads path-confined to inside the given folder |
 | `/__notlinear_open_files` | Native file **or** folder multi-select attach picker | 20MB per-file cap (base64-encoded), oversized files listed as `tooBig` with no content |
@@ -463,3 +476,5 @@ Worth tracking separately since these look clickable but currently do nothing (o
 ---
 
 *Last compiled 2026-08-02 by direct codebase inspection (`frontend/app.js`, `frontend/views/notes.js`, `frontend/core/*.js`, `frontend/providers/*.js`, `backend/server.py`, `index.html`, `redesign_product.md`, `BUGS.md`, `AGENTS.md`). If you land a feature and don't see it here, add it in the same session — see the update rule at the top of this file.*
+
+Last compiled update: 2026-11-01 — Codex; free macOS packaging, manual-download update checks, release tooling and packaged-mode boundaries.

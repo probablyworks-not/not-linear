@@ -747,3 +747,21 @@ All notable repository changes made by AI agents should be recorded here.
 - Agent: Kimi (k2.6)
 - Summary: Removed the topbar settings, share, and edge-toggle buttons, leaving only Context & files and Highlights.
 - Files changed: `notlinear.html`, `CHANGELOG.md`
+
+
+## 2026-11-01 · Codex · Portable macOS development bundle and DMG foundation
+
+- Summary: Added a self-contained development app builder with a bundled, relocated Python runtime, architecture/version controls, runtime dependency audit, local ad-hoc signing, and optional DMG creation. Fixed repository-specific native launch paths (bug #053).
+- Files changed: `backend/server.py`, `launchers/{NotlinearNative.m,build-macos-app.command}`, `scripts/build_macos.py`, `tests/test_packaged_server.py`, `.gitignore`, `README.md`, `FEATURES.md`, `docs/MACOS_RELEASE.md`, project-memory files, `BUGS.md`, `CHANGELOG.md`.
+- Behavior changes: Newly built native apps load `/frontend/index.html`, require the bundled runtime, poll their own backend readiness, report port conflicts without killing other processes, and write runtime logs/feedback under `~/Library/Application Support/Notlinear/`. Development server defaults, frontend file-watch, local origin, bundle identity, and both IndexedDB schemas are unchanged. A new GET `/__notlinear_health` identifies the backend process. The build command now requires a python.org framework and creates a separate output instead of modifying the tracked legacy app.
+- Verification: Relocated arm64 runtime imports succeeded; six isolated backend integration tests passed with system and bundled Python; native compilation, deep signature verification, shell/Python syntax, and development DMG checksum passed. Full GUI/provider smoke and clean-Mac/upgrade testing remain pending.
+- Observed: CDN assets still require internet; Sparkle, Keychain migration, complete backup/restore, Developer ID signing/notarization, hosting, and public-release QA remain pending. No code-signing identity is configured on this Mac.
+
+
+## 2026-11-01 · Codex · Free Mac DMG distribution and release notifications
+
+- Summary: Adopted the user-selected free, unnotarized DMG route through probablyworks-not/not-linear GitHub Releases and the existing notlinear.lol website. Added native release checks, manual update download prompts, release staging/draft-upload tooling, and a standalone download page ready for the existing Vercel project.
+- Files changed: `launchers/Notlinear{Native,Updates}.{m,h}`, `backend/server.py`, `scripts/{build_macos,prepare_macos_release}.py`, `tests/`, `release-site/`, `README.md`, `FEATURES.md`, release guide and project memory.
+- Behavior changes: Newly built Mac apps check public release metadata on launch/every six hours and expose Check for Updates…; newer builds offer Download Update/Later, with no automatic installation or restart. Packaged servers restrict Host/Origin and omit permissive CORS; the native bridge requires the main app origin and opens external pages in the browser (bug #054). A separate QA identity/port is available only for test builds. Development server defaults, local file-watch and both database schemas are unchanged.
+- Verification: Eight isolated server tests, native feed validation, download-page success/404/offline/unsafe-link cases, native compilation and relocated runtime check passed. Isolated QA served frontend modules and file-watch HEAD requests; native GUI/provider/clean-Mac and populated upgrade smoke remain unverified.
+- Observed: The website is on Vercel and links to another GitHub repository; its source project has not been identified, so no website deployment was attempted. CDN assets, local-browser-storage API keys and incomplete workspace backup remain disclosed beta limitations. Paid signing/notarization and Sparkle are deferred by user preference.

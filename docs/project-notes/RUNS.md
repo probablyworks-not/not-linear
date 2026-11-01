@@ -485,3 +485,37 @@ Each entry: **date/time · task or bug ID · command category · result · impor
 
 ## 2026-10-04 — editable modes
 `node --check` clean on all touched JS. Playwright (headless): 6 menu items → modal opens → create "Teacher" → 7 items → select → chip shows Teacher → persisted in IndexedDB and restored after reload; zero console errors. `core/modes.js` node test: override/reset/delete/fallback OK. Human GUI check of edit/reset/delete pending.
+
+
+## 2026-11-01 17:56 IST · TASK-MAC-001 / bug #053 · build/test
+
+- **Result:** Pass for targeted checks; full manual smoke pending.
+- **Commands:** `python3 scripts/build_macos.py --python-framework /Library/Frameworks/Python.framework/Versions/3.13 --output dist/Notlinear.app`; `--dmg-only`; `python3 -m unittest discover -s tests -p test_packaged_server.py`; same suite with bundled Python; `python3 -m py_compile backend/server.py scripts/build_macos.py tests/test_packaged_server.py`; `zsh -n launchers/build-macos-app.command`; `codesign --verify --deep --strict`; `hdiutil verify`; `git diff --check`; read-only architecture/dependency/signing inventory.
+- **Important output:** Six integration tests pass on system Python 3.14 and bundled Python 3.13. Relocated runtime reports its bundled prefix. Native arm64 app compiles and deep signature verification passes. Development app about 51 MB, DMG about 22 MB, image checksum valid. `security find-identity` reports zero valid identities. Initial build attempts failed on Python license/interpreter-layout assumptions; corrected to stdlib LICENSE.txt and actual Python.app interpreter. Sandboxed localhost binds and DMG creation failed; approved executions passed.
+- **Smoke test:** Server/HTTP subset passed (frontend, live changelog, feedback and runtime logs). GUI app load, Claude/fallback, nested branch/reopen/persist, research status, native attachment/folder picker, light highlights, theme/key/reload persistence, in-app changelog rendering, and file-watch prompt have NOT been manually exercised. No model API calls or personal-data changes performed.
+- **Follow-up:** Native and clean-Mac QA, offline assets, backup/restore and upgrade tests, Keychain, Sparkle, public signing/notarization and hosting remain required. This is not a release approval.
+
+
+## 2026-11-01 18:06 IST · TASK-MAC-001 · final build / native QA attempt
+
+- **Result:** Final preview app compile/relocation/deep signature checks and DMG checksum passed. Native UI smoke blocked by occupied fixed port.
+- **Important output:** Final artifact: `dist/preview/Notlinear-0.2.0-arm64.dmg` (~22 MB). QA copied to `/tmp/Notlinear Release QA.app` with separate bundle identity `local.notlinear.release-qa.20261101`. Opening it showed a native window, but its bundled backend exited with `Address already in use`. A localhost health check identified the existing listener as another service (not Notlinear); its interpreter is outside the bundled runtime. No process was killed. The computer-use initialization took several minutes and did not verify the rendered frontend. Full GUI smoke remains pending.
+- **Commands:** Final build to `dist/preview/Notlinear.app`, refresh bundled changelog, ad-hoc sign/deep verify, `--dmg-only` with checksum verification, isolated QA launch and read-only listener/health inspection, Python/shell syntax and `git diff --check`.
+- **Follow-up:** Free port 8765 before native QA. Keep the origin unchanged for existing data. Configure public signing/hosting later; no public release or update feed exists.
+
+
+## 2026-11-01 20:25 IST · TASK-MAC-005 / bug #054 · test/build/investigation
+
+- **Result:** Targeted checks pass; rendered/native/provider/clean-Mac/upgrade smoke pending.
+- **Commands/categories:** Native source compilation, `python3 -m unittest discover -s tests -p test_packaged_server.py`, `clang tests/test_release_feed.m launchers/NotlinearUpdates.m ...`, `/tmp/notlinear-release-feed-test`, `node tests/test_download_page.mjs`, syntax/diff checks; read-only GitHub repo/release/auth checks and public site headers/links; isolated native QA build on 18765 and local download preview on 18766.
+- **Important output:** Eight server tests pass, including packaged foreign-origin/rebinding rejection with same-origin feedback/log routing preserved. Feed validator rejects malformed metadata and unsafe links. Page tests cover published release, missing release, offline and unsafe link. GitHub access confirmed (repo public, admin/write); no existing releases. notlinear.lol responds 200 from Vercel, links to another GitHub repo; source not found. QA backend health PID matches bundled process, frontend modules/icon sheet/file-watch HEAD requests return 200.
+- **Verification limit:** Computer-use initialization stalled for about twenty minutes and exposed only native window/menu controls. No screenshot or interaction established rendered frontend correctness. Local preview opening was queued. These are not GUI smoke passes. No model requests, API keys, production database changes, or unrelated process termination performed.
+- **Follow-up:** Build/stage final review artifacts, human smoke/upgrade checks, Vercel source identification and review before publication.
+
+
+## 2026-11-01 20:27 IST · TASK-MAC-005 · final artifact preparation
+
+- **Result:** Pass for arm64 app, DMG, release staging and generated-feed validation.
+- **Commands:** `scripts/build_macos.py` → `dist/free-beta-release/Notlinear.app` (version 0.2.0, build 3), `--dmg-only`, `scripts/prepare_macos_release.py` → `dist/release-v0.2.0`, compiled native validator against the generated `latest.json`, Python/JS/shell syntax and diff checks.
+- **Important output:** Relocated prefix verified; deep ad-hoc code signatures and disk image checksum valid. Release folder contains DMG, latest.json, SHA256SUMS.txt and release-notes.md. The exact generated metadata is accepted by the native validator. No public release or website deployment performed.
+- **Follow-up:** Draft PR/release for human review. Full AGENTS smoke, populated upgrade, clean-Mac download/first-launch and runtime dependency license review remain publication gates. Website project source still required.

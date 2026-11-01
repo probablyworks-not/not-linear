@@ -814,3 +814,33 @@ None currently tracked.
 - Files touched: `frontend/providers/openai.js`, `BUGS.md`, `CHANGELOG.md`.
 - Test case: send a prompt with an OpenAI model; request returns 200 and streams. Not click-tested this session.
 - Related: none.
+
+
+### #053 — Native launcher depended on the maintainer's checkout and system Python
+
+- **Status:** fixed in source; packaged-runtime checks passed; native GUI/clean-Mac verification pending.
+- **Date discovered:** 2026-11-01.
+- **Date fixed:** 2026-11-01.
+- **Agent:** Codex.
+- **Symptom:** Copying the app to another Mac cannot provide a standalone installation; rebuilding from another checkout still targets the maintainer's Downloads directory.
+- **Root cause:** Build script and `startServerIfNeeded` hardcoded `/Users/yash/Downloads/notlinear`, required `/usr/bin/python3`, loaded the legacy entrypoint, and used `pkill -f` plus fixed sleeps instead of managing its own child readiness.
+- **Fix:** Bundle resources and a relocated Python runtime, resolve them through NSBundle, load the modular frontend, identify the owned child with a new health/PID endpoint, and show startup errors without killing other servers. Packaged logs and feedback use an external writable directory with stable public URLs.
+- **Files touched:** `launchers/NotlinearNative.m`, `launchers/build-macos-app.command`, `scripts/build_macos.py`, `backend/server.py`, `tests/test_packaged_server.py`, release documentation and memory.
+- **Manual test case:** Build at a path outside the source checkout; open the app with no development server running; verify frontend and attachments. Quit/relaunch and verify data persists. Start an unrelated listener on 8765, open the app, verify it reports a conflict and leaves the listener running. Repeat on a clean Mac without Python. These native steps remain pending; copied runtime imports and isolated backend HTTP checks pass.
+- **Prevention:** Explicit payload allowlist, dependency audit, relocated interpreter check, refusal to overwrite outputs, deep code-signature verification, isolated packaged-server routing tests, and clean-Mac QA gate.
+- **Related:** #007 (changelog path), #021 (native pickers); no branch/Notes state code changed.
+
+
+### #054 — Packaged app exposed permissive browser/native trust boundaries
+
+- **Status:** fixed in packaged source; origin/host integration tests pass; native GUI capabilities still need smoke verification.
+- **Date discovered:** 2026-11-01.
+- **Date fixed:** 2026-11-01.
+- **Agent:** Codex.
+- **Symptom:** Public distribution would retain permissive CORS on local privileged endpoints and a native file/save bridge available without checking frame origin. External main-frame pages could stay inside the same WebView.
+- **Root cause:** Server was designed for trusted single-user development with unconditional `Access-Control-Allow-Origin: *`; native handler accepted any message body and the shell lacked a navigation policy.
+- **Fix:** `NOTLINEAR_PACKAGED=1` checks Host/Origin/fetch-site before GET/HEAD/POST/OPTIONS and omits permissive CORS. The native handler requires the main frame and exact app origin; external main-frame links open in the browser. Developer server defaults and endpoint payloads stay compatible.
+- **Files touched:** `backend/server.py`, `launchers/NotlinearNative.m`, `tests/test_packaged_server.py`, docs and memory.
+- **Manual test case:** On a packaged QA server, submit runtime-log POST with a foreign Origin; expect 403 and no log write. Same-origin POST succeeds; foreign Host GET fails. In native UI verify main-page file/folder attach and both chat/Notes exports, then open an external link and verify it uses the browser. Automated server cases pass; native interaction cases remain pending.
+- **Prevention:** Packaged-mode origin/rebinding tests, explicit native navigationDelegate and message-origin checks; public release gate requires attachment/export smoke.
+- **Related:** #053 (packaging), #021 (native file pickers).

@@ -769,3 +769,29 @@ Each entry: **date · summary · files touched · why changed · risks · tests 
 - **Risks:** Drag mutates block arrays then `save()` + `renderPage()` — same persistence path as existing insert/remove, no schema change, notes db (`notlinear-notes`, ADR-007) untouched. The global keydown handler is capture-phase but no-ops unless page-selection mode is active and the Notes screen is shown.
 - **Tests run:** `node --check`; headless Playwright drive (placeholder computed styles, synthetic DnD + reload persistence, ⌘A/⌘A/⌘C clipboard capture, Escape) — all pass, zero console errors. See RUNS.md.
 - **Next steps:** Possible follow-up: mouse drag-selection across blocks (Notion-style rubber-band multi-block select) and Backspace-deletes-selection in page-selection mode.
+
+
+## 2026-11-01 · Codex · macOS packaging foundation
+
+- **Summary:** Built a portable native app and development DMG with an isolated Python runtime; removed checkout/system-runtime assumptions from the launcher and separated packaged writable files from code.
+- **Files touched:** `backend/server.py`, `launchers/{NotlinearNative.m,build-macos-app.command}`, `scripts/build_macos.py`, `tests/test_packaged_server.py`, `.gitignore`, `README.md`, `FEATURES.md`, `docs/MACOS_RELEASE.md`, project-memory files, `BUGS.md`, `CHANGELOG.md`.
+- **Why changed:** Begin the user-authorized Mac distribution plan while preserving the current application and data schemas.
+- **Call sites checked:** `applicationDidFinishLaunching` calls startup and readiness polling after cache cleanup; `waitForServer` calls `loadNotlinear`; `applicationWillTerminate` owns backend shutdown. Backend handler creation in `main` uses overridden static path routing; screenshot/record/upload/save response paths and `_media_file_from_rel` use the data root; log sync writes the same public `logs.md` route. HTTP tests cover feedback upload/list/save/discard, logs, health and static docs. Native call sites compile but GUI behavior is not yet manually verified.
+- **Fragile areas:** No branch snapshot/reopen/research, Notes navigation, or Dexie code changed. Existing file picker bridge, persistent WKWebView store, cache-only purge, root changelog route, and frontend file-watch remain intact; full manual smoke is still required.
+- **Risks:** Startup/permissions/upgrade not verified through native UI or on a clean Mac. CDN assets remain online; runtime redistribution notices and public signing still require release review. No public download/update endpoint is configured.
+- **Tests run:** Python compilation, zsh syntax, native arm64 compilation, runtime relocation/import check, six backend HTTP tests with both runtimes, deep ad-hoc signature verification, DMG checksum, diff whitespace check. Sandbox localhost/disk-image restrictions were addressed with approved execution; initial failed packaging attempts (missing license path/framework launcher) were corrected before the successful build.
+- **Next steps:** `docs/MACOS_RELEASE.md` delivery phases; complete native/clean-Mac smoke before declaring the first milestone verified.
+
+- Final QA follow-up: final development DMG is `dist/preview/Notlinear-0.2.0-arm64.dmg`; native QA used a separate app identity and was blocked by an unrelated listener on port 8765. No listener was killed. The UI was not verified.
+
+
+## 2026-11-01 · Codex · Free DMG release path
+
+- **Summary:** Added native release-feed checks and manual download notices, artifact/manifest/checksum staging with optional draft upload, local download-page assets, packaged origin/native-bridge protections, and isolated QA builds.
+- **Files touched:** Native launcher/update module, backend, release/build scripts, tests, release-site, README/FEATURES, release guide, changelog/bugs and project memory.
+- **Why:** Implement the user's no-paid-membership distribution choice while preserving current app/data behavior and existing Vercel hosting.
+- **Call sites checked:** `loadNotlinear` performs the first native check; the app menu and six-hour timer call `NLUpdateChecker.checkForUpdates`. `NLValidateRelease` is used by the checker and compiled fixture tests. Native `didReceiveScriptMessage` callers are main-chat export (`frontend/app.js`), composer pickFile (`frontend/app.js`), and Notes Markdown export (`frontend/views/notes.js`); their action payloads remain unchanged and main-origin access is retained. `createWindow` installs navigationDelegate; public bridge calls require the local main frame. Existing GET/HEAD/POST/OPTIONS go through packaged-mode validation; endpoint routing/payloads are unchanged.
+- **Fragile areas:** No branch state/reopen/search tool logic, Notes navigation, or persistence schema changes. Existing cache-only purge, storage identity/origin, picker handler, changelog URLs and file-watch remain intact; full GUI regression smoke is still required.
+- **Risks:** Unnotarized first launch depends on OS policy. GUI inspector returned only window controls after long stalls; do not infer rendered UI correctness from HTTP requests. No provider calls or populated upgrade tests. Website source unknown; page not deployed. Existing CDN/key-storage/backup limitations disclosed in beta notes.
+- **Tests run:** Eight isolated backend tests; compiled native feed tests (valid/malformed data, architecture, unsafe URLs); four Node page cases; Python/JS syntax and native QA compilation/relocated interpreter; localhost health/assets/watch requests.
+- **Next steps:** Review draft PR/release; full manual smoke/upgrade/clean-Mac tests; identify the Vercel source and deploy `/download/`; publish only after review.

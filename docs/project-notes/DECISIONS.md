@@ -404,3 +404,23 @@ Each chat branch stores `modelPref` (inherited from parent/main at creation, the
 
 ## 2026-10-04 — Modes: overrides-only storage in the prefs blob
 Built-in modes stay in code (`core/modes.js`); user edits are stored as per-field overrides (`prefs.modeOverrides`) and user-created modes in `prefs.customModes`. Merged at read time so improved defaults still reach users who never edited a mode, and reset = delete override. Lives in the existing `kv:'state'` blob, so no Dexie version bump. A mode is only a system prompt (no tool/model settings). Global, not per-chat.
+
+
+## ADR-031 — Bundle the existing native shell and Python backend for macOS distribution
+
+- **Status:** accepted (release architecture authorized by the user; this implementation is development-only).
+- **Context:** The user wants a DMG installation without Python or a source checkout, local databases, and in-app updates. The existing launcher hardcodes the maintainer's checkout and uses system Python.
+- **Decision:** Preserve the Cocoa/WKWebView shell, native ES-module frontend, stdlib backend, bundle identity, stable local origin, and existing separate Dexie schemas. Add release-only tooling that bundles a trimmed python.org framework runtime and explicitly allowlisted app resources. Relocate/audit native dependencies and locally ad-hoc sign. Put packaged writable logs/feedback outside the app, using `NOTLINEAR_DATA_DIR`; development defaults remain repo-relative. Use PID health polling and terminate only the owned server.
+- **Alternatives rejected:** Framework rewrite; relying on system Python; copying the entire repository (would distribute personal files); writing into a signed app; silently changing ports (would change storage origin); reusing or killing an unrelated local server.
+- **Consequences/tradeoffs:** Release packaging adds a developer build step without changing the frontend's no-build workflow. Initial tested architecture is arm64; macOS 11 metadata is provisional. Existing prebuilt legacy launcher is retained and not overwritten. Public release requires offline assets, storage/backup checks, security hardening, approved Sparkle integration, Developer ID/notarization, and hosting configuration.
+- **Related files:** `scripts/build_macos.py`, `launchers/NotlinearNative.m`, `backend/server.py`, `docs/MACOS_RELEASE.md`.
+
+
+## ADR-032 — Free unnotarized DMG, GitHub release feed, manual installation
+
+- **Status:** accepted; user explicitly rejected paid Apple membership and chose free DMG distribution. Supersedes paid-signing/Sparkle prerequisites in the original release proposal; ADR-031 bundling/data choices stay unchanged.
+- **Context:** The user provided `https://github.com/probablyworks-not/not-linear` and `https://notlinear.lol/`. The repo is public and writable; the existing site is Vercel-hosted, with source project still unknown.
+- **Decision:** Ad-hoc-sign the app/runtime, distribute a DMG with per-app first-launch approval instructions, and attach version/build/architecture/SHA-256 metadata as `latest.json` to each published GitHub release. Native launch/six-hour/manual checks offer a manual DMG download. Prepare a `/download/` page for the existing website; preserve its hosting and homepage. Prepare draft releases and a source PR for human review before publication/merge.
+- **Alternatives rejected:** Paid Developer ID/notarization now; global Gatekeeper disabling; claiming Homebrew or a ZIP avoids Gatekeeper; automatic unsigned app replacement; migrating the existing domain to new hosting without its source/configuration.
+- **Consequences/tradeoffs:** First launch may require Privacy & Security approval and may be restricted on managed Macs. No automatic install or restart. HTTPS/GitHub metadata and strict download URL validation are used; checksums are available for manual verification, not a claim of Apple notarization. `/latest` requires a regular published release, even while product copy calls it an early beta. Full GUI/clean-Mac/upgrade QA remains a release gate.
+- **Related files:** `docs/MACOS_RELEASE.md`, `launchers/NotlinearUpdates.{h,m}`, release scripts, `release-site/`.
