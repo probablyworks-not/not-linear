@@ -488,7 +488,7 @@ Each entry: **ID · Status · Goal · Context · Files likely involved · Accept
 
 
 ## TASK-MAC-005 — Free DMG, GitHub draft and website download path
-- **Status:** In progress (native checks, release/page tooling and verified DMG/feed/checksums implemented; draft PR/release being prepared).
+- **Status:** In progress (draft PR #2 and v0.2.0 release/assets uploaded and verified; human review, full smoke and Vercel source pending).
 - **Goal:** Ship an unnotarized free DMG through probablyworks-not/not-linear Releases and notlinear.lol, with in-app release notifications and manual downloads.
 - **Context:** User declined paid membership and explicitly chose this route. No global security bypasses.
 - **Files likely involved:** Native updater/launcher, build/release scripts, packaged backend checks, release-site, docs and tests.

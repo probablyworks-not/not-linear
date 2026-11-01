@@ -795,3 +795,5 @@ Each entry: **date · summary · files touched · why changed · risks · tests 
 - **Risks:** Unnotarized first launch depends on OS policy. GUI inspector returned only window controls after long stalls; do not infer rendered UI correctness from HTTP requests. No provider calls or populated upgrade tests. Website source unknown; page not deployed. Existing CDN/key-storage/backup limitations disclosed in beta notes.
 - **Tests run:** Eight isolated backend tests; compiled native feed tests (valid/malformed data, architecture, unsafe URLs); four Node page cases; Python/JS syntax and native QA compilation/relocated interpreter; localhost health/assets/watch requests.
 - **Next steps:** Review draft PR/release; full manual smoke/upgrade/clean-Mac tests; identify the Vercel source and deploy `/download/`; publish only after review.
+
+- Review artifacts: [draft PR #2](https://github.com/probablyworks-not/not-linear/pull/2) and [draft v0.2.0 release](https://github.com/probablyworks-not/not-linear/releases/tag/untagged-a53b1eba81446e0378dd). Uploaded DMG/feed/checksums verified; main and live website unchanged. Owned test processes stopped.

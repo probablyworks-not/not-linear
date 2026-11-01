@@ -519,3 +519,12 @@ Each entry: **date/time · task or bug ID · command category · result · impor
 - **Commands:** `scripts/build_macos.py` → `dist/free-beta-release/Notlinear.app` (version 0.2.0, build 3), `--dmg-only`, `scripts/prepare_macos_release.py` → `dist/release-v0.2.0`, compiled native validator against the generated `latest.json`, Python/JS/shell syntax and diff checks.
 - **Important output:** Relocated prefix verified; deep ad-hoc code signatures and disk image checksum valid. Release folder contains DMG, latest.json, SHA256SUMS.txt and release-notes.md. The exact generated metadata is accepted by the native validator. No public release or website deployment performed.
 - **Follow-up:** Draft PR/release for human review. Full AGENTS smoke, populated upgrade, clean-Mac download/first-launch and runtime dependency license review remain publication gates. Website project source still required.
+
+
+## 2026-11-01 20:33 IST · TASK-MAC-005 · review handoff / cleanup
+
+- **Result:** Pass: final eight server tests also pass using the exact staged app's Python runtime. Draft PR and release verified; no merge/public publication.
+- **Commands:** `git switch -c codex/free-mac-dmg`, explicit source/doc/test staging, commit `0bf5dc7`, push, `gh pr create --draft`, PR attachment, `gh release create --draft`, read-only PR/release/asset checks, local checksum comparison, final bundled-runtime test suite; owned QA/preview process cleanup. Final documentation follow-up records these artifacts on the same review branch.
+- **Important output:** PR https://github.com/probablyworks-not/not-linear/pull/2 (open/draft). Release https://github.com/probablyworks-not/not-linear/releases/tag/untagged-a53b1eba81446e0378dd (draft v0.2.0, target full SHA `0bf5dc70268eda21adf7dadfccc7a820cfc5ea49`). All three assets uploaded; DMG size 23,762,244 bytes, SHA-256 `d841921edbd982b8bf28425a8f813243b44b7158c742b6169524e76c6ea3d158`, matching GitHub's digest and latest.json. Initial release creation rejected the abbreviated commit SHA with HTTP 422; retry with the full pushed SHA succeeded. No duplicate release created.
+- **Cleanup:** Stopped only owned QA app/backend and the temporary 18766 page preview after checking their exact process identity. Unrelated 8765 service untouched.
+- **Follow-up:** Website source/project remains unknown; page is not live. Human code review, full app/provider/attachment smoke, clean-Mac first launch, populated upgrade and runtime license review still required before publication.

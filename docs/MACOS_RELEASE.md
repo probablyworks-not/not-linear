@@ -4,6 +4,16 @@ Status: 2026-11-01. The user chose a free, ad-hoc-signed, unnotarized DMG.
 Apple Developer membership, Developer ID, notarization, and Sparkle are not required for this beta path.
 This supersedes the earlier proposal that made paid signing a release prerequisite.
 
+## Review artifacts
+
+- Draft source PR: https://github.com/probablyworks-not/not-linear/pull/2
+- GitHub draft release: https://github.com/probablyworks-not/not-linear/releases/tag/untagged-a53b1eba81446e0378dd
+- Local release assets: `dist/release-v0.2.0/`.
+- App version/build: 0.2.0 / 3; arm64; not Apple-notarized.
+
+The draft contains the DMG, `latest.json`, and `SHA256SUMS.txt`. GitHub's asset SHA-256 matches
+the local DMG/manifest. Neither the release nor the website is published by this work.
+
 ## Destinations
 
 - GitHub source and releases: https://github.com/probablyworks-not/not-linear
