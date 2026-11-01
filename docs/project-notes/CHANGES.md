@@ -797,3 +797,12 @@ Each entry: **date · summary · files touched · why changed · risks · tests 
 - **Next steps:** Review draft PR/release; full manual smoke/upgrade/clean-Mac tests; identify the Vercel source and deploy `/download/`; publish only after review.
 
 - Review artifacts: [draft PR #2](https://github.com/probablyworks-not/not-linear/pull/2) and [draft v0.2.0 release](https://github.com/probablyworks-not/not-linear/releases/tag/untagged-a53b1eba81446e0378dd). Uploaded DMG/feed/checksums verified; main and live website unchanged. Owned test processes stopped.
+
+
+## 2026-11-01 · Website download integration
+
+- **Summary:** User identified the website source and requested replacing the waitlist. Implemented/deployed in probablyworks-not/notlinear-website, preserving the current design. Updated app release memory to identify the actual source and deployed homepage section.
+- **Files:** Website `lib/download-page.mjs`, `scripts/{build.mjs,download.js}`, `download.css`, `server.mjs`, `package.json`, tests and README; app repo documentation only.
+- **Why:** Replace email signup with the requested Mac download route on the real website, not a separate prototype.
+- **Call sites:** Existing build invokes the readable HTML transform before manifest extraction; local static route serves the new release script. Three former waitlist CTA anchors become download links; the old modal and inline submission handler are removed. Existing animation/font bundle extraction remains untouched.
+- **Risks/tests:** Four Node tests cover real-template conversion and published/404/offline/unsafe-link cases; syntax/build/HTTP checks pass. Vercel exact-commit success and live HTML confirm deployment. No visual screenshot QA (native inspector previously stalled). Mac draft publication remains a separate pending review/smoke gate. Legacy waitlist storage/backend is retained; no signup request is made by the built page and no existing signup data was deleted.

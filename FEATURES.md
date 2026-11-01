@@ -416,7 +416,7 @@ Bold/italic, inline code, markdown + auto-linked bare URLs, full GFM-style pipe 
 - Free beta distribution uses an ad-hoc-signed, unnotarized DMG; no paid Apple membership. Release staging verifies the image/signatures and generates SHA-256 checksums, a GitHub-hosted update feed, and installation notes. The optional upload creates a draft, never auto-publishes.
 - Native **Check for Updates…**, launch checks and six-hour checks show a newer published build with **Download Update / Later**. Downloads/installations remain manual; no data clearing/restart. Metadata URLs/hashes and architecture are validated, without sending user keys or chat content.
 - Packaged mode restricts local server Host/Origin, omits permissive CORS, confines native file/save messages to the main app frame, and opens external pages in the browser. Development defaults remain unchanged.
-- Static `/download/` page prepared for the existing notlinear.lol Vercel project; not yet deployed. GitHub Releases destination is probablyworks-not/not-linear.
+- Live notlinear.lol homepage replaces the waitlist with Mac download CTAs, removes email signup, and shows installation/update instructions. Website source is probablyworks-not/notlinear-website (Vercel); GitHub Releases destination is probablyworks-not/not-linear. Direct DMG links activate when the reviewed draft becomes a public release.
 - Offline assets, Keychain, full backup/restore, rendered GUI/clean-Mac/upgrade QA and public publication remain pending. See `docs/MACOS_RELEASE.md`.
 
 ## 7. Backend endpoints (`backend/server.py`)

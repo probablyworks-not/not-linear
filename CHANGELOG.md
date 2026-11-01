@@ -765,3 +765,11 @@ All notable repository changes made by AI agents should be recorded here.
 - Behavior changes: Newly built Mac apps check public release metadata on launch/every six hours and expose Check for Updates…; newer builds offer Download Update/Later, with no automatic installation or restart. Packaged servers restrict Host/Origin and omit permissive CORS; the native bridge requires the main app origin and opens external pages in the browser (bug #054). A separate QA identity/port is available only for test builds. Development server defaults, local file-watch and both database schemas are unchanged.
 - Verification: Eight isolated server tests, native feed validation, download-page success/404/offline/unsafe-link cases, native compilation and relocated runtime check passed. Isolated QA served frontend modules and file-watch HEAD requests; native GUI/provider/clean-Mac and populated upgrade smoke remain unverified.
 - Observed: The website is on Vercel and links to another GitHub repository; its source project has not been identified, so no website deployment was attempted. CDN assets, local-browser-storage API keys and incomplete workspace backup remain disclosed beta limitations. Paid signing/notarization and Sparkle are deferred by user preference.
+
+
+## 2026-11-01 · Codex · Website waitlist replaced with Mac downloads
+
+- Summary: Integrated the download path into the existing probablyworks-not/notlinear-website homepage and Vercel deployment; corrected this repository's release documentation/status.
+- Files changed here: `docs/MACOS_RELEASE.md`, `FEATURES.md`, `docs/project-notes/{TASKS,RUNS,CHANGES}.md`, `CHANGELOG.md`. Website changes are commit `fb01127d461c3afbe0e6e6019ac082d1cf8e60ec` in the separate website repository.
+- Behavior changes: Website navigation, hero and closing CTAs offer Download for Mac; signup modal/submission script removed. The existing design/animation assets remain unchanged. Download links discover the public arm64 GitHub asset, with an honest preparation message while the Mac release remains a draft. App code/data unchanged in this follow-up.
+- Verification: Website syntax checks, four behavior tests, static build and localhost HTTP checks pass. Vercel reports success for the exact commit. Live HTML verification checks all three download CTAs, no signup form, and the release-check script.

@@ -528,3 +528,11 @@ Each entry: **date/time · task or bug ID · command category · result · impor
 - **Important output:** PR https://github.com/probablyworks-not/not-linear/pull/2 (open/draft). Release https://github.com/probablyworks-not/not-linear/releases/tag/untagged-a53b1eba81446e0378dd (draft v0.2.0, target full SHA `0bf5dc70268eda21adf7dadfccc7a820cfc5ea49`). All three assets uploaded; DMG size 23,762,244 bytes, SHA-256 `d841921edbd982b8bf28425a8f813243b44b7158c742b6169524e76c6ea3d158`, matching GitHub's digest and latest.json. Initial release creation rejected the abbreviated commit SHA with HTTP 422; retry with the full pushed SHA succeeded. No duplicate release created.
 - **Cleanup:** Stopped only owned QA app/backend and the temporary 18766 page preview after checking their exact process identity. Unrelated 8765 service untouched.
 - **Follow-up:** Website source/project remains unknown; page is not live. Human code review, full app/provider/attachment smoke, clean-Mac first launch, populated upgrade and runtime license review still required before publication.
+
+
+## 2026-11-01 21:57 IST · TASK-MAC-005 · website build/test/deploy
+
+- **Result:** Pass. Website source: probablyworks-not/notlinear-website; cloned to `/tmp/notlinear-website-release`.
+- **Commands:** GitHub read-only source/Vercel status checks, `npm run check`, `npm test` (4 pass), `npm run build`, local server on 18766 and HTTP checks, website commit/push to its existing production main integration; Vercel exact-commit status and live-domain HTML checks. Updated app release documentation on the existing draft PR branch.
+- **Important output:** Website commit `fb01127d461c3afbe0e6e6019ac082d1cf8e60ec`; Vercel reports success. Built three download CTAs and removed the waitlist form/submission script. Initial test expected four CTAs, but the real page has three (nav/hero/closing); expectation corrected and all tests passed. DMG remains a GitHub draft; the page has an explicit preparation state until publication, with working section/Releases fallbacks. No secrets or signup data copied/deleted.
+- **Follow-up:** Mac smoke/upgrade/clean-Mac review and public release; direct DMG links activate automatically after publication.

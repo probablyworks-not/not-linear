@@ -12,19 +12,22 @@ This supersedes the earlier proposal that made paid signing a release prerequisi
 - App version/build: 0.2.0 / 3; arm64; not Apple-notarized.
 
 The draft contains the DMG, `latest.json`, and `SHA256SUMS.txt`. GitHub's asset SHA-256 matches
-the local DMG/manifest. Neither the release nor the website is published by this work.
+the local DMG/manifest. The Mac release remains a draft. The website waitlist-to-download update is deployed separately.
 
 ## Destinations
 
 - GitHub source and releases: https://github.com/probablyworks-not/not-linear
 - Existing website: https://notlinear.lol/ (Vercel).
-- Proposed download page: https://notlinear.lol/download/
+- Live download section: https://notlinear.lol/#download
 - Native update feed: https://github.com/probablyworks-not/not-linear/releases/latest/download/latest.json
 
-The Vercel website's source repository/project still needs to be identified. `release-site/download/`
-is ready to copy into its public/static directory. Do not replace or migrate the existing site.
-The public website currently links to a different repository; its download links need deliberate correction.
-No website/domain configuration has been changed by this work.
+Website source: https://github.com/probablyworks-not/notlinear-website . The existing Vercel
+main-branch integration deployed commit `fb01127d461c3afbe0e6e6019ac082d1cf8e60ec` on 2026-11-01.
+Its homepage now replaces all three waitlist buttons with Download for Mac, removes the email modal,
+corrects GitHub links, and includes installation/update details in `#download`. The existing design,
+assets and hosting remain in place. The standalone `release-site/` prototype was not used to replace it.
+GitHub's release is still a draft, so the live page honestly says the first download is being prepared;
+publishing the reviewed regular release will automatically activate direct DMG links.
 
 ## Build
 
