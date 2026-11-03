@@ -1,5 +1,8 @@
 # Free macOS distribution
 
+For the authoritative release checklist and publish/update commands, use [RELEASE.md](../RELEASE.md).
+This document describes Mac packaging, storage, security and earlier implementation verification.
+
 Status: 2026-11-01. The user chose a free, ad-hoc-signed, unnotarized DMG.
 Apple Developer membership, Developer ID, notarization, and Sparkle are not required for this beta path.
 This supersedes the earlier proposal that made paid signing a release prerequisite.

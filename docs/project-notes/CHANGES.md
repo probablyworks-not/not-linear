@@ -806,3 +806,13 @@ Each entry: **date · summary · files touched · why changed · risks · tests 
 - **Why:** Replace email signup with the requested Mac download route on the real website, not a separate prototype.
 - **Call sites:** Existing build invokes the readable HTML transform before manifest extraction; local static route serves the new release script. Three former waitlist CTA anchors become download links; the old modal and inline submission handler are removed. Existing animation/font bundle extraction remains untouched.
 - **Risks/tests:** Four Node tests cover real-template conversion and published/404/offline/unsafe-link cases; syntax/build/HTTP checks pass. Vercel exact-commit success and live HTML confirm deployment. No visual screenshot QA (native inspector previously stalled). Mac draft publication remains a separate pending review/smoke gate. Legacy waitlist storage/backend is retained; no signup request is made by the built page and no existing signup data was deleted.
+
+
+## 2026-11-03 · Release runbook consolidation
+
+- **Summary:** Created root `RELEASE.md` and updated README's update explanation and reference links. Kept the Mac technical guide as the runtime/storage/security reference.
+- **Files touched:** `RELEASE.md`, `README.md`, `docs/MACOS_RELEASE.md`, CHANGELOG and project memory.
+- **Why:** User requested documented release steps and a clearer update/release process. The truncated publication request was clarified asynchronously; documentation work proceeded independently.
+- **Risks:** Copyable commands distinguish examples for a future 0.2.1/build 4 from the existing 0.2.0/build 3 candidate. Draft upload and publication are separate; full source SHA, stable identity/origin, monotonic build and non-overwrite rules are explicit. No app behavior or data/schema changes.
+- **Tests/checks:** All shell fences parsed by bash without execution; local file links resolved; installed gh help confirms publish flags. Remote read-only checks confirm PR #2 and v0.2.0 remain drafts, existing assets/hash/target unchanged, root DNS resolves and www NXDOMAIN. Full GUI tests not rerun for documentation-only edits.
+- **Next steps:** Obtain the user's publication/build choice; existing release QA and review gates remain pending.

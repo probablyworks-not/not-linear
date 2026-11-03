@@ -536,3 +536,12 @@ Each entry: **date/time · task or bug ID · command category · result · impor
 - **Commands:** GitHub read-only source/Vercel status checks, `npm run check`, `npm test` (4 pass), `npm run build`, local server on 18766 and HTTP checks, website commit/push to its existing production main integration; Vercel exact-commit status and live-domain HTML checks. Updated app release documentation on the existing draft PR branch.
 - **Important output:** Website commit `fb01127d461c3afbe0e6e6019ac082d1cf8e60ec`; Vercel reports success. Built three download CTAs and removed the waitlist form/submission script. Initial test expected four CTAs, but the real page has three (nav/hero/closing); expectation corrected and all tests passed. DMG remains a GitHub draft; the page has an explicit preparation state until publication, with working section/Releases fallbacks. No secrets or signup data copied/deleted.
 - **Follow-up:** Mac smoke/upgrade/clean-Mac review and public release; direct DMG links activate automatically after publication.
+
+
+## 2026-11-03 11:23 IST · TASK-MAC-006 · documentation verification / release-state inspection
+
+- **Result:** Pass for documentation checks; no app build/publication attempted.
+- **Commands:** Read-only Git status/log/docs/script inspection, `gh release view v0.2.0`, `gh pr view 2`, public DNS queries for root/www, installed `gh release edit --help`, bash syntax parsing of RELEASE.md shell fences, local Markdown path validation, `git diff --check`. Documentation is committed/pushed on the existing draft review branch, not merged into main.
+- **Important output:** v0.2.0 remains draft/non-prerelease, target `0bf5dc70268eda21adf7dadfccc7a820cfc5ea49`; three uploaded assets unchanged. PR #2 open/draft. Root DNS succeeds, www status 3/NXDOMAIN. Copyable commands are syntax-valid and local file links resolve. Only syntax was checked for publication examples; they were not run.
+- **Smoke:** Not rerun (documentation-only; app/DB/watch/endpoints unchanged). Existing GUI/provider/clean-Mac/upgrade/license release gates remain pending.
+- **Follow-up:** User's final phrase was incomplete; async question asks current draft publication versus updated build review. Publication stays pending.

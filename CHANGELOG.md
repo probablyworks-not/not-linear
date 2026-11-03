@@ -773,3 +773,11 @@ All notable repository changes made by AI agents should be recorded here.
 - Files changed here: `docs/MACOS_RELEASE.md`, `FEATURES.md`, `docs/project-notes/{TASKS,RUNS,CHANGES}.md`, `CHANGELOG.md`. Website changes are commit `fb01127d461c3afbe0e6e6019ac082d1cf8e60ec` in the separate website repository.
 - Behavior changes: Website navigation, hero and closing CTAs offer Download for Mac; signup modal/submission script removed. The existing design/animation assets remain unchanged. Download links discover the public arm64 GitHub asset, with an honest preparation message while the Mac release remains a draft. App code/data unchanged in this follow-up.
 - Verification: Website syntax checks, four behavior tests, static build and localhost HTTP checks pass. Vercel reports success for the exact commit. Live HTML verification checks all three download CTAs, no signup form, and the release-check script.
+
+
+## 2026-11-03 · Codex · Document the complete Mac release and update procedure
+
+- Summary: Added root `RELEASE.md` as the operator checklist for source/version selection, building, verification, staging/uploading drafts, approved publication, anonymous download/feed/website checks, manual updates and recovery. Linked it from README and the Mac technical reference.
+- Files changed: `RELEASE.md`, `README.md`, `docs/MACOS_RELEASE.md`, `docs/project-notes/{TASKS,RUNS,CHANGES}.md`, `CHANGELOG.md`.
+- Verification: Release/PR state and root/www DNS checked on 2026-11-03; shell examples parsed with bash, local Markdown file links checked, GitHub publish flags checked against installed CLI help; whitespace check passed. Documentation only; app code and release assets unchanged.
+- Observed: v0.2.0/build 3 remains a draft; full native/provider/clean-Mac/upgrade and dependency-license checks remain pending. `www` still returns DNS NXDOMAIN. User's requested publication target is awaiting clarification because the message ended at “release the”.

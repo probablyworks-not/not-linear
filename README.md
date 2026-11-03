@@ -44,7 +44,7 @@ Another copy is probably running (or something else holds port 8765). Either ope
 
 Double-click `Notlinear.app` (built from `launchers/`). It starts the same local server and opens Notlinear in its own window, so you never need to open the URL yourself. A lighter alternative is `launchers/Notlinear.command`, which starts the server and opens your default browser.
 
-Build a self-contained development app with `launchers/build-macos-app.command` after setting `NOTLINEAR_PYTHON_FRAMEWORK` to a python.org framework version directory. The new builder bundles the runtime and app resources; the checked-in legacy app binary is not rebuilt in place. See [macOS release guide](docs/MACOS_RELEASE.md) for commands, data locations, and the remaining public-release gates. The free beta is not notarized by Apple and still needs internet for CDN assets. If macOS blocks the first launch, follow [Apple’s per-app approval instructions](https://support.apple.com/102445). The app checks for newer published GitHub releases and offers a manual DMG download; it does not install updates automatically.
+Build a self-contained development app with `launchers/build-macos-app.command` after setting `NOTLINEAR_PYTHON_FRAMEWORK` to a python.org framework version directory. The new builder bundles the runtime and app resources; the checked-in legacy app binary is not rebuilt in place. See [RELEASE.md](RELEASE.md) for the build → review → publish → update checklist, and the [Mac packaging reference](docs/MACOS_RELEASE.md) for runtime/data details. The free beta is not notarized by Apple and still needs internet for CDN assets. If macOS blocks the first launch, follow [Apple’s per-app approval instructions](https://support.apple.com/102445). The app checks for newer published GitHub releases and offers a manual DMG download; it does not install updates automatically.
 
 ## Platform differences
 
@@ -66,7 +66,11 @@ Windows and Linux support for the core app comes from the server using only the 
 
 ## Updating
 
-Edit files and the running app notices: a **New update, refresh** button appears in the bottom-right corner. Click it to reload.
+**Installed Mac app:** checks GitHub for newer published builds on launch, every six hours, or through **Check for Updates…**. Choose Download Update, finish your work, quit, and replace the app using the new DMG. Installation is manual; keep the same app identity and local address so local data stays accessible.
+
+**Development:** edit files and the running app notices; a **New update, refresh** button appears in the bottom-right corner. Click it to reload. This is separate from downloadable releases.
+
+For maintainers, [RELEASE.md](RELEASE.md) documents version/build numbers, verification, draft uploads, publication, website activation and recovery.
 
 ## Repo map
 

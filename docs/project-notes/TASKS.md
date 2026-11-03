@@ -494,3 +494,12 @@ Each entry: **ID · Status · Goal · Context · Files likely involved · Accept
 - **Files likely involved:** Native updater/launcher, build/release scripts, packaged backend checks, release-site, docs and tests.
 - **Acceptance criteria:** Versioned verified DMG, SHA-256/feed/notes, source PR and draft release for review, clear first-launch instructions, app launch/periodic/manual checks, site download link pointing at actual published release. Preserve schemas/local origin and existing site.
 - **Verification:** Eight server tests, native feed validator, four page cases and isolated QA HTTP startup passed. Website deployed and live HTML verified; rendered GUI/provider/upgrade/clean-Mac smoke and public Mac release remain pending.
+
+
+## TASK-MAC-006 — Document repeatable releases and updates
+- **Status:** Done (documentation and checks complete; publication remains TASK-MAC-005).
+- **Goal:** Root RELEASE.md with clear build/review/upload/publish/verify/update/recovery steps, current-state snapshot and links from README/technical guide.
+- **Context:** User asked to document release steps and clarify the update/release workflow; last publication phrase was incomplete and is awaiting clarification.
+- **Files likely involved:** RELEASE.md, README.md, docs/MACOS_RELEASE.md and project memory.
+- **Acceptance criteria:** No ambiguous version/build/tag examples, no automatic publication, exact candidate provenance, preserved data identity, explicit manual QA/review gates, actual website/release integration and www DNS state.
+- **Verification:** Shell fences parse, local Markdown links exist, installed gh flags match, remote release/review/DNS state verified; docs-only diff. No app smoke claimed.
