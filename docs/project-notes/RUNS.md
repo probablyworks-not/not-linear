@@ -545,3 +545,11 @@ Each entry: **date/time · task or bug ID · command category · result · impor
 - **Important output:** v0.2.0 remains draft/non-prerelease, target `0bf5dc70268eda21adf7dadfccc7a820cfc5ea49`; three uploaded assets unchanged. PR #2 open/draft. Root DNS succeeds, www status 3/NXDOMAIN. Copyable commands are syntax-valid and local file links resolve. Only syntax was checked for publication examples; they were not run.
 - **Smoke:** Not rerun (documentation-only; app/DB/watch/endpoints unchanged). Existing GUI/provider/clean-Mac/upgrade/license release gates remain pending.
 - **Follow-up:** User's final phrase was incomplete; async question asks current draft publication versus updated build review. Publication stays pending.
+
+
+## 2026-11-03 11:26 IST · TASK-MAC-007 · preflight
+
+- **Result:** Pass.
+- **Commands:** Git status/log, build/release script and skill-description inspection, existing artifact path checks, read-only GitHub release list and PR view.
+- **Important output:** Clean source on codex/free-mac-dmg at a6fecdb; existing v0.2.0 is draft, PR #2 open/draft. python.org framework 3.13 available. Fresh dist/mac-0.2.1-build4 and dist/release-v0.2.1 paths available.
+- **Follow-up:** Commit the candidate changelog/procedure before building so source provenance and bundled changelog match. Targeted verification remains to run; no public publication.

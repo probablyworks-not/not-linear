@@ -4,7 +4,15 @@ This is the operator runbook for building, reviewing, publishing and updating No
 Use the free **ad-hoc-signed, unnotarized DMG** route. No paid Apple membership is assumed.
 For runtime/data/security details, see [the Mac packaging reference](docs/MACOS_RELEASE.md).
 
-## Current release snapshot — checked 2026-11-03
+## Updated review candidate — 2026-11-03
+
+The user requested a fresh build for review, not public publication. Prepare **v0.2.1 / build 4**
+from the committed current source using `dist/mac-0.2.1-build4/` and `dist/release-v0.2.1/`.
+This rebuild includes the latest release runbook/changelog; application features are unchanged.
+The new candidate's exact source commit, checksums and draft link will be recorded after validation.
+Keep v0.2.0 available as a previous review candidate; do not overwrite its assets.
+
+## Previous review candidate snapshot — checked 2026-11-03
 
 | Item | State |
 | --- | --- |
@@ -41,8 +49,8 @@ The website currently explains that the first public Mac release is being prepar
 - Update CHANGELOG/FEATURES and task/run/change memory for the actual product change before building.
   The app bundles CHANGELOG.md, so changes after the build are not included in that DMG.
 
-For a future release after 0.2.0, the following uses **0.2.1 / build 4 as an example**.
-These values do not announce or create that release. Choose a fresh output directory for each attempt.
+The following commands select the new **0.2.1 / build 4 review candidate**.
+For a later release, choose higher version/build values and fresh output directories. Publication remains a separate step.
 Run the shell blocks in the same Terminal session from the repository root, using a shell that stops on a failed command.
 
 ```sh

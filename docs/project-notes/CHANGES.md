@@ -816,3 +816,13 @@ Each entry: **date · summary · files touched · why changed · risks · tests 
 - **Risks:** Copyable commands distinguish examples for a future 0.2.1/build 4 from the existing 0.2.0/build 3 candidate. Draft upload and publication are separate; full source SHA, stable identity/origin, monotonic build and non-overwrite rules are explicit. No app behavior or data/schema changes.
 - **Tests/checks:** All shell fences parsed by bash without execution; local file links resolved; installed gh help confirms publish flags. Remote read-only checks confirm PR #2 and v0.2.0 remain drafts, existing assets/hash/target unchanged, root DNS resolves and www NXDOMAIN. Full GUI tests not rerun for documentation-only edits.
 - **Next steps:** Obtain the user's publication/build choice; existing release QA and review gates remain pending.
+
+
+## 2026-11-03 · Start updated review candidate
+
+- **Summary:** Prepare v0.2.1/build 4 from current committed source, including updated release documentation/changelog. No product feature change.
+- **Files touched:** Release docs, changelog and project memory; generated artifacts ignored by Git.
+- **Why:** User chose a new build for review instead of publishing the older draft.
+- **Risks:** Preserve bundle ID/origin/databases and keep v0.2.0 assets untouched. Candidate remains unnotarized with previously disclosed CDN/key-storage/backup limitations. No fragile branch/Notes/tool/persistence code changed.
+- **Tests/run plan:** Fresh build and relocated interpreter; native feed tests; Node page cases; eight server tests on the bundled runtime; DMG integrity/mounted metadata/runtime; remote asset hashes. Native/provider/upgrade/clean-Mac smoke remains unverified.
+- **Next steps:** Validate and upload a new draft with exact source SHA; update review links/results.

@@ -7,7 +7,13 @@ Status: 2026-11-01. The user chose a free, ad-hoc-signed, unnotarized DMG.
 Apple Developer membership, Developer ID, notarization, and Sparkle are not required for this beta path.
 This supersedes the earlier proposal that made paid signing a release prerequisite.
 
-## Review artifacts
+## Latest review build
+
+A fresh v0.2.1 / build 4 review candidate is being prepared on 2026-11-03, following the user's
+explicit choice to prepare an updated build rather than publish v0.2.0. See [RELEASE.md](../RELEASE.md)
+for its validation/provenance. Existing product behavior and beta limitations are unchanged.
+
+## Previous v0.2.0 review artifacts
 
 - Draft source PR: https://github.com/probablyworks-not/not-linear/pull/2
 - GitHub draft release: https://github.com/probablyworks-not/not-linear/releases/tag/untagged-a53b1eba81446e0378dd

@@ -781,3 +781,11 @@ All notable repository changes made by AI agents should be recorded here.
 - Files changed: `RELEASE.md`, `README.md`, `docs/MACOS_RELEASE.md`, `docs/project-notes/{TASKS,RUNS,CHANGES}.md`, `CHANGELOG.md`.
 - Verification: Release/PR state and root/www DNS checked on 2026-11-03; shell examples parsed with bash, local Markdown file links checked, GitHub publish flags checked against installed CLI help; whitespace check passed. Documentation only; app code and release assets unchanged.
 - Observed: v0.2.0/build 3 remains a draft; full native/provider/clean-Mac/upgrade and dependency-license checks remain pending. `www` still returns DNS NXDOMAIN. User's requested publication target is awaiting clarification because the message ended at “release the”.
+
+
+## 2026-11-03 · Codex · Prepare v0.2.1 / build 4 for review
+
+- Summary: Rebuild the current Mac release source with the latest release runbook and bundled changelog as a distinct Apple Silicon review candidate; retain v0.2.0 as a previous draft.
+- Files changed: `RELEASE.md`, `docs/MACOS_RELEASE.md`, `CHANGELOG.md`, `docs/project-notes/{TASKS,RUNS,CHANGES}.md`; generated app/DMG/feed/checksums under ignored `dist/`.
+- Behavior changes: Candidate app version/build becomes 0.2.1/4. Product features, manual-update behavior, bundle identity, local origin and database schemas are unchanged. The candidate remains ad-hoc signed and unnotarized; no public release is authorized by this preparation request.
+- Verification: Build/runtime/signature/image/feed/server/page checks will be recorded in RUNS.md. Full native/provider/clean-Mac/upgrade and dependency-license checks remain publication gates; preparation does not claim those pass.

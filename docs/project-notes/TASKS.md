@@ -503,3 +503,12 @@ Each entry: **ID · Status · Goal · Context · Files likely involved · Accept
 - **Files likely involved:** RELEASE.md, README.md, docs/MACOS_RELEASE.md and project memory.
 - **Acceptance criteria:** No ambiguous version/build/tag examples, no automatic publication, exact candidate provenance, preserved data identity, explicit manual QA/review gates, actual website/release integration and www DNS state.
 - **Verification:** Shell fences parse, local Markdown links exist, installed gh flags match, remote release/review/DNS state verified; docs-only diff. No app smoke claimed.
+
+
+## TASK-MAC-007 — Updated v0.2.1 review candidate
+- **Status:** In progress.
+- **Goal:** Fresh arm64 app/DMG version 0.2.1, build 4, exact committed-source provenance, verified checksum/feed and separate GitHub draft.
+- **Context:** User explicitly selected Prepare an updated build for review on 2026-11-03. No new app features were requested; retain existing v0.2.0 assets and do not publish either draft.
+- **Files likely involved:** Release/changelog and project memory, generated dist artifacts; existing build/release tools unchanged.
+- **Acceptance criteria:** New version/build and preserved production identity, clean committed source, build/runtime/signature/image tests, staged asset/feed validation, uploaded-digest verification, review notes with exact source SHA and limitations.
+- **Verification:** Targeted tests and mounted-image metadata/runtime checks; full GUI/provider/clean-Mac/upgrade tests remain separately pending.
