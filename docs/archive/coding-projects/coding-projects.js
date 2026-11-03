@@ -1,20 +1,60 @@
-// Coding Projects — a self-registering view (see ADR-003…ADR-006).
+// ============================================================================
+// Coding Projects view — a Notion-style dashboard over local code projects.
+//
+// What it does: lists the user's local code projects and, for each one,
+// reads the project's README/CHANGELOG/BUGS/TASKS files (via a backend
+// filesystem scan) to show a what's-there / what's-missing checklist, a
+// count of open bugs (unchecked `- [ ]` items in BUGS.md), a last-updated
+// timestamp, and a short LLM-generated (or heuristic-fallback) status
+// sentence. Clicking a project opens a per-project page; clicking a
+// markdown file there opens a read-only preview drawer.
+//
+// It is strictly additive: it is a self-contained view that reads project
+// docs off disk (through the backend's scan endpoint) and writes only to
+// its own localStorage keys (see PROJECTS_KEY / STATUS_CACHE_KEY /
+// COMMENTS_KEY / SIDE_COLLAPSE_KEY below). It never touches the chat
+// database, threads, or branches.
+//
+// Self-registration: this module doesn't render anything until
+// initCodingProjects() (exported at the bottom, called once at app startup)
+// registers itself with the view registry (frontend/core/registry.js) via
+// registerView({ id: 'coding-projects', mount: showOverlay, unmount:
+// hideOverlay, ... }). The registry is the generic "one view visible at a
+// time" host used by every feature (chat, notes, coding-projects, ...);
+// mountView('coding-projects') / mountView('chat') is how this view and the
+// chat view swap places without either one knowing about the other.
+//
 // Full-screen overlay (#cp-screen) shown via the view registry; chat sits
 // underneath, untouched. CP02 built the seam; CP03 adds the real list view:
 // a localStorage project registry, a filesystem scan per project (CP01
 // endpoints), an LLM-generated status sentence (ADR-005) with heuristic
 // fallback, plus gallery / empty states and a minimal add-folder flow.
+//
+// Backend calls (all via frontend/core/api-client.js's loggedFetch, per the
+// "no direct fetch from a component" convention — see backend/server.py):
+//   - POST /__notlinear_scan_project  — walks a project folder, reads its
+//     README/CHANGELOG/BUGS/TASKS (and other markdown) files, and returns
+//     their text/size/mtime. See scanProject() below.
+//   - POST /__notlinear_pick_folder   — opens the native macOS folder
+//     picker and returns the chosen path. See pickFolderPath() below.
+// Markdown file previews reuse frontend/core/markdown.js's renderMarkdown()
+// (also esc() for HTML-escaping user/file-derived strings throughout this
+// file). Styling lives in frontend/styles/coding-projects.css (all `cp-*`
+// classes referenced in the template strings below come from there).
+// ============================================================================
 
 import { registerView, mountView } from '../core/registry.js';
 import { appState } from '../core/state.js';
 import { loggedFetch, readResponseBody } from '../core/api-client.js';
-import { esc, renderMarkdown } from '../core/markdown.js';
+import { esc, renderMarkdown, highlightCodeIn } from '../core/markdown.js';
 import { toast, wireTabInsertsTab } from '../core/ui.js';
 import { openEmojiPicker } from '../core/emoji.js';
 import { loadMindGarden, renderIconSvg, parseIconToken } from '../core/mind-garden.js';
 
 // Render a stored project glyph: an emoji char, a Mind Garden token
 // (`"icon:<id>"` or `"icon:<id>:<hex>"`), or the Tabler-folder fallback.
+// Used everywhere a project's icon is drawn: list rows, gallery cards,
+// the project page header, the sidebar, and the add-folder popover.
 function emojiHTML(value, size = 22){
   const fallback = '<i class="ti ti-folder"></i>';
   if (!value) return fallback;
@@ -26,19 +66,27 @@ function emojiHTML(value, size = 22){
   return esc(value);
 }
 
+// Scoped query-selector shorthand; `r` lets callers query within a popover
+// or drawer root instead of always searching the whole document.
 const $ = (s, r = document) => r.querySelector(s);
 
 let currentProjectId = null;   // null = list view; otherwise the open project page
 
-const SIDE_COLLAPSE_KEY = 'nl_cp_side_collapsed_v1';
-const PROJECTS_KEY = 'nl_cp_projects_v1';
-const STATUS_CACHE_KEY = 'nl_cp_status_cache_v1';
-const COMMENTS_KEY = 'nl_cp_comments_v1';
+// localStorage keys. Everything this view persists lives under these four
+// keys — intentionally NOT the chat/notes Dexie databases (see AGENTS.md /
+// ADR-007-style separation: this feature must not touch chat state).
+const SIDE_COLLAPSE_KEY = 'nl_cp_side_collapsed_v1';   // sidebar list collapsed/expanded
+const PROJECTS_KEY = 'nl_cp_projects_v1';              // the project registry itself
+const STATUS_CACHE_KEY = 'nl_cp_status_cache_v1';      // cached LLM status sentence per project path+mtime
+const COMMENTS_KEY = 'nl_cp_comments_v1';              // per-project notes/comments
 
 let galleryMode = false;       // session-sticky list/gallery toggle
 let scanCache = new Map();     // projectId -> scan result (this session)
 
 // ---------- small utils ----------
+// JSON localStorage read/write helpers. Swallow parse/quota errors so a
+// corrupted or missing key degrades to `fallback` instead of throwing and
+// breaking the whole view.
 function lsRead(key, fallback){
   try { return JSON.parse(localStorage.getItem(key) || '') ?? fallback; }
   catch { return fallback; }
@@ -46,6 +94,8 @@ function lsRead(key, fallback){
 function lsWrite(key, val){
   try { localStorage.setItem(key, JSON.stringify(val)); } catch {}
 }
+// Format a timestamp (ms) as a short relative-time string ("3m ago", "2d
+// ago", ...) for row/comment/status "last updated" displays.
 function relTime(ms){
   if (!ms) return '—';
   const s = Math.max(0, (Date.now() - ms) / 1000);
@@ -56,14 +106,22 @@ function relTime(ms){
   const mo = d / 30; if (mo < 12) return `${Math.floor(mo)}mo ago`;
   return `${Math.floor(d / 365)}y ago`;
 }
+// Used by deriveMeta() to decide whether a project's docs are "stale"
+// (no changes in the last 14 days) for the attention-needed indicator.
 function daysSince(ms){ return ms ? (Date.now() - ms) / 86400000 : Infinity; }
 
 // ---------- registry ----------
+// The project registry: the list of { id, path, name, emoji } entries the
+// user has added. This is the source of truth for "what projects exist" —
+// separate from scanCache, which holds the (re-fetchable) filesystem scan
+// results keyed by the same project id.
 function loadProjects(){ const v = lsRead(PROJECTS_KEY, []); return Array.isArray(v) ? v : []; }
 function saveProjects(list){ lsWrite(PROJECTS_KEY, list); }
 function commentCount(id){ return loadComments(id).length; }
 function loadComments(id){ const all = lsRead(COMMENTS_KEY, {}) || {}; return Array.isArray(all[id]) ? all[id] : []; }
 function saveComments(id, arr){ const all = lsRead(COMMENTS_KEY, {}) || {}; all[id] = arr; lsWrite(COMMENTS_KEY, all); }
+// Append a comment/note to a project's thread. Comments are local-only
+// annotations the user writes about a project (not derived from its files).
 function addComment(id, text){
   const who = appState?.prefs?.name || 'You';
   const c = { id: 'c' + Date.now(), who, avatar: (who.trim()[0] || '?').toUpperCase(), text, t: Date.now() };
@@ -72,6 +130,9 @@ function addComment(id, text){
 function deleteComment(id, cid){ saveComments(id, loadComments(id).filter(c => c.id !== cid)); }
 
 // ---------- comments rendering (CP06) ----------
+// HTML for a single comment/note row (avatar initial, author, relative
+// time, a delete button, and the escaped comment body). Shared by both the
+// list-row popover thread and the project-page thread.
 function commentItemHtml(c){
   return `
     <div class="cp-comment" data-cid="${c.id}">
@@ -130,6 +191,9 @@ function refreshCommentCounts(id){
   if (pageCount && currentProjectId === id) pageCount.textContent = String(n);
 }
 
+// Add a new project to the registry from the add-folder popover. Derives a
+// default display name from the last path segment when the user leaves the
+// name field blank (e.g. "/code/my-app/" -> "my-app").
 function addProject(path, name, emoji){
   const list = loadProjects();
   const id = 'cp' + Date.now().toString(36);
@@ -141,6 +205,11 @@ function addProject(path, name, emoji){
 
 
 // ---------- scan ----------
+// Ask the backend to scan a project folder on disk: it looks for
+// README/CHANGELOG/BUGS/TASKS (and other markdown files) and returns their
+// text/size/mtime. Goes through loggedFetch/readResponseBody from
+// frontend/core/api-client.js (never a bare fetch) so the call is logged
+// and its response parsed consistently with the rest of the app.
 async function scanProject(path){
   const res = await loggedFetch('/__notlinear_scan_project', {
     method: 'POST',
@@ -151,23 +220,36 @@ async function scanProject(path){
 }
 
 // Count unchecked GitHub-style checkboxes (`- [ ]`) in a markdown file's text.
+// Regex breakdown: `^[ \t>]*` allows leading whitespace/blockquote markers,
+// `[-*+]\s+` matches any markdown bullet style, `\[ \]` is the literal
+// unchecked-box token (a checked box `[x]` deliberately does not match).
+// Used against BUGS.md text to derive the "open bugs" count for a project.
 function countOpen(text){
   if (!text) return 0;
   const m = text.match(/^[ \t>]*[-*+]\s+\[ \]/gm);
   return m ? m.length : 0;
 }
+// Latest mtime across the four convention docs (readme/changelog/bugs/tasks)
+// returned by the scan, used as the project's "last updated" timestamp.
 function maxMtime(files){
   return Object.values(files || {}).reduce((mx, f) => Math.max(mx, (f && f.mtime) || 0), 0);
 }
+// Same idea but over the full markdownFiles list (any .md in the project),
+// so "last updated" also reflects edits to docs outside the four conventions.
 function maxMarkdownMtime(markdownFiles){
   return (Array.isArray(markdownFiles) ? markdownFiles : [])
     .reduce((mx, f) => Math.max(mx, (f && f.mtime) || 0), 0);
 }
+// How many of the four convention docs (readme/changelog/bugs/tasks) are
+// absent from the scan — drives the "needs attention" heuristic below.
 function missingCount(files){
   return ['readme', 'changelog', 'bugs', 'tasks'].filter(k => !(files?.[k]?.present)).length;
 }
 
 // ---------- status sentence (ADR-005) ----------
+// Cache keyed by (path, mtime) so the (costly, LLM-backed) status sentence
+// is only regenerated when the project's docs have actually changed since
+// the last scan — a cache hit returns instantly with no network call.
 function statusCacheGet(path, mtime){
   const cache = lsRead(STATUS_CACHE_KEY, {}) || {};
   const hit = cache[path];
@@ -180,6 +262,8 @@ function statusCacheSet(path, mtime, text){
 }
 
 // Local fallback when there's no key or the call fails — never blocks the list.
+// Builds the same "last shipped · next up" shape as the LLM version, but by
+// simple string parsing instead of a model call.
 function heuristicStatus(scan){
   const files = scan.files || {};
   if (!files.readme?.present && !files.changelog?.present && !files.tasks?.present){
@@ -187,16 +271,26 @@ function heuristicStatus(scan){
   }
   const parts = [];
   const cl = files.changelog?.text || '';
+  // First non-empty, non-heading, non-rule line of CHANGELOG.md is treated
+  // as "what was last shipped" (skips markdown `#` headings and `---`/`===`
+  // horizontal-rule lines so the sentence doesn't start with formatting noise).
   const firstCl = cl.split('\n').map(l => l.trim())
     .find(l => l && !/^#{1,6}\s*$/.test(l) && !/^[-=]{3,}$/.test(l));
   if (firstCl) parts.push(firstCl.replace(/^#{1,6}\s*/, '').slice(0, 80));
   const tasks = files.tasks?.text || '';
+  // First unchecked `- [ ]` line in TASKS.md is treated as "what's next".
   const firstOpen = tasks.split('\n').map(l => l.trim())
     .find(l => /^[-*+]\s+\[ \]/.test(l));
   if (firstOpen) parts.push('next: ' + firstOpen.replace(/^[-*+]\s+\[ \]\s*/, '').slice(0, 70));
   return parts.join(' · ') || 'no changelog or tasks yet';
 }
 
+// Ask DeepSeek (an OpenAI-compatible chat completion endpoint, separate
+// from the Anthropic/Claude chat path used elsewhere in the app) to write a
+// one-line status sentence from the project's CHANGELOG + TASKS text.
+// Returns null (falling back to heuristicStatus) when there's no API key,
+// the request fails, or the response is empty — this must never block or
+// error out the project list.
 async function llmStatus(scan){
   const key = appState?.apiKeys?.deepseek;
   if (!key) return null;
@@ -230,6 +324,10 @@ async function llmStatus(scan){
 }
 
 // Resolve a project's display data from a scan; status is filled async.
+// `attn` (needs-attention) is true when: there's no BUGS.md at all, or
+// there are open bugs and the docs are stale (>14 days untouched), or more
+// than one of the four convention docs is missing. Drives the small dot
+// next to a project's name in rowHtml().
 function deriveMeta(scan){
   const files = scan.files || {};
   const bugs = countOpen(files.bugs?.text);
@@ -241,10 +339,17 @@ function deriveMeta(scan){
 }
 
 // ---------- rendering ----------
+// The sparkle-icon status line shown in each row; `text` is either the
+// heuristic/LLM status sentence or a placeholder ("scanning…"/"scan failed").
 function statusHtml(text){
   return `<span class="cp-status"><i class="ti ti-sparkles"></i><span class="cp-status-text">${esc(text || 'scanning…')}</span></span>`;
 }
 
+// Build one project row (list mode) or card (gallery mode via the `card`
+// class) — icon, name + attention dot + path, status sentence, bug count
+// chip, last-updated time, and the comment-count button. `scan` may be
+// undefined (not yet fetched) or `{ ok: false }` (fetch failed); rowHtml
+// degrades gracefully in both cases via statusHtml's fallback text.
 function rowHtml(p, scan, meta){
   const bugChip = meta.bugs > 0
     ? `<span class="cp-bugs${meta.stale ? ' attn' : ''}">🐛 ${meta.bugs}</span>`
@@ -267,6 +372,10 @@ function rowHtml(p, scan, meta){
     </div>`;
 }
 
+// Zero-state shown when the project registry is empty (per CLAUDE.md's
+// "empty states matter" — invites adding a folder instead of showing a
+// bare list). "set root" (batch-import a folder of projects) is stubbed
+// disabled for a later version.
 function emptyHtml(){
   return `
     <div class="cp-empty">
@@ -279,6 +388,7 @@ function emptyHtml(){
     </div>`;
 }
 
+// Top bar for the list view: title, list/gallery toggle, rescan, and add.
 function headerHtml(){
   return `
     <div class="cp-head">
@@ -291,6 +401,10 @@ function headerHtml(){
     </div>`;
 }
 
+// Populate a row's status text in place, after the row's initial paint:
+// try the mtime-keyed cache, then the LLM (llmStatus), then fall back to
+// the heuristic. Runs per-row/async so slow or missing LLM calls don't
+// block the rest of the list from appearing.
 async function fillStatus(p, scan){
   const row = $(`.cp-row[data-id="${p.id}"] .cp-status-text`);
   if (!row || !scan?.ok) { if (row) row.textContent = 'scan failed'; return; }
@@ -301,10 +415,16 @@ async function fillStatus(p, scan){
     if (text) statusCacheSet(p.path, mtime, text);
     else text = heuristicStatus(scan);
   }
+  // Re-query rather than reuse `row`: the row may have been replaced
+  // (outerHTML swap in refineRow) by the time this async work resolves.
   const live = $(`.cp-row[data-id="${p.id}"] .cp-status-text`);
   if (live) live.textContent = text;
 }
 
+// Main list-view render: paints the header + all rows immediately using
+// whatever's in scanCache (so the list appears instantly even before any
+// scan completes), wires up click handlers, then scans each project that
+// isn't cached yet and refines its row/status in place as results land.
 async function render(){
   const inner = $('#cp-inner');
   if (!inner) return;
@@ -334,6 +454,9 @@ async function render(){
   }
 }
 
+// Replace one row's DOM with a freshly rendered version once its scan
+// result is known, and re-wire its event listeners (outerHTML replacement
+// drops the old element and its listeners entirely).
 function refineRow(p, scan){
   const rowEl = $(`.cp-row[data-id="${p.id}"]`);
   if (!rowEl) return;
@@ -343,6 +466,8 @@ function refineRow(p, scan){
 }
 
 // ---------- events ----------
+// Merge `patch` into a project's registry entry (e.g. rename, change emoji)
+// and persist. Used by the title/emoji editors on the project page and row.
 function updateProject(id, patch){
   const list = loadProjects();
   const p = list.find(x => x.id === id);
@@ -351,6 +476,9 @@ function updateProject(id, patch){
   saveProjects(list);
 }
 
+// Render the breadcrumb: "coding projects" alone at the list view, or
+// "coding projects / <project name>" (with the first segment clickable to
+// go back to the list) when a project page is open.
 function setCrumb(){
   const crumb = $('.cp-crumb');
   if (!crumb) return;
@@ -365,12 +493,14 @@ function setCrumb(){
   }
 }
 
+// Navigate back to the list view.
 function showList(){
   currentProjectId = null;
   setCrumb();
   render();
 }
 
+// Navigate to a project's detail page.
 function openProject(id){
   currentProjectId = id;
   setCrumb();
@@ -378,10 +508,13 @@ function openProject(id){
 }
 
 // ---------- project page (CP04) ----------
+// How many of the four convention docs are present — the "x/4 convention
+// docs" figure in the project page's meta strip (inverse of missingCount).
 function docsPresentCount(files){
   return ['readme', 'changelog', 'bugs', 'tasks'].filter(k => files?.[k]?.present).length;
 }
 
+// Human-readable file size (bytes/kb/mb) for the file-cell size labels.
 function formatSize(bytes){
   const n = Number(bytes);
   if (!Number.isFinite(n) || n < 0) return '—';
@@ -390,6 +523,10 @@ function formatSize(bytes){
   return `${(n / (1024 * 1024)).toFixed(1)}mb`;
 }
 
+// The list of markdown files to show in the project page's file grid.
+// Prefers the scan's full markdownFiles list (every .md found in the
+// project); falls back to synthesizing entries from just the four
+// convention docs for a stale/older backend that predates markdownFiles.
 function markdownFilesForScan(scan, files){
   const scanned = Array.isArray(scan?.markdownFiles) ? scan.markdownFiles : [];
   if (scanned.length) return scanned;
@@ -399,12 +536,17 @@ function markdownFilesForScan(scan, files){
     .filter(Boolean);
 }
 
+// One clickable file cell in the project page's file grid; data-file="md:N"
+// (N = index into the markdownFiles array) is read back by openDrawer()'s
+// click handler in wireProjectPage() to identify which file to preview.
 function markdownFileCellHtml(file, index){
   const rel = file.relativePath || file.filename || 'untitled.md';
   const size = file.tooBig ? 'too large' : formatSize(file.size);
   return `<button class="cp-file-cell" data-file="md:${index}" title="${esc(rel)}"><i class="ti ti-file-text"></i><span class="cp-file-name">${esc(rel)}</span><span class="cp-file-size">${esc(size)}</span></button>`;
 }
 
+// The file grid's contents: empty state, or the file cells plus a note when
+// the backend truncated the list (scan caps at 200 markdown files).
 function markdownFilesHtml(filesList, truncated){
   if (!filesList.length){
     return `<div class="cp-file-empty"><i class="ti ti-file-off"></i><span>no markdown files found</span></div>`;
@@ -416,6 +558,13 @@ function markdownFilesHtml(filesList, truncated){
   return cells + note;
 }
 
+// Render a single project's detail page: header (icon + editable name +
+// path), a meta strip summarizing doc coverage/bugs/last-updated, a grid of
+// clickable markdown files (opens the read-only preview drawer), and the
+// notes/comments thread. If the project hasn't been scanned yet, kicks off
+// scanProject() and re-renders this page once it resolves (see the `if
+// (!scan)` block below) so opening a project page always eventually shows
+// real data even without waiting on the list view's background scan loop.
 function renderProjectPage(id){
   const inner = $('#cp-inner');
   const p = loadProjects().find(x => x.id === id);
@@ -462,6 +611,10 @@ function renderProjectPage(id){
   }
 }
 
+// Wire up the project page's interactive bits: rename-on-blur/Enter for the
+// title input, the emoji picker button, click-to-open-file for each markdown
+// file cell (routes to openDrawer, the read-only preview), and the notes
+// thread composer.
 function wireProjectPage(id, scan){
   const titleEl = $('#cp-page-title');
   const persist = () => {
@@ -487,6 +640,10 @@ function wireProjectPage(id, scan){
 }
 
 // Open the native macOS folder picker and resolve to the chosen path (or null).
+// Note this is a bare fetch (not loggedFetch) since it's a lightweight,
+// non-scan/non-LLM local IPC call to the backend's folder-picker endpoint;
+// every failure mode (server not running, endpoint missing, user cancelled,
+// picker error) is turned into a calm toast rather than a thrown error.
 async function pickFolderPath(){
   let res;
   try {
@@ -499,6 +656,10 @@ async function pickFolderPath(){
   return data.path || null;
 }
 
+// Wire one list/gallery row's click and keyboard behavior: clicking the
+// emoji or comments sub-controls stops propagation and opens their own
+// popover instead of navigating; clicking (or Enter/Space on) the row
+// itself opens the project page.
 function wireRow(rowEl){
   if (!rowEl) return;
   rowEl.addEventListener('click', (e) => {
@@ -513,6 +674,9 @@ function wireRow(rowEl){
   });
 }
 
+// Wire the list view's header buttons (add folder, rescan, list/gallery
+// toggle) plus every currently-rendered row. Called after every render()
+// of the list, since render() replaces #cp-inner's innerHTML wholesale.
 function wireListEvents(){
   $('#cp-add')?.addEventListener('click', (e) => openAddPopover(e.currentTarget));
   $('#cp-empty-add')?.addEventListener('click', (e) => openAddPopover(e.currentTarget));
@@ -525,6 +689,8 @@ function wireListEvents(){
 let activePopover = null;
 let popoverOutside = null;
 
+// Close and remove the currently open floating popover (comments/emoji/add),
+// if any, and tear down its outside-click listener.
 function closeFloater(){
   if (!activePopover) return;
   activePopover.remove();
@@ -550,6 +716,10 @@ function attachFloater(pop, anchorEl, width, height){
   setTimeout(() => document.addEventListener('mousedown', popoverOutside), 0);
 }
 
+// Open the comments popover anchored under a row's comment-count button:
+// header with the project's icon/name/count, the comment thread (oldest
+// first, since this is a compact live popover rather than a full page),
+// and a composer to add a new one.
 function openCommentsPopover(projectId, anchorEl){
   closeFloater();
   const p = loadProjects().find(x => x.id === projectId);
@@ -576,6 +746,10 @@ function openCommentsPopover(projectId, anchorEl){
 }
 
 // ---------- emoji picker (CP07; shared picker lives in core/emoji.js) ----------
+// Open the shared emoji/icon picker (frontend/core/emoji.js) anchored to
+// `anchorEl`, persist the chosen glyph onto the project, and let the caller
+// decide how to redraw (`rerender`) since this is called both from list
+// rows and the project page header, which render differently.
 function pickEmojiFor(projectId, anchorEl, rerender){
   openEmojiPicker(anchorEl, (emoji) => {
     updateProject(projectId, { emoji });
@@ -586,6 +760,10 @@ function pickEmojiFor(projectId, anchorEl, rerender){
 }
 
 // ---------- add-project popover (CP07) ----------
+// Build and wire the "add coding project" popover: a folder path field
+// (typed or picked via the native picker), an optional display name, and
+// an icon picker. Submitting calls addProject() and refreshes both the
+// sidebar and the list view.
 function openAddPopover(anchorEl){
   closeFloater();
   const pop = document.createElement('div');
@@ -654,10 +832,17 @@ function openAddPopover(anchorEl){
 }
 
 // ---------- file preview drawer (CP05, read-only) ----------
-let drawerFileKey = null;
+let drawerFileKey = null;   // which file is currently shown, so re-clicking the same cell is a no-op-safe reopen
 
 function drawerOpen(){ return $('#cp-screen')?.classList.contains('drawer-open'); }
 
+// Open the read-only markdown preview drawer for a file cell click.
+// `fileKey` is either "md:<index>" (an index into the scan's markdownFiles
+// array, from markdownFileCellHtml's data-file attribute) or one of the
+// four convention-doc keys (readme/changelog/bugs/tasks) for older
+// call sites. Renders the file's markdown via core/markdown.js's
+// renderMarkdown — this is a preview only; there is no edit/write path.
+// "Open in Finder" is stubbed for later (see the reveal button below).
 function openDrawer(projectId, fileKey){
   const p = loadProjects().find(x => x.id === projectId);
   const scan = scanCache.get(projectId);
@@ -678,6 +863,7 @@ function openDrawer(projectId, fileKey){
   $('#cp-drawer-body').innerHTML = f.tooBig
     ? '<p>file too large to preview</p>'
     : renderMarkdown(f.text || '');
+  highlightCodeIn($('#cp-drawer-body'));
   $('#cp-drawer-body').scrollTop = 0;
   $('#cp-drawer-reveal').onclick = () => toast('reveal in finder — coming later');
   $('#cp-drawer').classList.add('show');
@@ -693,10 +879,19 @@ function closeDrawer(){
 }
 
 // ---------- overlay + sidebar ----------
+// mount/unmount pair registered with the view registry below: showing the
+// overlay always resets to the list view (never reopens onto a stale
+// project page) and re-renders fresh.
 function showOverlay(){ $('#cp-screen')?.classList.add('show'); currentProjectId = null; setCrumb(); render(); }
 function hideOverlay(){ $('#cp-screen')?.classList.remove('show'); }
+// Switch the whole app to this view via the shared registry (used by the
+// sidebar's "coding projects" header and its add-project shortcut).
 function openList(){ mountView('coding-projects'); }
+// Hand control back to the chat view via the shared registry.
 function backToChat(){ mountView('chat'); }
+// Back/escape handling with a priority order: close an open popover first,
+// then an open file drawer, then step up from a project page to the list,
+// and only then leave the feature entirely back to chat.
 function navBack(){
   if (activePopover){ closeCommentsPopover(); return; }
   if (drawerOpen()){ closeDrawer(); return; }
@@ -704,6 +899,8 @@ function navBack(){
 }
 
 function readCollapse(){ return lsRead(SIDE_COLLAPSE_KEY, {}) || {}; }
+// Apply the persisted collapsed/expanded state to the sidebar's project
+// list section (toggling a class and rotating the disclosure caret).
 function applyCollapse(){
   const list = $('#cp-side-list');
   const caret = $('#cp-side-head .cp-caret');
@@ -716,6 +913,10 @@ function toggleCollapse(){
   const next = readCollapse(); next.cp = !next.cp; lsWrite(SIDE_COLLAPSE_KEY, next); applyCollapse();
 }
 
+// Render the app-wide sidebar's list of coding projects (a persistent
+// shortcut list living outside #cp-screen, alongside the sidebar's other
+// features) so a project can be jumped to without first opening this view's
+// own list page.
 function renderSidebarList(){
   const host = $('#cp-side-list');
   if (!host) return;
@@ -728,6 +929,11 @@ function renderSidebarList(){
   });
 }
 
+// Wire the sidebar's coding-projects section: the collapse caret, clicking
+// the header to open this view's list page, and the header's own
+// add-project shortcut (opens the list then immediately opens the
+// add-folder popover, via a setTimeout so the list has finished rendering
+// #cp-add first).
 function wireSidebar(){
   const head = $('#cp-side-head');
   const addBtn = $('#cp-add-project');
@@ -745,6 +951,14 @@ function wireSidebar(){
   loadMindGarden().then(() => renderSidebarList()).catch(() => {});
 }
 
+// Entry point, called once at app startup (see the file-level comment
+// above). Bails out if the overlay's static markup (#cp-screen) isn't in
+// the page yet — this feature's DOM shell must already exist in
+// index.html/similar for it to attach to. Wires the overlay's own chrome
+// (back button, drawer close, escape key, click-outside-drawer), then
+// registers this view with the shared registry (frontend/core/registry.js)
+// so mountView('coding-projects') can activate it, and finally wires the
+// persistent sidebar shortcut.
 export function initCodingProjects(){
   if (!$('#cp-screen')) return;
   $('#cp-back')?.addEventListener('click', navBack);

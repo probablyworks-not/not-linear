@@ -4,12 +4,33 @@
 // `screencapture` (works in both the native shell and a browser tab) and land in
 // feedback/media/. Toggle with ⌘⇧B (or ⌘Q in the native shell — browsers reserve it).
 
+// Relationship to other core/ modules: imports toast/wireTabInsertsTab from
+// core/ui.js for its own composer textarea and status messages, reads
+// core/state.js's appState (currentThreadId) and core/registry.js's
+// getActiveViewId() to tag each saved entry with where it was filed from.
+// Unlike the provider modules, this file talks to backend/server.py directly
+// via its own local `post()` fetch helper (see below) instead of going
+// through core/api-client.js's loggedFetch — see the note in
+// core/api-client.js's file header about this being a deliberate/known
+// exception, so requests made here won't show up in the app's request log.
+// This module also defines its own local `esc()` HTML-escaper rather than
+// importing core/markdown.js's — functionally equivalent, just not shared.
+// Only app.js imports/calls this file (a single initFeedback() call at
+// startup); frontend/styles/feedback.css supplies the panel's visual styling.
 import { toast, wireTabInsertsTab } from './ui.js';
 import { appState } from './state.js';
 import { getActiveViewId } from './registry.js';
 
 const esc = (s) => String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
 
+// initFeedback: build and wire up the entire floating feedback panel —
+// creates its DOM (panel + capture-preview overlay), and attaches all
+// behavior: bug/idea type toggle, screenshot/recording capture via the
+// backend's OS-level `screencapture` integration, pen-annotate-before-attach
+// preview flow, save-to-FEEDBACK.md, the collapsible bugs/ideas log in
+// Settings, ⌘⇧B (or ⌘Q in the native shell) toggle, and panel drag-to-move.
+// Called once by app.js at startup; there is no corresponding teardown
+// function since the panel is meant to persist for the page's lifetime.
 export function initFeedback(){
   const panel = document.createElement('div');
   panel.id = 'feedback-panel';
@@ -72,6 +93,10 @@ export function initFeedback(){
   });
   // Close on Escape only when focus is inside the panel, and stop the app-level
   // Escape handler from also firing (capture phase runs before it).
+  // Registered with `capture: true` (the trailing `true` arg) specifically so
+  // this fires before app.js's own (bubble-phase) Escape handling — without
+  // stopPropagation() here, Escape inside the feedback panel could also
+  // trigger app.js's unrelated Escape behavior (e.g. closing a different modal).
   document.addEventListener('keydown', e => {
     if (e.key === 'Escape' && isOpen() && panel.contains(document.activeElement)
         && !overlay.classList.contains('show')){   // preview overlay's own Escape handler wins
@@ -105,12 +130,18 @@ export function initFeedback(){
     }));
   }
 
+  // Local POST helper for this panel's own backend calls (/__notlinear_feedback_*).
+  // Deliberately a plain fetch rather than core/api-client.js's loggedFetch —
+  // see the file-level note above.
   async function post(url, body){
     const res = await fetch(url, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body || {}) });
     return res.json();
   }
 
   // ---------- capture mode menu (Select area / Full screen) ----------
+  // Small anchored popup used by both the screenshot and recording buttons
+  // to pick a capture mode before calling the backend's `screencapture`-based
+  // endpoint; `onPick(mode)` is doShot or startRec depending on which button opened it.
   let captureMenu = null;
   function closeCaptureMenu(){ captureMenu?.remove(); captureMenu = null; }
   function openCaptureMenu(anchor, onPick){
@@ -133,6 +164,9 @@ export function initFeedback(){
   }
 
   // ---------- screenshot ----------
+  // Trigger a screenshot via the backend's OS-level screencapture. Hides this
+  // panel first (with a short delay to let the hide actually paint) so the
+  // feedback UI itself doesn't end up in its own screenshot.
   async function doShot(mode){
     shotBtn.disabled = true;
     panel.classList.add('fb-capturing');            // hide the panel so it isn't in the shot
@@ -198,6 +232,10 @@ export function initFeedback(){
   // ---------- capture preview: annotate (pen) → Add / Discard ----------
   // Nothing attaches to the report until "Add" is pressed; Discard (or Escape)
   // deletes the just-captured file from disk.
+  // `pv` (below) holds the mutable state for whichever screenshot/recording is
+  // currently being previewed — kind ('image'|'video'), the server-relative
+  // path, and for images a canvas/context/backing <img> plus the freehand
+  // annotation `strokes` (array of point arrays) drawn with the pen tool.
   const overlay = document.createElement('div');
   overlay.id = 'fb-preview-overlay';
   overlay.innerHTML = `
@@ -239,6 +277,9 @@ export function initFeedback(){
     }
   }
 
+  // Convert a pointer event's viewport coordinates into canvas pixel
+  // coordinates, scaling for any difference between the canvas's natural
+  // resolution (image dimensions) and its displayed CSS size.
   function canvasPoint(e){
     const r = pv.canvas.getBoundingClientRect();
     return { x: (e.clientX - r.left) * (pv.canvas.width / r.width),
@@ -392,6 +433,11 @@ export function initFeedback(){
   }
 
   // ---------- drag by header ----------
+  // Freeform drag: on pointerdown on the header (excluding the close button),
+  // track the cursor offset within the panel and reposition it with
+  // left/top on every pointermove, clamped to stay within the viewport;
+  // switching from right/bottom-anchored CSS to left/top here is what lets it
+  // be dragged freely instead of snapping back to its default corner.
   const head = panel.querySelector('.fb-head');
   head.addEventListener('pointerdown', e => {
     if (e.target.closest('.fb-close')) return;

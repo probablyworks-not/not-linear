@@ -4,6 +4,27 @@ Each entry: **Decision ID · status · context · decision · alternatives rejec
 
 ---
 
+## ADR-030 — Coding Projects removed; scan/pick-folder endpoints and picker CSS kept
+- **Status:** accepted 2026-09-29.
+- **Context:** User asked to remove Coding Projects entirely. Grep showed chat Projects' folder-context feature calls `/__notlinear_scan_project` and `/__notlinear_pick_folder`, and `core/emoji.js` uses `.cp-*`/`.mg-*` classes defined in `coding-projects.css`.
+- **Decision:** Delete the view, its CSS, markup and wiring; keep the two endpoints; move shared picker CSS to `styles/emoji-picker.css`. Supersedes ADR-003–006, 008 for the removed UI. Archive: `docs/coding-projects-archive.md`.
+- **Alternatives rejected:** deleting the endpoints (breaks chat Projects); renaming `cp-*` classes (unneeded churn).
+- **Related files:** `frontend/styles/emoji-picker.css`, `backend/server.py`, `frontend/core/emoji.js`.
+
+## ADR-029 — fetch_url/firecrawl_scrape page windowing lives in tools.js, not per-provider
+
+- **Status:** accepted
+- **Context:** `runFetchUrl`/`runFirecrawlScrape` truncated long pages to a fixed head-of-document cutoff (4000/6000 chars) with no way for the model to read further. Fixing this required deciding (a) how a model asks for "more" of a page, and (b) where the fetch-result cache should live — `claude.js` had its own `_fetchUrlCache` (URL → already-truncated string), while `openai.js`/`deepseek.js` had none.
+- **Decision:** Add optional `offset`/`query` params to both tools' schemas (in all three provider tool-schema copies in `app.js`); `tools.js`'s runners fetch the full page once, cache the *raw* text keyed by `${tool}:${url}` in a new shared `fetchRawTextCached` helper, and slice a bounded window (`windowText`) per call — `offset` resumes from a position, `query` centers the window on a case-insensitive substring match. Every windowed result reports the char range and total length so the model knows to call again. The cache moved out of `claude.js` entirely; `executeTool` in `tools.js` is the single place all three providers hit, so all three now share one cache and the pagination behavior identically.
+- **Alternatives rejected:**
+  - **Keep the cache in `claude.js`, add offset/query only there:** would leave OpenAI/DeepSeek without caching or pagination, an inconsistency with no upside — the fetch/scrape logic is provider-agnostic.
+  - **Duplicate the raw-text cache into each of the three provider files:** three copies of the same Map+wrapper logic for no behavioral difference; centralizing in `tools.js` (already the single dispatch point via `executeTool`) is strictly simpler.
+  - **Just raise the truncation cap instead of paging:** doesn't solve the general case, only pushes the wall further out — a big-enough page still gets cut off with no way to continue.
+- **Consequences/tradeoffs:** The raw-text cache now stores full page text instead of a truncated ~4-6KB string per URL, so per-session memory use for `fetch_url`/`firecrawl_scrape` grows somewhat on pages that get fetched — acceptable for a page-session-scoped cache. Tool schemas gained two optional params on both tools, effective across Claude, OpenAI, and DeepSeek call paths identically.
+- **Related files:** `frontend/providers/tools.js` (`windowText`, `fetchRawTextCached`, `runFetchUrl`, `runFirecrawlScrape`, `executeTool`), `frontend/providers/claude.js` (removed `_fetchUrlCache`/`executeToolCached`), `frontend/app.js` (`buildTools`, `buildDeepSeekTools`)
+
+---
+
 ## ADR-028 — Notes branches reuse chat's `.branch`/`.branch-stack` CSS/DOM and interaction model, not its data or code
 
 - **Status:** accepted (2026-08-02)
@@ -377,3 +398,29 @@ Each entry: **Decision ID · status · context · decision · alternatives rejec
   - **(B) History scrub + flip public:** `git filter-repo` over months of history with personal artifacts is error-prone; a leaked blob is unrecoverable once public. Clean start is safer and simpler.
 - **Consequences/tradeoffs:** Two repos to maintain and a subtree sync cost; public repo loses granular history (acceptable). The plugin seam requires a small core change (optional `plugins/` loader) logged as its own task. Public contributions demand automated smoke coverage (Playwright) before PRs open — called out as the highest-leverage prerequisite in `plan.md` §OSS-04.
 - **Related files:** `plan.md`, `frontend/core/registry.js`, `frontend/app.js`, `backend/server.py`
+
+## 2026-10-03 — Model choice is per composer, not global
+Each chat branch stores `modelPref` (inherited from parent/main at creation, then independent). Main keeps `prefs.model`. Thinking toggle stays global; Notes branch panels still follow main (revisit if wanted).
+
+## 2026-10-04 — Modes: overrides-only storage in the prefs blob
+Built-in modes stay in code (`core/modes.js`); user edits are stored as per-field overrides (`prefs.modeOverrides`) and user-created modes in `prefs.customModes`. Merged at read time so improved defaults still reach users who never edited a mode, and reset = delete override. Lives in the existing `kv:'state'` blob, so no Dexie version bump. A mode is only a system prompt (no tool/model settings). Global, not per-chat.
+
+
+## ADR-031 — Bundle the existing native shell and Python backend for macOS distribution
+
+- **Status:** accepted (release architecture authorized by the user; this implementation is development-only).
+- **Context:** The user wants a DMG installation without Python or a source checkout, local databases, and in-app updates. The existing launcher hardcodes the maintainer's checkout and uses system Python.
+- **Decision:** Preserve the Cocoa/WKWebView shell, native ES-module frontend, stdlib backend, bundle identity, stable local origin, and existing separate Dexie schemas. Add release-only tooling that bundles a trimmed python.org framework runtime and explicitly allowlisted app resources. Relocate/audit native dependencies and locally ad-hoc sign. Put packaged writable logs/feedback outside the app, using `NOTLINEAR_DATA_DIR`; development defaults remain repo-relative. Use PID health polling and terminate only the owned server.
+- **Alternatives rejected:** Framework rewrite; relying on system Python; copying the entire repository (would distribute personal files); writing into a signed app; silently changing ports (would change storage origin); reusing or killing an unrelated local server.
+- **Consequences/tradeoffs:** Release packaging adds a developer build step without changing the frontend's no-build workflow. Initial tested architecture is arm64; macOS 11 metadata is provisional. Existing prebuilt legacy launcher is retained and not overwritten. Public release requires offline assets, storage/backup checks, security hardening, approved Sparkle integration, Developer ID/notarization, and hosting configuration.
+- **Related files:** `scripts/build_macos.py`, `launchers/NotlinearNative.m`, `backend/server.py`, `docs/MACOS_RELEASE.md`.
+
+
+## ADR-032 — Free unnotarized DMG, GitHub release feed, manual installation
+
+- **Status:** accepted; user explicitly rejected paid Apple membership and chose free DMG distribution. Supersedes paid-signing/Sparkle prerequisites in the original release proposal; ADR-031 bundling/data choices stay unchanged.
+- **Context:** The user provided `https://github.com/probablyworks-not/not-linear` and `https://notlinear.lol/`. The repo is public and writable; the existing site is Vercel-hosted, with source project still unknown.
+- **Decision:** Ad-hoc-sign the app/runtime, distribute a DMG with per-app first-launch approval instructions, and attach version/build/architecture/SHA-256 metadata as `latest.json` to each published GitHub release. Native launch/six-hour/manual checks offer a manual DMG download. Prepare a `/download/` page for the existing website; preserve its hosting and homepage. Prepare draft releases and a source PR for human review before publication/merge.
+- **Alternatives rejected:** Paid Developer ID/notarization now; global Gatekeeper disabling; claiming Homebrew or a ZIP avoids Gatekeeper; automatic unsigned app replacement; migrating the existing domain to new hosting without its source/configuration.
+- **Consequences/tradeoffs:** First launch may require Privacy & Security approval and may be restricted on managed Macs. No automatic install or restart. HTTPS/GitHub metadata and strict download URL validation are used; checksums are available for manual verification, not a claim of Apple notarization. `/latest` requires a regular published release, even while product copy calls it an early beta. Full GUI/clean-Mac/upgrade QA remains a release gate.
+- **Related files:** `docs/MACOS_RELEASE.md`, `launchers/NotlinearUpdates.{h,m}`, release scripts, `release-site/`.

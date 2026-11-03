@@ -1,0 +1,38 @@
+/* Shared emoji / Mind Garden picker styles (core/emoji.js). Moved out of the removed coding-projects.css; class names unchanged. */
+.cp-pop{position:fixed;z-index:420;background:var(--bg);border:1px solid var(--rule-2);border-radius:10px;box-shadow:var(--shadow-lg);display:flex;flex-direction:column;max-height:340px;overflow:hidden}
+/* ---------- emoji picker ---------- */
+.cp-emoji-pop{padding:10px;gap:8px}
+.cp-emoji-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:4px}
+.cp-emoji-pop .cp-emoji-grid{overflow-y:auto;max-height:240px;align-content:start}
+.cp-emoji-opt{font-size:18px;height:30px;border-radius:6px;border:none;background:transparent;cursor:pointer;display:grid;place-items:center}
+.cp-emoji-opt:hover{background:var(--bg-3)}
+.cp-emoji-opt.on{background:var(--accent-soft);outline:1px solid var(--accent)}
+.cp-emoji-search,.cp-emoji-more{width:100%;border:1px solid var(--rule);border-radius:7px;background:var(--surface);color:var(--text);font:inherit;font-size:13px;padding:6px 8px;outline:none}
+.cp-emoji-more{margin-top:8px}
+.cp-emoji-search:focus{border-color:var(--accent)}
+.cp-emoji-empty{grid-column:1/-1;text-align:center;color:var(--text-3);font-size:12px;padding:18px 0}
+/* mind-garden picker toolbar (search + color swatch) */
+.mg-toolbar{display:flex;align-items:center;gap:8px;margin-bottom:8px;flex:0 0 auto}
+.mg-toolbar .cp-emoji-search{flex:1;margin:0}
+.mg-color-swatch{position:relative;width:32px;height:32px;border-radius:8px;border:1px solid var(--rule);background:var(--surface);display:grid;place-items:center;cursor:pointer;flex:0 0 auto;padding:0}
+.mg-color-swatch:hover{background:var(--bg-3)}
+.mg-color-swatch .mg-color-fill{width:18px;height:18px;border-radius:50%;display:block;box-shadow:0 0 0 1px rgba(0,0,0,.08) inset}
+.mg-color-swatch.default .ti{font-size:16px;color:var(--text-3)}
+.mg-color-pop{position:absolute;right:10px;top:48px;background:var(--bg);border:1px solid var(--rule-2);border-radius:10px;box-shadow:var(--shadow-lg);padding:10px;display:grid;grid-template-columns:repeat(5,28px);gap:8px;z-index:430}
+.mg-color-pop[hidden]{display:none}
+.mg-color-opt{width:28px;height:28px;border-radius:50%;border:2px solid transparent;cursor:pointer;padding:0;display:grid;place-items:center}
+.mg-color-opt:hover{transform:scale(1.08)}
+.mg-color-opt:focus-visible,.mg-color-opt.on{border-color:var(--accent)}
+.mg-color-opt.default{background:var(--surface);border-color:var(--rule)}
+.mg-color-opt.default .ti{font-size:14px;color:var(--text-3)}
+.cp-emoji-pop.mg-only .cp-emoji-grid{flex:1;overflow-y:auto;max-height:300px}
+.mg-grid{grid-template-columns:repeat(6,1fr);gap:2px}
+.mg-opt{height:44px;padding:2px}
+.mg-opt .mg-icon{width:30px;height:30px}
+/* mind garden inline SVGs */
+.mg-icon{display:block;color:inherit}
+.thread-emoji .mg-icon,.project-emoji .mg-icon{width:22px;height:22px}
+/* Mind Garden glyphs dropped into the document body */
+.mg-inline{display:inline-flex;align-items:center;vertical-align:middle;color:inherit;margin:0 1px;user-select:none}
+.mg-inline .mg-icon{width:1.1em;height:1.1em}
+

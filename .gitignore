@@ -1,0 +1,4 @@
+# Generated release artifacts and Python caches
+/dist/
+__pycache__/
+*.pyc

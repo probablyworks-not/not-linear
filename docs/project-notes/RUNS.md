@@ -4,6 +4,48 @@ Each entry: **date/time · task or bug ID · command category · result · impor
 
 ---
 
+## 2026-09-29 — Coding Projects removal — static + headless load check — pass
+- **Command category:** static (`node --check`, `py_compile`) + headless Playwright on `:8765`
+- **Result:** pass
+- **Output:** no console/page errors; `#cp-screen`, `#cp-side-list`, `#bte-coding-projects` absent; blank tab shows 4 tiles; Notes opens.
+- **Follow-up:** Human smoke test (icon picker styling, chat Projects folder scan) not yet run.
+
+---
+
+## 2026-09-24 (2) — Context panel grouped by main-chat turn — static check + live Playwright E2E — pass
+- **Command category:** static (`node --check`) + live headless Playwright against the real running `:8765` dev server, with `page.route()` intercepting `https://api.anthropic.com/v1/messages` (protocol-correct mocked SSE, zero real API calls/cost).
+- **Result:** pass
+- **Output:** `node --check` clean on `app.js`. Drive script: created a new chat thread, sent two real main-composer messages ("What is topic one about?" / "What is topic two about?", each getting a distinct mocked reply), confirmed both turns rendered with distinct `data-turn-id` values. Selected text inside turn 1's response and used the real selection-popover Branch action to create a branch, sent a message in it; repeated for turn 2's response. Opened the Context panel: rendered tree had turn 2's `.ctx-turn` header ("What is topic two about?") above turn 1's, each followed by a `.ctx-turn-branches` wrapper containing exactly that turn's branch, correct turn-count badges ("2 turns" each), and `title` attributes carrying the full (untruncated) turn prompt text. Re-ran against the original demo thread (`doc-main`, 2 legacy branches with no `mainTurnId`, from the earlier same-day session) and confirmed they still render correctly with no turn header — the "no turn" fallback path works. Zero console/page errors in both runs. Screenshot reviewed for turn-2-on-top visual ordering.
+- **Follow-up:** None required. Human can spot-check with a longer real conversation (many turns, some with multiple branches) to eyeball spacing/readability at scale, but the grouping/ordering logic is confirmed correct.
+
+## 2026-09-24 — Context panel turn counts / nested tree / collapse — static check + live Playwright E2E — pass
+- **Command category:** static (`node --check`) + live headless Playwright against the real running `:8765` dev server (found already running under another process; left it running, did not start a second instance or kill it), with `page.route()` intercepting `https://api.anthropic.com/v1/messages` to return a hand-built but protocol-correct SSE stream — no real Anthropic API calls or cost.
+- **Result:** pass
+- **Output:** `node --check` clean on `app.js`. Drive script: set a fake key in `localStorage['nl_api_keys']` (never sent anywhere real, since the network call was mocked), selected real text in the main doc via the Range API + `selectionchange`, clicked the selection popover's Branch action, typed + sent a message in the resulting branch composer (mocked reply streamed in via the intercepted route), then selected text inside that branch's own response to create a nested sub-branch and sent a message there too — all through the actual UI code paths, not synthetic state injection (an earlier attempt to seed `branchSnapshots`/`branchRecents` directly via raw IndexedDB was abandoned after confirming the app's own render/normalization pass discards branch state that wasn't created through the live `openBranch()`/`captureBranchSnapshot()` flow — not a bug, just not a valid shortcut for this kind of test). Opened the Context panel: parent row showed "2 turns" and a chevron (has a child), child row was correctly nested inside a `.ctx-branch-children` wrapper with a visible connecting guide line and showed "2 turns" with no chevron (no children); the two pre-existing zero-message demo branches still rendered with no turn badge. Clicking the turn-count badge showed an inline preview with correct "You"/"Assistant" truncated text; clicking the chevron set the children wrapper's computed `display` to `none`; re-expanding and using the composer's attach-branch menu afterward still worked. Zero console/page errors across the whole run. Screenshots reviewed at each step.
+- **Follow-up:** None required — human can spot-check the visual polish (guide-line color/spacing) in the real browser at leisure, but the logic and rendering are confirmed correct end-to-end.
+
+## 2026-09-18 — Bug #049 (Notes nested-bullet copy/export) — static check + scripted logic check — pass
+- **Command category:** static (`node --check`) + scripted logic check (standalone node script, not the real app — `stripHtml`/`getNote` stubbed out since the real implementation needs a browser DOM)
+- **Result:** pass
+- **Output:** `node --check` clean on `frontend/views/notes.js`. Scripted check: fed the patched `blocksToText` recursion logic a 3-level nested bullet list (Products → "Products that I have worked on" → Notlinear/GYST/Interview feedback/ETC, matching the user's reported screenshot) and confirmed every level printed with one extra `  ` indent per depth — previously the two inner levels would have been dropped entirely.
+- **Follow-up:** Human: start the dev server, in a real Notes page Tab-indent a bullet under another bullet, ⌘A ⌘A → ⌘C, paste into a plain-text field and confirm the child bullet is present; also spot-check the "export as .md" path on the same nested structure.
+
+## 2026-09-06 — Syntax-highlighted code blocks (chat/Notes/Coding Projects) — static check + headless Chromium against live :8765 — pass
+- **Command category:** static (`node --check`) + pure-function sanity (`node -e`) + headless-browser smoke (Playwright, `:8765` — the user's already-running server, not a throwaway port)
+- **Result:** pass
+- **Output:** `node --check` clean on `frontend/core/markdown.js`, `frontend/app.js`, `frontend/views/notes.js`, `frontend/views/coding-projects.js`. `node -e` against `renderMarkdown()` confirmed the new `.code-block`/header/copy-button HTML shape for a fenced code block. Installed `playwright-core` into the scratchpad (browsers already cached at `~/Library/Caches/ms-playwright`, no `chromium-cli` available in this environment) and drove the live `:8765` page: injected a synthetic assistant message with a Python code fence through the app's own `renderMarkdown`/`highlightCodeIn` functions (bypassing the need for a live LLM API key), confirmed `.code-block`, `.code-copy-btn`, a `python` language label, and 7 `hljs-keyword`/`hljs-string`/`hljs-comment` spans (real syntax coloring) all present; clicking Copy flipped the button label to "Copied" (needed `context.grantPermissions(['clipboard-write'])` for headless Chromium's Clipboard API). Screenshots reviewed in both light and dark-mono themes — colors read clearly in both, header bar and Copy button both legible. One pre-existing unrelated console 404 seen, not investigated (not caused by this change).
+- **Follow-up:** None required. Did not exercise this through a real streamed LLM response (used a synthetic injected message instead, since testing the render path itself doesn't need a live model) — human can do one real chat turn with a code-block-producing prompt as a final sanity check if desired.
+
+---
+
+## 2026-09-06 — fetch_url/firecrawl_scrape pagination + shared cache — static check + server smoke — pass (partial)
+- **Command category:** static (`node --check`) + live-server sanity (`:8765`, already running)
+- **Result:** pass on what was checked; full manual smoke not run
+- **Output:** `node --check` clean on `frontend/providers/tools.js`, `frontend/providers/claude.js`, `frontend/app.js`. `curl :8765/frontend/index.html` → 200; fetched the live-served `app.js` from the running server and re-ran `node --check` against it to confirm the server is handing out the edited file with no syntax errors.
+- **Follow-up:** No live `fetch_url`/`firecrawl_scrape` tool call was exercised this session (would need a real chat turn triggering the tool against a genuinely long page, plus a Firecrawl key for that half). Human: ask the app to fetch a long page, confirm the `[showing chars X-Y of TOTAL...]` note appears and a follow-up call with `offset` continues correctly; try a `query` term and confirm the window centers on it.
+
+---
+
 ## 2026-08-07 — Model provider upgrade + picker expansion (BUGS #044–#047) — static checks + headless Chromium (throwaway :8799, 4 runs) — pass
 
 - **Command category:** static (`node --check`) + curl + headless Playwright against a throwaway server on `:8799` (never the user's live `:8765` session — their real IndexedDB data was untouched throughout).
@@ -437,3 +479,88 @@ Each entry: **date/time · task or bug ID · command category · result · impor
 - **Result:** pass (full-screen flows); area flows pending human smoke test (native macOS picker can't be driven headlessly)
 - **Output:** `py_compile` + `node --check` clean. Upload/discard routes reject path traversal (`backend/server.py`, `../…`) and accept `feedback/media/` paths. E2E: capture-mode menu shows 2 options; full-screen shot → preview overlay → pen stroke drawn → "Add to report" rewrote the PNG (1,125,593 → 1,170,972 bytes) and added the chip; second capture → Discard deleted the file with no chip; 2.5s full-screen recording → stop → `<video>` preview → Add → chip; zero console errors. Overlay screenshot reviewed (annotation visible). Test media removed; user's own capture kept.
 - **Follow-up:** Human: restart :8765, test both "Select area" flows (shot + recording), annotate, Add, then Save a bug and confirm entry + media in Settings → Feedback.
+
+## 2026-10-03 — per-branch model
+`node --check frontend/app.js` OK. Manual smoke test not run by agent; pending human.
+
+## 2026-10-04 — editable modes
+`node --check` clean on all touched JS. Playwright (headless): 6 menu items → modal opens → create "Teacher" → 7 items → select → chip shows Teacher → persisted in IndexedDB and restored after reload; zero console errors. `core/modes.js` node test: override/reset/delete/fallback OK. Human GUI check of edit/reset/delete pending.
+
+
+## 2026-11-01 17:56 IST · TASK-MAC-001 / bug #053 · build/test
+
+- **Result:** Pass for targeted checks; full manual smoke pending.
+- **Commands:** `python3 scripts/build_macos.py --python-framework /Library/Frameworks/Python.framework/Versions/3.13 --output dist/Notlinear.app`; `--dmg-only`; `python3 -m unittest discover -s tests -p test_packaged_server.py`; same suite with bundled Python; `python3 -m py_compile backend/server.py scripts/build_macos.py tests/test_packaged_server.py`; `zsh -n launchers/build-macos-app.command`; `codesign --verify --deep --strict`; `hdiutil verify`; `git diff --check`; read-only architecture/dependency/signing inventory.
+- **Important output:** Six integration tests pass on system Python 3.14 and bundled Python 3.13. Relocated runtime reports its bundled prefix. Native arm64 app compiles and deep signature verification passes. Development app about 51 MB, DMG about 22 MB, image checksum valid. `security find-identity` reports zero valid identities. Initial build attempts failed on Python license/interpreter-layout assumptions; corrected to stdlib LICENSE.txt and actual Python.app interpreter. Sandboxed localhost binds and DMG creation failed; approved executions passed.
+- **Smoke test:** Server/HTTP subset passed (frontend, live changelog, feedback and runtime logs). GUI app load, Claude/fallback, nested branch/reopen/persist, research status, native attachment/folder picker, light highlights, theme/key/reload persistence, in-app changelog rendering, and file-watch prompt have NOT been manually exercised. No model API calls or personal-data changes performed.
+- **Follow-up:** Native and clean-Mac QA, offline assets, backup/restore and upgrade tests, Keychain, Sparkle, public signing/notarization and hosting remain required. This is not a release approval.
+
+
+## 2026-11-01 18:06 IST · TASK-MAC-001 · final build / native QA attempt
+
+- **Result:** Final preview app compile/relocation/deep signature checks and DMG checksum passed. Native UI smoke blocked by occupied fixed port.
+- **Important output:** Final artifact: `dist/preview/Notlinear-0.2.0-arm64.dmg` (~22 MB). QA copied to `/tmp/Notlinear Release QA.app` with separate bundle identity `local.notlinear.release-qa.20261101`. Opening it showed a native window, but its bundled backend exited with `Address already in use`. A localhost health check identified the existing listener as another service (not Notlinear); its interpreter is outside the bundled runtime. No process was killed. The computer-use initialization took several minutes and did not verify the rendered frontend. Full GUI smoke remains pending.
+- **Commands:** Final build to `dist/preview/Notlinear.app`, refresh bundled changelog, ad-hoc sign/deep verify, `--dmg-only` with checksum verification, isolated QA launch and read-only listener/health inspection, Python/shell syntax and `git diff --check`.
+- **Follow-up:** Free port 8765 before native QA. Keep the origin unchanged for existing data. Configure public signing/hosting later; no public release or update feed exists.
+
+
+## 2026-11-01 20:25 IST · TASK-MAC-005 / bug #054 · test/build/investigation
+
+- **Result:** Targeted checks pass; rendered/native/provider/clean-Mac/upgrade smoke pending.
+- **Commands/categories:** Native source compilation, `python3 -m unittest discover -s tests -p test_packaged_server.py`, `clang tests/test_release_feed.m launchers/NotlinearUpdates.m ...`, `/tmp/notlinear-release-feed-test`, `node tests/test_download_page.mjs`, syntax/diff checks; read-only GitHub repo/release/auth checks and public site headers/links; isolated native QA build on 18765 and local download preview on 18766.
+- **Important output:** Eight server tests pass, including packaged foreign-origin/rebinding rejection with same-origin feedback/log routing preserved. Feed validator rejects malformed metadata and unsafe links. Page tests cover published release, missing release, offline and unsafe link. GitHub access confirmed (repo public, admin/write); no existing releases. notlinear.lol responds 200 from Vercel, links to another GitHub repo; source not found. QA backend health PID matches bundled process, frontend modules/icon sheet/file-watch HEAD requests return 200.
+- **Verification limit:** Computer-use initialization stalled for about twenty minutes and exposed only native window/menu controls. No screenshot or interaction established rendered frontend correctness. Local preview opening was queued. These are not GUI smoke passes. No model requests, API keys, production database changes, or unrelated process termination performed.
+- **Follow-up:** Build/stage final review artifacts, human smoke/upgrade checks, Vercel source identification and review before publication.
+
+
+## 2026-11-01 20:27 IST · TASK-MAC-005 · final artifact preparation
+
+- **Result:** Pass for arm64 app, DMG, release staging and generated-feed validation.
+- **Commands:** `scripts/build_macos.py` → `dist/free-beta-release/Notlinear.app` (version 0.2.0, build 3), `--dmg-only`, `scripts/prepare_macos_release.py` → `dist/release-v0.2.0`, compiled native validator against the generated `latest.json`, Python/JS/shell syntax and diff checks.
+- **Important output:** Relocated prefix verified; deep ad-hoc code signatures and disk image checksum valid. Release folder contains DMG, latest.json, SHA256SUMS.txt and release-notes.md. The exact generated metadata is accepted by the native validator. No public release or website deployment performed.
+- **Follow-up:** Draft PR/release for human review. Full AGENTS smoke, populated upgrade, clean-Mac download/first-launch and runtime dependency license review remain publication gates. Website project source still required.
+
+
+## 2026-11-01 20:33 IST · TASK-MAC-005 · review handoff / cleanup
+
+- **Result:** Pass: final eight server tests also pass using the exact staged app's Python runtime. Draft PR and release verified; no merge/public publication.
+- **Commands:** `git switch -c codex/free-mac-dmg`, explicit source/doc/test staging, commit `0bf5dc7`, push, `gh pr create --draft`, PR attachment, `gh release create --draft`, read-only PR/release/asset checks, local checksum comparison, final bundled-runtime test suite; owned QA/preview process cleanup. Final documentation follow-up records these artifacts on the same review branch.
+- **Important output:** PR https://github.com/probablyworks-not/not-linear/pull/2 (open/draft). Release https://github.com/probablyworks-not/not-linear/releases/tag/untagged-a53b1eba81446e0378dd (draft v0.2.0, target full SHA `0bf5dc70268eda21adf7dadfccc7a820cfc5ea49`). All three assets uploaded; DMG size 23,762,244 bytes, SHA-256 `d841921edbd982b8bf28425a8f813243b44b7158c742b6169524e76c6ea3d158`, matching GitHub's digest and latest.json. Initial release creation rejected the abbreviated commit SHA with HTTP 422; retry with the full pushed SHA succeeded. No duplicate release created.
+- **Cleanup:** Stopped only owned QA app/backend and the temporary 18766 page preview after checking their exact process identity. Unrelated 8765 service untouched.
+- **Follow-up:** Website source/project remains unknown; page is not live. Human code review, full app/provider/attachment smoke, clean-Mac first launch, populated upgrade and runtime license review still required before publication.
+
+
+## 2026-11-01 21:57 IST · TASK-MAC-005 · website build/test/deploy
+
+- **Result:** Pass. Website source: probablyworks-not/notlinear-website; cloned to `/tmp/notlinear-website-release`.
+- **Commands:** GitHub read-only source/Vercel status checks, `npm run check`, `npm test` (4 pass), `npm run build`, local server on 18766 and HTTP checks, website commit/push to its existing production main integration; Vercel exact-commit status and live-domain HTML checks. Updated app release documentation on the existing draft PR branch.
+- **Important output:** Website commit `fb01127d461c3afbe0e6e6019ac082d1cf8e60ec`; Vercel reports success. Built three download CTAs and removed the waitlist form/submission script. Initial test expected four CTAs, but the real page has three (nav/hero/closing); expectation corrected and all tests passed. DMG remains a GitHub draft; the page has an explicit preparation state until publication, with working section/Releases fallbacks. No secrets or signup data copied/deleted.
+- **Follow-up:** Mac smoke/upgrade/clean-Mac review and public release; direct DMG links activate automatically after publication.
+
+
+## 2026-11-03 11:23 IST · TASK-MAC-006 · documentation verification / release-state inspection
+
+- **Result:** Pass for documentation checks; no app build/publication attempted.
+- **Commands:** Read-only Git status/log/docs/script inspection, `gh release view v0.2.0`, `gh pr view 2`, public DNS queries for root/www, installed `gh release edit --help`, bash syntax parsing of RELEASE.md shell fences, local Markdown path validation, `git diff --check`. Documentation is committed/pushed on the existing draft review branch, not merged into main.
+- **Important output:** v0.2.0 remains draft/non-prerelease, target `0bf5dc70268eda21adf7dadfccc7a820cfc5ea49`; three uploaded assets unchanged. PR #2 open/draft. Root DNS succeeds, www status 3/NXDOMAIN. Copyable commands are syntax-valid and local file links resolve. Only syntax was checked for publication examples; they were not run.
+- **Smoke:** Not rerun (documentation-only; app/DB/watch/endpoints unchanged). Existing GUI/provider/clean-Mac/upgrade/license release gates remain pending.
+- **Follow-up:** User's final phrase was incomplete; async question asks current draft publication versus updated build review. Publication stays pending.
+
+
+## 2026-11-03 11:26 IST · TASK-MAC-007 · preflight
+
+- **Result:** Pass.
+- **Commands:** Git status/log, build/release script and skill-description inspection, existing artifact path checks, read-only GitHub release list and PR view.
+- **Important output:** Clean source on codex/free-mac-dmg at a6fecdb; existing v0.2.0 is draft, PR #2 open/draft. python.org framework 3.13 available. Fresh dist/mac-0.2.1-build4 and dist/release-v0.2.1 paths available.
+- **Follow-up:** Commit the candidate changelog/procedure before building so source provenance and bundled changelog match. Targeted verification remains to run; no public publication.
+
+
+## 2026-11-03 11:32 IST · TASK-MAC-007 · build/test/draft upload
+
+- **Result:** Pass for review-candidate preparation. No public release.
+- **Source/artifacts:** Commit `83bc2ad4ef82ed4fb57f3e641a72c757a069fdfe`; app version 0.2.1/build 4. App/image in `dist/mac-0.2.1-build4/`; staged DMG/feed/checksums/notes in `dist/release-v0.2.1/`.
+- **Commands:** Fresh build with explicit --version/--build/--dmg; Python/shell syntax checks, native feed fixture compile/run, four Node page behavior cases; read-only DMG attach with try/finally detach and metadata/shortcut/deep-signature/payload/runtime/CA checks; eight integration tests against packaged backend using bundled Python; staging/image verification and generated-feed validator; candidate commit push, `gh release create --draft`, read-only asset-digest/state checks and PR-description update.
+- **Important output:** 27 mounted payload files match source; 26 non-changelog payload files match v0.2.0. Correct production identity and 0.2.1/4 metadata; runtime prefix/imports/CA certificates load after mounting. All eight server tests pass. Initial temporary harness passed a relative SOURCE path and produced one absolute-vs-relative comparison failure; corrected the harness to `.resolve()` (the test suite's existing convention) and reran successfully without app/test-source changes. Native parser accepts generated feed; DMG checksum valid. All three GitHub asset digests match local bytes. DMG SHA-256 `c08e174f3facba699097ad0502e817fd667a573f734387c11dceb0f9e072eff2`.
+- **Review:** https://github.com/probablyworks-not/not-linear/releases/tag/untagged-a7f846b6e3a674155801; target `83bc2ad4ef82ed4fb57f3e641a72c757a069fdfe`. v0.2.0 retained unchanged as draft. PR #2 remains draft; main and public website unchanged.
+- **Manual smoke:** Not claimed; no native app GUI, real provider request, clean-Mac install, populated upgrade or license audit performed. Candidate request is for review only. Temporary image detached; test data/servers cleaned by the harness.
+- **Follow-up:** Maintainer review and existing publication checks.
