@@ -4,13 +4,31 @@ This is the operator runbook for building, reviewing, publishing and updating No
 Use the free **ad-hoc-signed, unnotarized DMG** route. No paid Apple membership is assumed.
 For runtime/data/security details, see [the Mac packaging reference](docs/MACOS_RELEASE.md).
 
-## Updated review candidate — 2026-11-03
+## Updated review candidate — verified 2026-11-03
 
-The user requested a fresh build for review, not public publication. Prepare **v0.2.1 / build 4**
-from the committed current source using `dist/mac-0.2.1-build4/` and `dist/release-v0.2.1/`.
-This rebuild includes the latest release runbook/changelog; application features are unchanged.
-The new candidate's exact source commit, checksums and draft link will be recorded after validation.
-Keep v0.2.0 available as a previous review candidate; do not overwrite its assets.
+The user requested a fresh build for review, not public publication.
+
+| Item | State |
+| --- | --- |
+| Candidate | **v0.2.1 / build 4**, arm64, ad-hoc signed and unnotarized |
+| Review download | [GitHub draft release](https://github.com/probablyworks-not/not-linear/releases/tag/untagged-a7f846b6e3a674155801) |
+| Exact build source | `83bc2ad4ef82ed4fb57f3e641a72c757a069fdfe` |
+| Source review | [PR #2](https://github.com/probablyworks-not/not-linear/pull/2) |
+| App/image output | `dist/mac-0.2.1-build4/` |
+| Release assets | `dist/release-v0.2.1/` |
+| DMG SHA-256 | `c08e174f3facba699097ad0502e817fd667a573f734387c11dceb0f9e072eff2` |
+
+All three uploaded asset digests match local files. The image mounted read-only with the correct
+version/build/identity, Applications shortcut and deep signature. All 27 payload files match source;
+its runtime relocates and loads standard modules plus CA certificates. All eight integration tests
+passed against the actual packaged backend using bundled Python; native feed/parser and four page
+cases passed. The image was detached and temporary test servers shut down normally.
+
+The 26 non-changelog application payload files match v0.2.0. This is a rebuild of current features
+with the updated bundled changelog and release runbook in source, not a new feature implementation.
+Both releases remain drafts. Full native GUI/provider, clean-Mac downloaded first launch,
+populated upgrade and runtime dependency license review remain pending. Do not mark those passed.
+Keep the older candidate available; do not overwrite its assets.
 
 ## Previous review candidate snapshot — checked 2026-11-03
 

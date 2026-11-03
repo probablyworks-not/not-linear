@@ -506,7 +506,7 @@ Each entry: **ID · Status · Goal · Context · Files likely involved · Accept
 
 
 ## TASK-MAC-007 — Updated v0.2.1 review candidate
-- **Status:** In progress.
+- **Status:** Done (candidate uploaded/verified as draft; public release and full manual smoke remain TASK-MAC-005).
 - **Goal:** Fresh arm64 app/DMG version 0.2.1, build 4, exact committed-source provenance, verified checksum/feed and separate GitHub draft.
 - **Context:** User explicitly selected Prepare an updated build for review on 2026-11-03. No new app features were requested; retain existing v0.2.0 assets and do not publish either draft.
 - **Files likely involved:** Release/changelog and project memory, generated dist artifacts; existing build/release tools unchanged.

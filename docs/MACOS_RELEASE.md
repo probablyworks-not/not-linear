@@ -9,9 +9,17 @@ This supersedes the earlier proposal that made paid signing a release prerequisi
 
 ## Latest review build
 
-A fresh v0.2.1 / build 4 review candidate is being prepared on 2026-11-03, following the user's
-explicit choice to prepare an updated build rather than publish v0.2.0. See [RELEASE.md](../RELEASE.md)
-for its validation/provenance. Existing product behavior and beta limitations are unchanged.
+Updated review candidate **v0.2.1 / build 4**, prepared and verified 2026-11-03:
+
+- [GitHub draft](https://github.com/probablyworks-not/not-linear/releases/tag/untagged-a7f846b6e3a674155801) — not public.
+- Local DMG/feed/checksums: `dist/release-v0.2.1/`.
+- Exact source: `83bc2ad4ef82ed4fb57f3e641a72c757a069fdfe`.
+- Fresh app/image build, mounted payload/runtime and uploaded digest verification passed.
+- Eight packaged-backend tests plus native feed and page cases passed.
+
+Application features and beta limitations are unchanged. The previous draft is retained.
+Full native/provider/clean-Mac/upgrade/license checks remain separate pending publication gates.
+See [RELEASE.md](../RELEASE.md) for provenance and the complete procedure.
 
 ## Previous v0.2.0 review artifacts
 

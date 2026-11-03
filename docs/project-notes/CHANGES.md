@@ -826,3 +826,12 @@ Each entry: **date · summary · files touched · why changed · risks · tests 
 - **Risks:** Preserve bundle ID/origin/databases and keep v0.2.0 assets untouched. Candidate remains unnotarized with previously disclosed CDN/key-storage/backup limitations. No fragile branch/Notes/tool/persistence code changed.
 - **Tests/run plan:** Fresh build and relocated interpreter; native feed tests; Node page cases; eight server tests on the bundled runtime; DMG integrity/mounted metadata/runtime; remote asset hashes. Native/provider/upgrade/clean-Mac smoke remains unverified.
 - **Next steps:** Validate and upload a new draft with exact source SHA; update review links/results.
+
+
+## 2026-11-03 · Complete v0.2.1/build 4 review candidate
+
+- **Summary:** Fresh committed-source app/DMG and verified GitHub draft prepared at https://github.com/probablyworks-not/not-linear/releases/tag/untagged-a7f846b6e3a674155801. Previous draft preserved.
+- **Files/artifacts:** Release docs, changelog and task/run/change memory; ignored dist/mac-0.2.1-build4 and dist/release-v0.2.1. Build/release/test implementation unchanged.
+- **Why:** User explicitly requested an updated build for review. App payload features remain unchanged; only bundled changelog and version/build metadata differ from v0.2.0.
+- **Risks/tests:** Fresh runtime/native/image checks and read-only mounted-source comparison pass. Eight tests target actual packaged backend/runtime; native feed and page behavior cases pass. Remote asset digests/provenance verified. Full GUI/provider/upgrade/clean-Mac/license review still pending; no new claim of app readiness or public publication.
+- **Next steps:** Review PR #2 and the new draft; publication is a separate future action.

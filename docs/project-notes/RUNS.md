@@ -553,3 +553,14 @@ Each entry: **date/time · task or bug ID · command category · result · impor
 - **Commands:** Git status/log, build/release script and skill-description inspection, existing artifact path checks, read-only GitHub release list and PR view.
 - **Important output:** Clean source on codex/free-mac-dmg at a6fecdb; existing v0.2.0 is draft, PR #2 open/draft. python.org framework 3.13 available. Fresh dist/mac-0.2.1-build4 and dist/release-v0.2.1 paths available.
 - **Follow-up:** Commit the candidate changelog/procedure before building so source provenance and bundled changelog match. Targeted verification remains to run; no public publication.
+
+
+## 2026-11-03 11:32 IST · TASK-MAC-007 · build/test/draft upload
+
+- **Result:** Pass for review-candidate preparation. No public release.
+- **Source/artifacts:** Commit `83bc2ad4ef82ed4fb57f3e641a72c757a069fdfe`; app version 0.2.1/build 4. App/image in `dist/mac-0.2.1-build4/`; staged DMG/feed/checksums/notes in `dist/release-v0.2.1/`.
+- **Commands:** Fresh build with explicit --version/--build/--dmg; Python/shell syntax checks, native feed fixture compile/run, four Node page behavior cases; read-only DMG attach with try/finally detach and metadata/shortcut/deep-signature/payload/runtime/CA checks; eight integration tests against packaged backend using bundled Python; staging/image verification and generated-feed validator; candidate commit push, `gh release create --draft`, read-only asset-digest/state checks and PR-description update.
+- **Important output:** 27 mounted payload files match source; 26 non-changelog payload files match v0.2.0. Correct production identity and 0.2.1/4 metadata; runtime prefix/imports/CA certificates load after mounting. All eight server tests pass. Initial temporary harness passed a relative SOURCE path and produced one absolute-vs-relative comparison failure; corrected the harness to `.resolve()` (the test suite's existing convention) and reran successfully without app/test-source changes. Native parser accepts generated feed; DMG checksum valid. All three GitHub asset digests match local bytes. DMG SHA-256 `c08e174f3facba699097ad0502e817fd667a573f734387c11dceb0f9e072eff2`.
+- **Review:** https://github.com/probablyworks-not/not-linear/releases/tag/untagged-a7f846b6e3a674155801; target `83bc2ad4ef82ed4fb57f3e641a72c757a069fdfe`. v0.2.0 retained unchanged as draft. PR #2 remains draft; main and public website unchanged.
+- **Manual smoke:** Not claimed; no native app GUI, real provider request, clean-Mac install, populated upgrade or license audit performed. Candidate request is for review only. Temporary image detached; test data/servers cleaned by the harness.
+- **Follow-up:** Maintainer review and existing publication checks.
