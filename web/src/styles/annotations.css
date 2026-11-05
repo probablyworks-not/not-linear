@@ -1,0 +1,11 @@
+.annotation-layer{position:fixed;pointer-events:none;z-index:70;overflow:hidden}
+.annotation-layer.annotation-drawing{pointer-events:none;touch-action:none;user-select:none}
+.annotation-layer path{fill:none;stroke:var(--annotation-amber);stroke-opacity:var(--annotation-opacity);stroke-width:var(--annotation-width);stroke-linecap:round;stroke-linejoin:round;pointer-events:none}
+.annotation-toolbar{position:fixed;bottom:124px;left:18px;z-index:36;display:flex;align-items:center;gap:6px;padding:6px;border:1px solid var(--rule);border-radius:10px;background:var(--surface-2);color:var(--text);box-shadow:var(--shadow-md);font-size:12px}
+.annotation-toolbar[hidden]{display:none}
+.annotation-toolbar button{padding:6px 8px;border-radius:5px;color:var(--text);background:var(--bg)}
+.annotation-toolbar button[aria-pressed="true"]{outline:2px solid var(--annotation-amber)}
+.annotation-toolbar button:disabled{opacity:.4;cursor:default}
+.annotation-surface{color:var(--text-3);padding:0 4px}
+
+body:has(.annotation-drawing) [data-chat-stream],body:has(.annotation-drawing) [data-chat-stream] > .chat-stream,body:has(.annotation-drawing) .branch-stack .branch-body{cursor:crosshair;user-select:none;-webkit-user-select:none}

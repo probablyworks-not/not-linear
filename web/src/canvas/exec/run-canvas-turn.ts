@@ -55,10 +55,9 @@ export interface CanvasTurnInput {
   wantsHtml?: boolean;
   /**
    * C9. Files picked in the Ink composer for *this* send. Native PDF/image blocks for a provider
-   * that supports them (today: Claude), text content inline for the rest — same `userContentFor`
-   * chat already uses. These are display-only on the canvas document itself (the attachment part
-   * carries no asset, since Canvas has no asset store yet — C5); the bytes only ever go to the
-   * model for this one turn.
+   * that supports them, text content inline for the rest — same `userContentFor` chat uses.
+   * Uploaded images also live in the document's existing asset collection, so later turns
+   * and ancestor context retain their bytes after reload.
    */
   attachments?: Attachment[];
 }
@@ -122,7 +121,7 @@ export async function runCanvasTurn(input: CanvasTurnInput, hooks: CanvasTurnHoo
     // prompt (`buildSystemPrompt` below takes `input.project` directly); this is what makes the
     // Context Islands' Rules tab say "inherited" truthfully instead of always reading empty.
     const inheritedRules = project?.rules?.trim() ? ['project-rules'] : [];
-    const context = resolveContext(d, input.threadId, { inheritedRules });
+    const context = resolveContext(d, input.threadId, { inheritedRules, provider: plan.provider });
     d.manifests.push(manifestFor(runId, context.manifest, now));
     const msg = addMessage(d, {
       threadId: input.threadId,
@@ -137,7 +136,8 @@ export async function runCanvasTurn(input: CanvasTurnInput, hooks: CanvasTurnHoo
   if (!created) return { status: 'failed', runId, messageId: null, text: '', error: 'This canvas is no longer open.' };
 
   const { messageId, partId, messages } = created;
-  const query = messages.filter(m => m.role === 'user').at(-1)?.content;
+  const question = messages.filter(m => m.role === 'user').at(-1)?.content;
+  const query = typeof question === 'string' ? question : question?.filter(b => b.type === 'text').map(b => String(b.text ?? '')).join('\n');
   // The attachments belong to the question that was just sent — always the last message
   // `resolveContext` produced, since it walks the ancestor chain ending at this thread's own,
   // newest-first-by-seq turn. Swapping its `content` here (rather than threading attachments
@@ -147,6 +147,13 @@ export async function runCanvasTurn(input: CanvasTurnInput, hooks: CanvasTurnHoo
     const last = messages[messages.length - 1];
     if (last?.role === 'user' && typeof last.content === 'string') {
       last.content = userContentFor(plan.provider, last.content, input.attachments);
+    } else if (last?.role === 'user' && Array.isArray(last.content)) {
+      // Images already came from saved assets. Keep this send's text/PDF attachments too.
+      const otherFiles = input.attachments.filter(f => f.kind !== 'image');
+      if (otherFiles.length) {
+        const extra = userContentFor(plan.provider, '', otherFiles);
+        last.content.push(...(typeof extra === 'string' ? [{ type: 'text', text: extra }] : extra));
+      }
     }
   }
   let text = '';

@@ -9,6 +9,7 @@ export const NOTE_TAB_PREFIX = 'note:';
 export const CANVAS_TAB_PREFIX = 'canvas:';
 /** Singleton, non-thread tabs. `blank` is a real tab but is never saved. */
 export const SINGLETON_TABS = {
+  sketch: { label: 'Sketches' },
   notes: { label: 'Notes' },
   blank: { label: 'New tab' },
 } as const;
@@ -16,6 +17,7 @@ export const SINGLETON_TABS = {
 export interface Tab { id: string }
 export interface StoredTabs { tabs: Tab[]; active: string | null }
 
+export const isSketchTabId = (id: string): boolean => id.startsWith('sketch:');
 export const isNoteTabId = (id: string): boolean => id.startsWith(NOTE_TAB_PREFIX);
 export const isCanvasTabId = (id: string): boolean => id.startsWith(CANVAS_TAB_PREFIX);
 export const canvasIdOfTab = (id: string): string => id.slice(CANVAS_TAB_PREFIX.length);
@@ -41,7 +43,7 @@ export function parseTabs(raw: string | null, deleted: ReadonlySet<string>): Sto
     if (!Array.isArray(tabs)) return { tabs: [], active: null };
     const kept = tabs.filter((t): t is Tab =>
       !!t && typeof t === 'object' && typeof (t as Tab).id === 'string' &&
-      (isSingletonTab((t as Tab).id) || isNoteTabId((t as Tab).id) || isCanvasTabId((t as Tab).id) || !deleted.has((t as Tab).id)));
+      (isSingletonTab((t as Tab).id) || isNoteTabId((t as Tab).id) || isSketchTabId((t as Tab).id) || isCanvasTabId((t as Tab).id) || !deleted.has((t as Tab).id)));
     return { tabs: kept, active: typeof active === 'string' ? active : null };
   } catch {
     return { tabs: [], active: null };

@@ -37,7 +37,7 @@ describe('structureReply — nesting a named item\'s body under it', () => {
     expect(secondItem.querySelectorAll('p.md-label-line')).toHaveLength(1);
   });
 
-  it('wraps a lone "N. Name" number-line and its body in one indented block', () => {
+  it('keeps a numbered item and its label body in a semantic list', () => {
     const el = render([
       '## Major private players',
       '',
@@ -46,9 +46,10 @@ describe('structureReply — nesting a named item\'s body under it', () => {
       'Model: Long-term municipal and industrial contracts.',
     ].join('\n'));
 
-    const numberLine = el.querySelector('p.md-number-line')!;
-    expect(numberLine.parentElement?.classList.contains('nl-number-item')).toBe(true);
-    expect(numberLine.parentElement?.querySelectorAll('p.md-label-line')).toHaveLength(2);
+    const item = el.querySelector('ol > li')!;
+    expect(item.textContent).toContain('Re Sustainability');
+    expect(item.querySelectorAll('p.md-label-line')).toHaveLength(2);
+    expect(el.querySelector('p.md-number-line')).toBeNull();
   });
 
   it('leaves an ALL-CAPS label line alone for groupCallouts instead of absorbing it as body', () => {

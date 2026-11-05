@@ -21,3 +21,15 @@ describe('note pane width', () => {
     expect(paneLayout(900, 1000).width).toBe(640);
   });
 });
+
+// Shared by the chat reservation and the actual note pane.
+describe('competing panels', () => {
+  it('overlays when the sidebar leaves too little room for both columns', () => {
+    expect(paneLayout(900, 900, 264)).toEqual({ width: 900, beside: false });
+    expect(paneLayout(900, 964, 264)).toEqual({ width: 340, beside: true });
+  });
+  it('overlays beside an open branch without reserving a second drawer', () => {
+    expect(paneLayout(900, 1470, 264, true)).toEqual({ width: 1470, beside: false });
+    expect(paneLayout(900, 1470, 264, false)).toEqual({ width: 846, beside: true });
+  });
+});

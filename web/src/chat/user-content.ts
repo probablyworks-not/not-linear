@@ -41,7 +41,14 @@ export function buildPlainUserContent(text: string, files: readonly Attachment[]
 }
 
 export function userContentFor(provider: ProviderId, text: string, files: readonly Attachment[] = []): string | ContentBlock[] {
-  return provider === 'claude' ? buildClaudeUserContent(text, files) : buildPlainUserContent(text, files);
+  if (provider === 'claude') return buildClaudeUserContent(text, files);
+  if (provider === 'deepseek') return buildPlainUserContent(text, files);
+  const images = files.filter(f => f.kind === 'image' && f.base64 && !f.tooBig);
+  const body = buildTextUserContent(text, files, { nativeImageNames: new Set(images.map(f => f.name)) });
+  return images.length ? [
+    ...images.map(f => ({ type: 'image', source: { type: 'base64', media_type: f.type, data: f.base64 } })),
+    { type: 'text', text: body },
+  ] : body;
 }
 
 const TI_ICON: Record<ReturnType<typeof fileIconKind>, string> = { folder: 'ti-folder', pdf: 'ti-file-type-pdf', image: 'ti-photo', file: 'ti-file' };

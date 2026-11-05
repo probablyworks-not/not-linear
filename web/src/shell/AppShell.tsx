@@ -23,16 +23,37 @@ import { ImagePreview } from '../ui/ImagePreview';
 import { FilePreview } from '../ui/FilePreview';
 import { ExportButton } from '../notes/ExportButton';
 import { SaveToArtifactsButton } from '../notes/SaveToArtifactsButton';
+import { newSketch } from '../sketch/open-sketch';
 import { NOTE_TAB_PREFIX, canvasIdOfTab, isCanvasTabId, isNoteTabId } from '../state/tabs';
 import { flags } from '../flags';
 import { useEdgeReveal } from '../lib/edge-reveal';
+import { useCanvasDoc } from '../canvas/canvas-doc-store';
+import { useCanvasStore } from '../canvas/canvas-store';
 
 // BlockNote is large; chat should not pay for it at startup.
 const NotesView = lazy(() => import('../notes/NotesView').then(m => ({ default: m.NotesView })));
 // Lazy for the same reason Notes is: the spatial editor and React Flow arrive in C3, and the
 // initial bundle must not carry them.
+const SketchView = lazy(() => import('../sketch/SketchView').then(m => ({ default: m.SketchView })));
 const CanvasWorkspace = lazy(() => import('../canvas/view/CanvasWorkspace').then(m => ({ default: m.CanvasWorkspace })));
 const CanvasSearchPalette = lazy(() => import('../canvas/view/CanvasSearchPalette').then(m => ({ default: m.CanvasSearchPalette })));
+
+function CanvasBreadcrumbs({ canvasId }: { canvasId: string }) {
+  const doc = useCanvasDoc(s => s.canvasId === canvasId ? s.doc : null);
+  const summary = useCanvasStore(s => s.all.find(c => c.id === canvasId));
+  const canvas = doc?.summary ?? summary;
+  const folder = useAppStore(s => s.prefs.folderName) || 'Workspace';
+  const project = useAppStore(s => canvas?.projectId ? s.projects[canvas.projectId] : undefined);
+  const setActiveProject = useUiStore(s => s.setActiveProject);
+  return <span className="flex min-w-0 items-center gap-2 truncate">
+    <span className="text-text-3">/</span><span className="text-text-3">{folder}</span>
+    {project && <><span className="text-text-3">/</span>
+      <button type="button" className="text-text-2 hover:text-text hover:underline"
+        onClick={() => setActiveProject(project.id)}>{project.name || 'Project'}</button></>}
+    <span className="text-text-3">/</span>
+    <span className="truncate text-text" data-testid="crumb-here">{canvas?.title ?? 'Canvas'}</span>
+  </span>;
+}
 
 export function AppShell() {
   const sidebarOpen = useUiStore(s => s.sidebarOpen);
@@ -54,9 +75,12 @@ export function AppShell() {
   const barRef = useRef<HTMLDivElement>(null);
   const bar = useEdgeReveal(barRef, 'top');
 
+  const workspaceView = view === 'canvas' || view === 'sketch';
   const noteId = activeTabId && isNoteTabId(activeTabId) ? activeTabId.slice(NOTE_TAB_PREFIX.length) : null;
   const trail: ReactNode = view === 'notes' ? (flags.notesV2 && noteId ? <NoteBreadcrumbs noteId={noteId} /> : 'Notes')
+    : view === 'sketch' ? 'Sketch'
     : view === 'blank' ? 'New tab'
+    : view === 'canvas' && activeTabId && isCanvasTabId(activeTabId) ? <CanvasBreadcrumbs canvasId={canvasIdOfTab(activeTabId)} />
     : flags.chat && activeTabId ? <Breadcrumbs threadId={activeTabId} fallbackTitle={title} /> : title;
 
   return (
@@ -67,22 +91,32 @@ export function AppShell() {
         <div
           ref={barRef} data-shown={bar.visible} {...bar.focusProps}
           className={clsx(
-            bar.autohide
+            workspaceView && bar.autohide
+              ? 'sticky top-0 z-30 grid bg-bg transition-[grid-template-rows] duration-150 ease-out'
+              : bar.autohide
               ? 'fixed inset-x-0 top-0 z-30 bg-bg shadow-md transition-[transform,left] duration-150 ease-out'
               : 'sticky top-0 z-30 bg-bg',
-            bar.autohide && sidebarOpen && 'md:left-sidebar',
-            !bar.visible && '-translate-y-full',
+            bar.autohide && !workspaceView && sidebarOpen && 'md:left-sidebar',
+            workspaceView && bar.autohide && (bar.visible ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'),
+            !workspaceView && !bar.visible && '-translate-y-full',
           )}
         >
+          <div className={workspaceView && bar.autohide ? 'min-h-0 overflow-hidden' : undefined}>
           <TabStrip />
-          <Topbar trail={trail} actions={view === 'notes' && flags.notesV2 && activeTabId && isNoteTabId(activeTabId) ? <><SaveToArtifactsButton noteId={activeTabId.slice(NOTE_TAB_PREFIX.length)} /><ExportButton noteId={activeTabId.slice(NOTE_TAB_PREFIX.length)} /></> : undefined} />
+          {!workspaceView && <Topbar trail={trail} actions={view === 'notes' && flags.notesV2 && activeTabId && isNoteTabId(activeTabId) ? <><SaveToArtifactsButton noteId={activeTabId.slice(NOTE_TAB_PREFIX.length)} /><ExportButton noteId={activeTabId.slice(NOTE_TAB_PREFIX.length)} /></> : undefined} />}
+          </div>
         </div>
+        {workspaceView && <Topbar trail={trail} />}
         {error && (
           // Errors read as a calm statement of what happened, not an apology.
           <div role="alert" className="mx-7 mt-2 rounded-md border border-rule-2 bg-surface-2 px-3 py-2 text-sm text-text-2">{error}</div>
         )}
         {view === 'chat' && flags.chat && activeTabId ? (
           <main className="flex flex-1 flex-col"><ChatView key={activeTabId} threadId={activeTabId} /></main>
+        ) : view === 'sketch' ? (
+          <Suspense fallback={<main className="flex-1 p-8 text-sm text-text-3">Loading Sketch…</main>}>
+            <SketchView key={activeTabId} documentId={activeTabId?.startsWith('sketch:') ? activeTabId.slice(7) : undefined} />
+          </Suspense>
         ) : view === 'notes' && flags.notesV2 ? (
           <Suspense fallback={<main className="flex-1 p-8 text-sm text-text-3">Loading&hellip;</main>}><NotesView /></Suspense>
         ) : view === 'canvas' && flags.canvas && activeTabId && isCanvasTabId(activeTabId) ? (
@@ -93,6 +127,7 @@ export function AppShell() {
           <main className="flex flex-1 items-center justify-center px-7 py-16">
             {view === 'blank' ? (
               <div className="text-center">
+                <button type="button" onClick={() => { void newSketch(); }} className="mb-4 rounded-lg border border-rule-2 bg-bg-2 px-3.5 py-2 text-sm text-text hover:bg-bg-3">Sketch</button>
                 <p className="mb-4 text-sm text-text-2">Start a chat, or pick one from the left pane.</p>
                 <button
                   type="button" onClick={() => { void newChat(); }}

@@ -1,13 +1,14 @@
 import { useState } from 'react';
-import { Lock } from 'lucide-react';
+import { Lock, Bot, Globe, KeyRound, Search, Flame, Mic } from 'lucide-react';
+import { SubscriptionConnections } from './SubscriptionConnections';
 import { clsx } from 'clsx';
 import { useAppStore } from '../../state/app-store';
 import { useUiStore } from '../../state/ui-store';
 import { maskKey } from '../../lib/api-keys';
 import { toast } from '../../ui/toast';
-import { MODELS, RANKING_OPTIONS, providerLabel } from '../options';
+import { RANKING_OPTIONS, providerLabel } from '../options';
 import { toolStatuses } from '../tool-status';
-import { INPUT, Section, Segmented } from '../fields';
+import { INPUT, Section } from '../fields';
 import { BTN_DANGER, BTN_PRIMARY, PageBody, Pill } from '../ui';
 
 interface Card { id: string; name: string; sub: string; kind: 'key' | 'url' }
@@ -46,7 +47,6 @@ export const isHttpUrl = (v: string): boolean => /^https?:\/\/\S+$/i.test(v);
 export function ModelsTab() {
   const apiKeys = useAppStore(s => s.apiKeys);
   const searxngUrl = useAppStore(s => s.prefs.searxngUrl);
-  const model = useAppStore(s => s.prefs.model);
   const rankingLlm = useAppStore(s => s.prefs.rankingLlm);
   const setPref = useAppStore(s => s.setPref);
   const [open, setOpen] = useState<string | null>(null);
@@ -55,9 +55,7 @@ export function ModelsTab() {
 
   return (
     <PageBody>
-      <Section label="Default model" help="Used for new chats. You can switch per chat from the composer.">
-        <Segmented label="Default model" value={model || 'sonnet'} choices={MODELS} columns={2} onChange={id => { void setPref('model', id); }} />
-      </Section>
+      <SubscriptionConnections />
 
       {GROUPS.map(g => (
         <Section key={g.title} label={g.title}>
@@ -100,11 +98,18 @@ export function ModelsTab() {
   );
 }
 
+const LOCAL_MARKS: Record<string, string> = { anthropic:'anthropic', openai:'openai', deepseek:'deepseek', gemini:'google', github:'github', searxng:'searxng', firecrawl:'firecrawl', assemblyai:'assemblyai' };
+function ProviderMark({ id }: { id: string }) {
+  const mark = LOCAL_MARKS[id];
+  const Icon = ({openai:Bot, custom:KeyRound, serper:Search, firecrawl:Flame, assemblyai:Mic} as Record<string, typeof Bot>)[id] ?? Globe;
+  return <span aria-hidden className="grid h-[38px] w-[38px] flex-none place-items-center rounded-[10px] bg-bg-3 text-text">{mark ? <span className="block h-5 w-5 bg-current" style={{mask:`url(/web/provider-logos/${mark}.svg) center / contain no-repeat`, WebkitMask:`url(/web/provider-logos/${mark}.svg) center / contain no-repeat`}} /> : <Icon size={20} />}</span>;
+}
+
 function ProviderCard({ card, open, connected, onToggle }: { card: Card; open: boolean; connected: boolean; onToggle(): void }) {
   return (
     <div data-provider={card.id} className={clsx('rounded-[14px] border bg-surface p-3.5 transition-colors duration-150', open ? 'border-text' : 'border-rule')}>
       <button type="button" aria-expanded={open} aria-label={`${card.name} settings`} onClick={onToggle} className="flex w-full items-center gap-3 text-left">
-        <span aria-hidden className="grid h-[38px] w-[38px] flex-none place-items-center rounded-[10px] bg-bg-3 text-base font-semibold text-text">{card.name[0]}</span>
+        <ProviderMark id={card.id} />
         <span className="min-w-0 flex-1">
           <span className="block text-base font-semibold text-text">{card.name}</span>
           <span className="block text-xs leading-snug text-text-3">{card.sub}</span>

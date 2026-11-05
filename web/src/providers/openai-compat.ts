@@ -12,12 +12,12 @@ import {
 import { isToolFatal, toolStatusLabel } from '../tools/tool-runners';
 import { toOpenAITools, type ToolSpec } from './tool-specs';
 import { errorKindOf, messageOf, sseData } from './sse';
-import type { ChatMessage, ChatProvider, ChatRequest, ErrorKind, ProviderEvent, ProviderId, TokenUsage } from './types';
+import type { ChatMessage, ChatProvider, ChatRequest, ContentBlock, ErrorKind, ProviderEvent, ProviderId, TokenUsage } from './types';
 
 const MAX_REQUESTS = 10;
 
 interface WireToolCall { id: string; type: 'function'; function: { name: string; arguments: string } }
-interface WireMessage { role: string; content: string | null; tool_calls?: WireToolCall[]; tool_call_id?: string }
+interface WireMessage { role: string; content: string | ContentBlock[] | null; tool_calls?: WireToolCall[]; tool_call_id?: string }
 
 interface CompatEvent {
   usage?: { prompt_tokens?: number; completion_tokens?: number };
@@ -40,10 +40,19 @@ export interface CompatConfig {
   streamUsage: boolean;
 }
 
-/** These endpoints take text only: a message that is blocks keeps just its text. */
-function plainText(content: ChatMessage['content']): string {
+/** Translate the app's native image blocks to the compatibility API's image_url form. */
+export function compatContent(content: ChatMessage['content']): string | ContentBlock[] {
   if (typeof content === 'string') return content;
-  return content.map(b => (b.type === 'text' ? String(b.text ?? '') : '')).filter(Boolean).join('\n\n');
+  return content.flatMap((block): ContentBlock[] => {
+    if (block.type === 'text') return [{ type: 'text', text: String(block.text ?? '') }];
+    if (block.type === 'image') {
+      const source = block.source as { type?: string; media_type?: string; data?: string } | undefined;
+      if (source?.type === 'base64' && source.data && source.media_type) {
+        return [{ type: 'image_url', image_url: { url: `data:${source.media_type};base64,${source.data}` } }];
+      }
+    }
+    return [];
+  });
 }
 
 export function makeCompatProvider(cfg: CompatConfig): ChatProvider {
@@ -66,7 +75,7 @@ export function makeCompatProvider(cfg: CompatConfig): ChatProvider {
         return { t: 'error', kind, message };
       };
 
-      let current: WireMessage[] = [{ role: 'system', content: req.systemPrompt }, ...req.messages.map(m => ({ role: m.role, content: plainText(m.content) }))];
+      let current: WireMessage[] = [{ role: 'system', content: req.systemPrompt }, ...req.messages.map(m => ({ role: m.role, content: compatContent(m.content) }))];
       let inputTokens = 0;
       let outputTokens = 0;
       let full = '';

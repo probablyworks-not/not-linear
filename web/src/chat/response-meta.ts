@@ -80,7 +80,7 @@ export function responseMetaHTML(meta: ResponseMeta): string {
   return `<details class="llm-meta">
       <summary>
         <span class="llm-summary-main"><i class="ti ti-receipt"></i><span>${esc(modelName)} · ${fmtTokenCount(total)} tokens${requestNote}${cacheNote}</span></span>
-        <span class="llm-summary-cost">${esc(fmtUsd(cost))}</span>
+        <span class="llm-summary-cost">${esc(turn.provider === 'subscription' ? 'Subscription' : fmtUsd(cost))}</span>
         <i class="ti ti-chevron-down llm-chevron"></i>
       </summary>
       <div class="llm-meta-body">
@@ -88,7 +88,7 @@ export function responseMetaHTML(meta: ResponseMeta): string {
           <div class="llm-usage-cell"><span class="lab">Model</span><span class="val" title="${esc(meta.model || modelName)}">${esc(modelName)}</span></div>
           <div class="llm-usage-cell"><span class="lab">Input</span><span class="val">${esc(fmtTokenCount(usage.inputTokens || 0))}</span></div>
           <div class="llm-usage-cell"><span class="lab">Output</span><span class="val">${esc(fmtTokenCount(usage.outputTokens || 0))}</span></div>
-          <div class="llm-usage-cell"><span class="lab">Cost</span><span class="val">${esc(fmtUsd(cost))}</span></div>
+          <div class="llm-usage-cell"><span class="lab">Cost</span><span class="val">${esc(turn.provider === 'subscription' ? 'Subscription' : fmtUsd(cost))}</span></div>
           ${cache ? `<div class="llm-usage-cell"><span class="lab">Cache hit</span><span class="val">${esc(fmtTokenCount(cache))}</span></div>` : ''}
         </div>
         <div class="llm-context-title">Context sent to model</div>

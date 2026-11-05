@@ -19,8 +19,8 @@ export function clampPaneWidth(width: number, viewport: number, reserved = 0): n
 }
 
 /** The width actually drawn, and whether the chat column makes room for it (otherwise it overlays). */
-export function paneLayout(width: number, viewport: number, reserved = 0): { width: number; beside: boolean } {
-  if (viewport < PANE_OVERLAY_BELOW) return { width: viewport, beside: false };
+export function paneLayout(width: number, viewport: number, reserved = 0, overlay = false): { width: number; beside: boolean } {
+  if (overlay || viewport < PANE_OVERLAY_BELOW || viewport - reserved < PANE_MIN + CHAT_MIN) return { width: viewport, beside: false };
   return { width: clampPaneWidth(width, viewport, reserved), beside: true };
 }
 

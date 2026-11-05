@@ -34,6 +34,7 @@ export const DEFAULT_MODEL_PREF = 'sonnet';
 
 export function planModel(pref: string | undefined, thinkingPref: boolean): ModelPlan {
   const p = pref || DEFAULT_MODEL_PREF;
+  if (/^sub:(claude|chatgpt):.+/.test(p)) return { supported:true, provider:'claude', modelId:p, thinking:false, usageProvider:'subscription' };
   if (p === 'deepseek' || p === 'deepseek-r1') {
     return { supported: true, provider: 'deepseek', modelId: 'deepseek-v4-flash', thinking: p === 'deepseek-r1', usageProvider: 'deepseek' };
   }

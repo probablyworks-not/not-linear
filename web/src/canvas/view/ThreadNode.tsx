@@ -70,7 +70,7 @@ const STATUS_TITLE = {
   missing: 'The source is gone — the excerpt is kept',
 } as const;
 
-export const ThreadNode = memo(function ThreadNode({ data, selected, width, height }: NodeProps<ThreadNodeType>) {
+export const ThreadNode = memo(function ThreadNode({ data, selected }: NodeProps<ThreadNodeType>) {
   const {
     thread, messages, sources, highlightsByMessage, onSaveOutput, onViewOutput, active,
     onContentSize, onBodyResize, onBlockPick, onPickWhole, wholeTone, minimized, onToggleMinimized,
@@ -162,9 +162,6 @@ export const ThreadNode = memo(function ThreadNode({ data, selected, width, heig
             <SquareDashedMousePointer size={13} aria-hidden />
           </button>
         )}
-        <span className="flex-none font-mono text-xs text-text-3" data-testid="node-dims">
-          {Math.round(width ?? 0)}&times;{Math.round(height ?? 0)}
-        </span>
       </header>
 
       {!minimized && sources.length > 0 && (

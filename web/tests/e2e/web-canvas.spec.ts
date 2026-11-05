@@ -138,6 +138,97 @@ test.afterEach(async ({ page }) => {
 });
 
 test.describe('the canvas loop', () => {
+  test('Canvas hierarchy stays closed until explicitly opened, including after reload', async ({ page }) => {
+    await seed(page);
+    await openProject(page); await newCanvas(page);
+    const toggle = page.getByTestId('canvas-hierarchy-toggle');
+    const hierarchy = page.getByTestId('canvas-hierarchy');
+    await expect(toggle).toHaveAttribute('aria-pressed', 'false');
+    await expect(hierarchy).toHaveCount(0);
+    await toggle.click();
+    await expect(hierarchy).toBeVisible();
+    await hierarchy.getByRole('button', { name: 'Hide hierarchy' }).click();
+    await expect(hierarchy).toHaveCount(0);
+    await toggle.click();
+    await expect(hierarchy).toBeVisible();
+    await page.reload();
+    await expect(toggle).toHaveAttribute('aria-pressed', 'false');
+    await expect(hierarchy).toHaveCount(0);
+    await toggle.click();
+    await expect(hierarchy).toBeVisible();
+  });
+
+  test('Canvas hierarchy locates nested saved branches without changing their geometry', async ({ page }) => {
+    await seed(page);
+    await openProject(page); await newCanvas(page);
+    const id = (await page.getByTestId('canvas-workspace').getAttribute('data-canvas'))!;
+    const fixture = emptyDoc({ id, title: 'Hierarchy fixture', projectId: 'p1', rev: 2, createdAt: 1, updatedAt: 1, counts: { threads: 0, messages: 0, outputs: 0 } });
+    const root = createRootThread(fixture, 'Main question', { now: 1 });
+    const source = freezeSelection(fixture, root.message.id, root.message.parts[0]!.id, 'Main', 0, { now: 2 })!;
+    source.highlightTone = 'pink';
+    const branch = branchFrom(fixture, { snapshotId: source.id, prompt: 'First branch', title: 'First branch' }, { now: 3 })!;
+    const childSource = freezeSelection(fixture, branch.message.id, branch.message.parts[0]!.id, 'First', 0, { now: 4 })!;
+    const child = branchFrom(fixture, { snapshotId: childSource.id, prompt: 'Nested question', title: 'Nested question' }, { now: 5 })!;
+    createRootThread(fixture, 'Independent question', { now: 6 });
+    fixture.threads.forEach((thread, index) => setGeometry(fixture, thread.id, { x: index * 800, y: index * 300, w: 360, h: index === 0 ? 12000 : 300 }));
+    fixture.summary.counts = { threads: 4, messages: fixture.messages.length, outputs: 0 };
+    await page.evaluate(async fixture => {
+      const db = await new Promise<IDBDatabase>((resolve, reject) => {
+        const r = indexedDB.open('notlinear-canvas'); r.onsuccess = () => resolve(r.result); r.onerror = () => reject(r.error);
+      });
+      await new Promise<void>((resolve, reject) => {
+        const tx = db.transaction('kv', 'readwrite'); tx.objectStore('kv').put({ key: `canvas_doc_v1:${fixture.summary.id}`, value: fixture });
+        tx.oncomplete = () => resolve(); tx.onerror = () => reject(tx.error);
+      }); db.close();
+    }, fixture);
+    await page.reload();
+    await expect(page.getByTestId('canvas-hierarchy-toggle')).toHaveAttribute('aria-pressed', 'false');
+    await page.getByTestId('canvas-hierarchy-toggle').click();
+    const hierarchy = page.getByRole('complementary', { name: 'Canvas hierarchy', exact: true });
+    await expect(hierarchy.locator('[data-hierarchy-thread]')).toHaveCount(4);
+    const branchRow = hierarchy.locator(`[data-hierarchy-thread="${branch.thread.id}"]`).locator('div').first();
+    await expect(branchRow.getByTestId('hierarchy-source')).toHaveText('Main');
+    await expect(branchRow.getByTestId('hierarchy-source')).toHaveAttribute('data-highlight-tone', 'pink');
+    await expect(branchRow.getByTestId('hierarchy-source')).toHaveClass(/bg-cv-hl-pink/);
+    await expect(branchRow.getByTestId('hierarchy-question')).toHaveText('First branch');
+    expect(await hierarchy.evaluate(el => Math.round(el.getBoundingClientRect().width))).toBe(440);
+    expect(await hierarchy.evaluate(el => getComputedStyle(el).backgroundColor)).toBe('rgba(0, 0, 0, 0)');
+    await hierarchy.locator(`[data-hierarchy-thread="${root.thread.id}"]`).getByRole('button', { name: /^Locate / }).first().click();
+    const rootHeader = page.getByTestId(`thread-node-${root.thread.id}`).locator('header').first();
+    await page.waitForTimeout(350); // Let the 200ms camera transition finish before checking visibility.
+    await expect(rootHeader).toBeInViewport();
+    const rootRow = hierarchy.locator(`[data-hierarchy-thread="${root.thread.id}"]`);
+    await expect(rootRow.locator(`[data-hierarchy-thread="${child.thread.id}"]`)).toBeVisible();
+    await hierarchy.getByRole('button', { name: 'Toggle branches of First branch' }).click();
+    await expect(hierarchy.getByRole('button', { name: 'Locate Nested question', exact: true })).toHaveCount(0);
+    await hierarchy.getByRole('button', { name: 'Toggle branches of First branch' }).click();
+    await hierarchy.getByRole('button', { name: 'Locate Nested question', exact: true }).click();
+    await expect(hierarchy.getByRole('button', { name: 'Locate Nested question', exact: true })).toHaveAttribute('aria-pressed', 'true');
+    const card = page.locator(`.react-flow__node[data-id="${child.thread.id}"]`);
+    await expect.poll(async () => {
+      const rect = await card.boundingBox(); const flow = await page.locator('.react-flow').boundingBox();
+      return !!rect && !!flow && rect.x >= flow.x && rect.x + rect.width <= flow.x + flow.width + 2;
+    }).toBe(true);
+    await hierarchy.getByRole('button', { name: 'Read Nested question', exact: true }).click();
+    await expect(page.getByTestId('reading-branch')).toContainText('Nested question');
+    await page.getByTestId('canvas-reading-toggle').click();
+    await hierarchy.getByRole('button', { name: 'Hide hierarchy' }).click();
+    await expect(hierarchy).toHaveCount(0);
+    await page.getByTestId('canvas-hierarchy-toggle').click();
+    await expect(hierarchy).toBeVisible();
+    await page.reload();
+    await expect(page.getByTestId('canvas-hierarchy-toggle')).toHaveAttribute('aria-pressed', 'false');
+    await page.getByTestId('canvas-hierarchy-toggle').click();
+    await expect(hierarchy.getByRole('button', { name: 'Locate Nested question', exact: true })).toBeVisible();
+    await expect(page.getByTestId('canvas-save-state')).toHaveText('Saved');
+    const entries = await page.evaluate(async id => {
+      const db = await new Promise<IDBDatabase>(resolve => { const r = indexedDB.open('notlinear-canvas'); r.onsuccess = () => resolve(r.result); });
+      return new Promise(resolve => { const r = db.transaction('kv').objectStore('kv').get(`canvas_doc_v1:${id}`); r.onsuccess = () => { resolve(r.result.value.layouts); db.close(); }; });
+    }, id);
+    expect(entries).toEqual(fixture.layouts);
+    await page.screenshot({ path: '/tmp/notlinear-hierarchy-desktop.png', animations: 'disabled' });
+  });
+
 
   test('formatted selection freezes readable context and restores multi-node marks', async ({ page }) => {
     await seed(page, 'alpha **beta** gamma\n\n' + Array.from({length: 80}, (_, i) => `Paragraph ${i}`).join('\n\n'));
@@ -219,7 +310,7 @@ test.describe('the canvas loop', () => {
     await expect(cells()).toHaveText(['Upstream', 'Oil marketing companies', 'Complete final row']);
   });
 
-  test('HTML generation shows completed sections and a reduced-motion shimmer then settles', async ({ page }) => {
+  test('HTML generation shows completed sections and a reduced-motion shimmer then settles', async ({ page }, testInfo) => {
     await seed(page);
     await page.addInitScript(() => {
       const original = window.fetch.bind(window);
@@ -244,12 +335,19 @@ test.describe('the canvas loop', () => {
     const live = page.getByTestId('live-html');
     await expect(live).toBeVisible();
     await expect(live.locator('[aria-busy="true"]')).toBeVisible();
+    await expect(live.locator('iframe')).toBeHidden();
+    await expect(live.locator('.nl-html-skeleton i')).toHaveCount(4);
+    expect(await live.locator('.nl-html-pending').evaluate(el => getComputedStyle(el, '::before').animationName)).toBe('nl-html-sweep');
+    const sweep = await live.locator('.nl-html-pending').evaluate(el => getComputedStyle(el, '::before').transform);
+    await expect.poll(() => live.locator('.nl-html-pending').evaluate(el => getComputedStyle(el, '::before').transform)).not.toBe(sweep);
+    await page.screenshot({ path: testInfo.outputPath('html-loading.png') });
     await page.getByTestId('canvas-reading-toggle').click();
     await expect(page.getByTestId('canvas-reading').getByTestId('live-html')).toBeVisible();
     await page.getByRole('button', { name: 'Back to the canvas' }).click();
     await expect(live).toBeVisible();
     await page.evaluate(() => (window as unknown as { beginHtml: () => void }).beginHtml());
     await expect(page.frameLocator('[data-testid="live-html"] iframe').locator('p')).toHaveText('First completed passage');
+    await expect(live.locator('iframe')).toBeVisible();
     await expect(live.locator('[aria-busy="true"]')).toBeVisible();
     await page.emulateMedia({ reducedMotion: 'reduce' });
     expect(await live.locator('.nl-html-pending').evaluate(el => getComputedStyle(el, '::before').animationName)).toBe('none');
@@ -261,15 +359,15 @@ test.describe('the canvas loop', () => {
     expect(await page.locator('.react-flow iframe').evaluate(el => (el as HTMLIFrameElement).offsetHeight)).toBeLessThan(640);
   });
 
-  test('a selection across an HTML section boundary survives branching and reload', async ({ page }) => {
+  test('a formatted selection deep in a continuous HTML report survives branching and reload', async ({ page }) => {
     const html = '<style>#report>p{font:24px/2 system-ui}</style><main id="report"><p>' + 'Repeated <b>formatted</b> passage &amp; source. '.repeat(180) + '</p></main>';
     await seed(page, html); await openProject(page); await newCanvas(page); await ask(page, 'render as html');
     const frame = page.frameLocator('.react-flow iframe');
-    await expect(frame.locator('[data-nl-page-gap]').first()).toBeAttached();
+    await expect(frame.locator('[data-nl-page-gap]')).toHaveCount(0);
     await expect.poll(() => page.locator('.react-flow__node').first().evaluate(el => (el as HTMLElement).offsetWidth)).toBe(880);
     const quote = await frame.locator('p').evaluate(el => {
-      const gap = el.querySelector('[data-nl-page-gap]')!;
-      const before = gap.previousSibling as Text, after = gap.nextSibling as Text;
+      const formatted = el.querySelectorAll('b')[40]!;
+      const before = formatted.previousSibling as Text, after = formatted.nextSibling as Text;
       const range = document.createRange();
       range.setStart(before, Math.max(0, before.length - 8)); range.setEnd(after, Math.min(after.length, 12));
       const selection = getSelection()!; selection.removeAllRanges(); selection.addRange(range);
@@ -282,7 +380,8 @@ test.describe('the canvas loop', () => {
     await ask(page, 'explain that passage');
     await expect(page.getByTestId('canvas-save-state')).toHaveText('Saved');
     await page.reload();
-    await expect(page.frameLocator('.react-flow iframe').first().locator('mark').first()).toBeAttached();
+    await expect.poll(() => page.frameLocator('.react-flow iframe').first().locator('body').evaluate(() => CSS.highlights.size)).toBe(1);
+    expect(await page.frameLocator('.react-flow iframe').first().locator('body').evaluate(() => [...CSS.highlights.get('nl-source-0')!].map(range => range.toString()).join('').trim())).toBe(quote.trim());
     await expect(page.getByTestId('canvas-output-detail')).toHaveCount(0);
   });
 
@@ -296,7 +395,7 @@ test.describe('the canvas loop', () => {
     const frame = page.frameLocator('.react-flow iframe');
     await expect(frame.locator('p').first()).toHaveText('alpha beta & gamma');
     expect(await iframe.evaluate(el => (el as HTMLElement).offsetHeight)).toBeGreaterThan(640);
-    expect(await page.getByTestId('html-section').count()).toBeGreaterThan(1);
+    expect(await page.getByTestId('html-section').count()).toBe(1);
     await expect.poll(() => iframe.locator('xpath=ancestor::*[contains(@class, "react-flow__node")][1]').evaluate(el => (el as HTMLElement).offsetWidth)).toBe(880);
     await page.getByRole('button', { name: 'Zoom Out', exact: true }).click();
     await page.getByRole('button', { name: 'Zoom Out', exact: true }).click();
@@ -318,13 +417,13 @@ test.describe('the canvas loop', () => {
     await expect.poll(() => page.locator('.react-flow__viewport').getAttribute('style')).not.toBe(before);
     await expect(page.getByTestId('canvas-save-state')).toHaveText('Saved');
     expect(await iframe.evaluate(el => (el as HTMLElement).offsetHeight)).toBeGreaterThan(640);
-    expect(await page.getByTestId('html-section').count()).toBeGreaterThan(1);
+    expect(await page.getByTestId('html-section').count()).toBe(1);
     await page.reload();
     await expect(page.locator('.react-flow iframe')).toBeVisible();
     await expect(page.getByTestId('canvas-save-state')).toHaveText('Saved');
   });
 
-  test('paginated HTML stays inside the canvas through selection, branching and reload', async ({ page }) => {
+  test('continuous HTML stays inside the canvas through selection, branching and reload', async ({ page }) => {
     const html = '<!doctype html><html><head><title>alpha beta &amp; gamma</title></head><body><p>alpha <b>beta</b> &amp; gamma</p>' + '<p>Reading content</p>'.repeat(60) + '</body></html>';
     await seed(page, html);
     await openProject(page); await newCanvas(page); await ask(page, 'render as html');
@@ -344,7 +443,7 @@ test.describe('the canvas loop', () => {
     const paragraph = frame.locator('p').first();
     await expect(paragraph).toHaveText('alpha beta & gamma');
     expect(await iframe.evaluate(el => (el as HTMLElement).offsetHeight)).toBeGreaterThan(640);
-    expect(await page.getByTestId('html-section').count()).toBeGreaterThan(1);
+    expect(await page.getByTestId('html-section').count()).toBe(1);
     await page.screenshot({ path: test.info().outputPath('canvas-full-page-reader.png') });
     await paragraph.evaluate(el => {
       const r = document.createRange(); r.selectNodeContents(el);
@@ -358,12 +457,29 @@ test.describe('the canvas loop', () => {
     await expect(page.locator('.react-flow__viewport')).toHaveAttribute('style', viewport!);
     await ask(page, 'why?');
     await page.reload();
-    await expect(page.frameLocator('.react-flow iframe').first().locator('mark')).toHaveCount(3);
+    await expect.poll(() => page.frameLocator('.react-flow iframe').first().locator('body').evaluate(() => CSS.highlights.get('nl-source-0')?.size ?? 0)).toBe(3);
     await expect(page.getByTestId('html-section').first()).toBeVisible();
     await expect(page.getByTestId('canvas-output-detail')).toHaveCount(0);
-    const marks = page.frameLocator('.react-flow iframe').first().locator('mark');
-    expect(await marks.first().evaluate(el => getComputedStyle(el).color)).toBe('rgb(0, 0, 0)');
-    expect(await marks.first().evaluate(el => getComputedStyle(el).backgroundColor)).not.toBe('rgb(255, 255, 255)');
+    const restored = page.frameLocator('.react-flow iframe').first();
+    expect(await restored.locator('body').evaluate(() => [...CSS.highlights.get('nl-source-0')!].map(range => range.toString()).join(''))).toBe('alpha beta & gamma');
+    expect(await restored.locator('p').first().evaluate(el => getComputedStyle(el).color)).toBe('rgb(0, 0, 0)');
+    await expect.poll(() => restored.locator('[data-nl-highlights]').textContent()).toContain('35%');
+  });
+
+  test('continuous HTML also fills Read mode instead of a short preview', async ({ page }) => {
+    const html = '<body><nav style="position:sticky;top:0">Pipeline</nav><section><h2>Full HTML report</h2>' + '<p>Continuous reading passage</p>'.repeat(70) + '<p>Final report passage</p></section></body>';
+    await seed(page, html); await openProject(page); await newCanvas(page); await ask(page, 'render as html');
+    await expect(page.locator('.react-flow iframe')).toBeVisible();
+    await page.getByTestId('canvas-reading-toggle').click();
+    const iframe = page.getByTestId('canvas-reading').locator('iframe');
+    const frame = page.frameLocator('[data-testid="canvas-reading"] iframe');
+    await expect.poll(() => iframe.evaluate(el => (el as HTMLIFrameElement).clientHeight)).toBeGreaterThan(1000);
+    await frame.getByRole('heading', { name:'Full HTML report' }).click();
+    await expect(frame.getByRole('navigation', { name:'Selected element hierarchy' })).toBeVisible();
+    expect(await frame.getByText('Final report passage').evaluate(el => el.getBoundingClientRect().bottom <= innerHeight + 1)).toBe(true);
+    await expect(page.getByText('This layout uses a scrollable section to preserve its formatting and interactions.')).toHaveCount(0);
+    await page.getByRole('button', { name:'Back to the canvas' }).click();
+    await expect.poll(() => page.locator('.react-flow iframe').evaluate(el => (el as HTMLIFrameElement).clientHeight)).toBeGreaterThan(1000);
   });
 
   test('authored HTML preserves chart colors and readable selections after reload', async ({ page }) => {
@@ -379,8 +495,8 @@ test.describe('the canvas loop', () => {
         return [style.color, style.webkitTextFillColor, style.backgroundColor, selected.color];
       })).toEqual(['rgb(124, 58, 237)', 'rgb(124, 58, 237)', 'rgba(0, 0, 0, 0)', 'rgb(0, 0, 0)']);
       expect(await frame.locator('.chart-bar').evaluateAll(els => els.map(el => [getComputedStyle(el).backgroundColor, el.getBoundingClientRect().width]))).toEqual([['rgb(37, 99, 235)', 30], ['rgb(37, 99, 235)', 80], ['rgb(37, 99, 235)', 160]]);
-      await expect.poll(() => frame.locator('[data-nl-page-gap]').count()).toBeGreaterThan(0);
-      expect(await frame.locator('[data-nl-page-gap]').evaluateAll(els => els.every(el => el.getBoundingClientRect().height === 8))).toBe(true);
+      await expect(frame.locator('[data-nl-page-gap]')).toHaveCount(0);
+      expect(await frame.locator('p').last().evaluate(el => el.getBoundingClientRect().bottom <= innerHeight + 1)).toBe(true);
       await expect(page.getByTestId('canvas-save-state')).toHaveText('Saved');
       if (i === 0) await page.reload();
     }
@@ -408,14 +524,28 @@ test.describe('the canvas loop', () => {
     await expect(first).not.toContainText('first question');
     await expect(page.getByTestId('canvas-save-state')).toHaveText('Saved');
     await page.getByRole('button', { name: 'Fit View', exact: true }).click();
-    await first.locator('header').click();
+    // Overlap is intentional; the hierarchy exposes cards obscured by a newer branch.
+    const firstId = await first.getAttribute('data-thread');
+    await page.getByTestId('canvas-hierarchy-toggle').click();
+    await page.getByTestId('canvas-hierarchy').locator(`[data-hierarchy-thread="${firstId}"]`).getByRole('button', { name: /^Locate / }).first().click();
     await expect(first).toContainText('first question');
     await expect(first.getByText('View full')).toHaveCount(0);
     await first.getByRole('button', { name: 'Minimize branch' }).click();
     await expect(first.getByRole('button', { name: 'Expand branch' })).toBeVisible();
     await expect(page.getByTestId('canvas-save-state')).toHaveText('Saved');
     await page.reload();
-    await expect(page.locator('.react-flow [data-thread]').nth(1)).toContainText('first question');
+    const restored = page.locator('.react-flow [data-thread]');
+    await expect(restored).toHaveCount(3);
+    await expect(page.getByRole('button', { name: 'Expand branch' })).toHaveCount(2);
+    await expect(restored.nth(1)).not.toContainText('first question');
+    await expect(restored.nth(2)).not.toContainText('second question');
+    await expect(page.getByTestId('node-dims')).toHaveCount(0);
+    await page.getByRole('button', { name: 'Fit View', exact: true }).click();
+    await restored.nth(1).getByRole('button', { name: 'Expand branch' }).click();
+    await expect(restored.nth(1)).toContainText('first question');
+    await expect(page.getByTestId('canvas-save-state')).toHaveText('Saved');
+    await page.reload();
+    await expect(page.getByRole('button', { name: 'Expand branch' })).toHaveCount(2);
   });
 
   test('HTML elements can be selected and drilled into for a branch', async ({ page }) => {
@@ -431,6 +561,69 @@ test.describe('the canvas loop', () => {
     await expect(page.getByTestId('context-chips')).toContainText('A specific detail');
     await ask(page, 'explain this');
     await expect(page.locator('.react-flow [data-thread]')).toHaveCount(2);
+  });
+
+  test('Ask branches from the entire blue-bordered HTML component', async ({ page }) => {
+    await seed(page, '<body><section><h2>Migration risks</h2><div id="component" style="display:grid;grid-template-columns:1fr 1fr"><div><h3>Established from the repository</h3><ul><li id="detail">The backend is FastAPI.</li><li>Screening records use SQLite.</li></ul></div><div><h3>Implication</h3><ul><li>Cloud Run can host the application.</li><li>Decks must move to private object storage.</li></ul></div></div><p>Outside the component.</p></section></body>');
+    await openProject(page); await newCanvas(page); await ask(page, 'render as html');
+    const frame = page.frameLocator('.react-flow iframe').first();
+    await frame.locator('#detail').click();
+    await frame.locator('#detail').dblclick();
+    await expect.poll(() => frame.locator('#component').evaluate(el => el.style.outline)).not.toBe('');
+    await frame.locator('#detail').evaluate(el => {
+      const range = document.createRange(); range.selectNodeContents(el);
+      const selection = window.getSelection()!; selection.removeAllRanges(); selection.addRange(range);
+      document.dispatchEvent(new Event('selectionchange'));
+      selection.removeAllRanges(); document.dispatchEvent(new Event('selectionchange'));
+    });
+    await page.getByTestId('add-source').click();
+    await expect(page.getByRole('textbox', { name: 'Ask about this canvas' })).toBeVisible();
+    await expect(page.getByTestId('context-chips')).toContainText('Established from the repository');
+    await ask(page, 'Explain the entire selected component');
+    await expect(page.locator('.react-flow [data-thread]')).toHaveCount(2);
+    await expect(page.getByTestId('canvas-save-state')).toHaveText('Saved');
+    const canvasId = await page.getByTestId('canvas-workspace').getAttribute('data-canvas');
+    const readSource = () => page.evaluate(async canvasId => {
+      const db = await new Promise<IDBDatabase>(resolve => { const r = indexedDB.open('notlinear-canvas'); r.onsuccess = () => resolve(r.result); });
+      const content = await new Promise<string>(resolve => {
+        const r = db.transaction('kv').objectStore('kv').get(`canvas_doc_v1:${canvasId}`);
+        r.onsuccess = () => resolve(r.result.value.snapshots.at(-1).content);
+      });
+      db.close(); return content;
+    }, canvasId);
+    const content = await readSource();
+    expect(content).toContain('Established from the repository');
+    expect(content).toContain('Decks must move to private object storage.');
+    expect(content).not.toContain('Outside the component.');
+    await page.reload();
+    await expect(page.locator('.react-flow [data-thread]')).toHaveCount(2);
+    expect(await readSource()).toBe(content);
+  });
+
+  test('HTML table geometry stays intact after creating a branch', async ({ page }) => {
+    await seed(page, `<body><section><h2>Stable table</h2><table style="width:100%;border-collapse:collapse">
+      <tr><th>Layer</th> <th>Choice</th> <th>Constraint</th></tr>
+      <tr><td>Application database</td> <td>Supabase PostgreSQL</td> <td>SQLite requires migration work</td></tr>
+    </table></section></body>`);
+    await openProject(page); await newCanvas(page); await ask(page, 'render as html');
+    const frame = page.frameLocator('.react-flow iframe').first();
+    await expect(frame.locator('table')).toBeVisible();
+    const inspect = () => frame.locator('table').evaluate(el => ({
+      html: el.innerHTML,
+      boxes: Array.from(el.querySelectorAll('td,th')).map(n => {
+        const r = n.getBoundingClientRect(); return [r.x,r.y,r.width,r.height];
+      }),
+    }));
+    const before = await inspect();
+    await frame.getByRole('heading', { name: 'Stable table' }).click();
+    await page.getByTestId('add-source').click();
+    await ask(page, 'Explain this table');
+    await expect(page.locator('.react-flow [data-thread]')).toHaveCount(2);
+    await expect.poll(() => frame.locator('table').evaluate(() => CSS.highlights.size)).toBe(1);
+    expect(await inspect()).toEqual(before);
+    await page.reload();
+    await expect.poll(() => frame.locator('table').evaluate(() => CSS.highlights.size)).toBe(1);
+    expect(await inspect()).toEqual(before);
   });
 
   test('an HTML image can be selected as a branch source', async ({ page }) => {
@@ -920,4 +1113,334 @@ test('a project Canvas sends linked repository evidence and folder tools to the 
   expect(requests[0]!.system).toContain('Orion orchestrates Vega in the repository.');
   expect(requests[0]!.tools?.map(t => t.name)).toEqual(expect.arrayContaining(['list_project_files', 'read_project_file']));
   await expect(page.getByTestId('canvas-status')).not.toBeVisible();
+});
+
+test('Canvas slash skills are reachable, keep multiple picks, and reach only the chosen turn', async ({ page }) => {
+  const requests = await seed(page, 'Noted.');
+  await openProject(page); await newCanvas(page); await openComposer(page);
+  const composer = page.getByTestId('ink-composer');
+  const box = composer.getByRole('textbox');
+  const menu = page.getByRole('listbox', { name: 'Skills' });
+  await box.fill('Help with this plan /');
+  await expect(menu).toBeVisible();
+  const first = menu.locator('[data-skill-option]').first();
+  // Visibility alone misses overflow clipping: the option must actually receive a pointer.
+  await expect.poll(() => first.evaluate(el => {
+    const r = el.getBoundingClientRect();
+    return el.contains(document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2));
+  })).toBe(true);
+  await page.screenshot({ path: '/tmp/notlinear-canvas-skills.png' });
+  // Reposition the same open menu after a window resize; it must stay clickable and bounded.
+  await page.setViewportSize({ width: 640, height: 480 });
+  await expect.poll(() => first.evaluate(el => {
+    const r = el.getBoundingClientRect();
+    return el.contains(document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2));
+  })).toBe(true);
+  const bounds = await menu.boundingBox();
+  expect(bounds!.y).toBeGreaterThanOrEqual(8);
+  expect(bounds!.y + bounds!.height).toBeLessThanOrEqual(page.viewportSize()!.height - 8);
+  await box.fill('Help with this plan /pre-mor');
+  await menu.locator('[data-skill-option="pre-mortem"]').click();
+  await expect(composer.getByTestId('picked-skills')).toContainText('pre-mortem');
+  await expect(box).toHaveValue('Help with this plan');
+  await expect(menu).toBeVisible();
+  await box.fill('Help with this plan /steelman');
+  await box.press('Enter');
+  await expect(composer.getByTestId('picked-skills')).toContainText('steelman');
+  await box.press('Escape');
+  await expect(menu).toBeHidden();
+  await expect(composer).toBeVisible();
+  await box.press('Enter');
+  await expect.poll(() => requests.length).toBe(1);
+  expect(JSON.stringify(requests[0]!.system)).toContain('### Skill: pre-mortem');
+  expect(JSON.stringify(requests[0]!.system)).toContain('### Skill: steelman');
+  await expect(page.getByTestId('picked-skills')).toBeHidden();
+  await expect(page.locator('.react-flow')).toContainText('Noted.');
+  await ask(page, 'hello again');
+  await expect.poll(() => requests.length).toBe(2);
+  expect(JSON.stringify(requests[1]!.system)).not.toContain('### Skill: pre-mortem');
+  expect(JSON.stringify(requests[1]!.system)).not.toContain('### Skill: steelman');
+});
+
+test('Canvas header edits persist and navigation remains above it with autohide', async ({ page }) => {
+  await page.addInitScript(() => localStorage.setItem('nl_autohide_bars', '1'));
+  await seed(page);
+  await page.goto('/web/');
+  await expect(page.getByRole('tablist', { name: 'Open tabs' })).toBeAttached();
+  await page.mouse.move(800, 400);
+  await page.mouse.move(200, 2);
+  await page.getByRole('button', { name: 'Open left pane' }).click();
+  await page.locator('aside[aria-label="Left pane"] [data-project="p1"] button').first().click();
+  await newCanvas(page);
+  await page.mouse.move(800, 400);
+  const title = page.getByTestId('canvas-title');
+  await title.click();
+  const input = page.getByRole('textbox', { name: 'Canvas name' });
+  await input.fill('Research map'); await input.press('Enter');
+  await expect(title).toHaveText('Research map');
+  await expect(page.getByTestId('crumb-trail')).toContainText('Research');
+  await expect(page.getByTestId('crumb-here')).toHaveText('Research map');
+  const crumb = await page.locator('[data-topbar]').boundingBox();
+  const header = await title.boundingBox();
+  expect(crumb!.y + crumb!.height).toBeLessThanOrEqual(header!.y);
+  await title.click(); await input.fill('Cancelled'); await input.press('Escape');
+  await expect(title).toHaveText('Research map');
+  await title.click(); await input.fill('   '); await input.press('Enter');
+  await expect(title).toHaveText('Research map');
+  await page.getByRole('button', { name: 'Set canvas icon' }).click();
+  const icon = page.getByTestId('glyph-picker').locator('[data-icon]').first();
+  await expect(icon).toBeVisible();
+  await icon.click();
+  await expect(page.getByRole('button', { name: 'Set canvas icon' }).locator('.mg-glyph')).toBeVisible();
+  await expect(page.getByTestId('canvas-save-state')).toHaveText('Saved');
+  await page.reload();
+  await expect(title).toHaveText('Research map');
+  await expect(page.getByRole('button', { name: 'Set canvas icon' }).locator('.mg-glyph')).toBeVisible();
+  await page.mouse.move(220, 2);
+  const tab = page.getByRole('tab').filter({ hasText: 'Research map' });
+  await expect(tab).toBeVisible();
+  await tab.click();
+  await page.mouse.move(800, 400);
+  await page.getByTestId('canvas-reading-toggle').click();
+  await expect(title).toHaveText('Research map');
+  await page.mouse.move(220, 2);
+  await tab.click();
+  const toggle = page.getByRole('button', { name: 'Open left pane' });
+  const assertToggleBelowTabs = async () => {
+    await page.mouse.move(220, 2);
+    await expect.poll(async () => {
+      const tabs = await page.getByRole('tablist', { name: 'Open tabs' }).boundingBox();
+      const button = await toggle.boundingBox();
+      return !!tabs && !!button && button.y >= tabs.y + tabs.height;
+    }).toBe(true);
+    const before = await toggle.getAttribute('aria-expanded');
+    await toggle.click();
+    await expect(toggle).toHaveAttribute('aria-expanded', before === 'true' ? 'false' : 'true');
+  };
+  await assertToggleBelowTabs();
+  await page.mouse.move(800, 400);
+  await page.getByTestId('canvas-reading-toggle').click();
+  await assertToggleBelowTabs();
+  await page.mouse.move(800, 400);
+  await page.waitForTimeout(450);
+  await page.screenshot({ path: '/tmp/notlinear-canvas-navigation-hidden.png' });
+  await page.mouse.move(220, 2);
+  await page.waitForTimeout(250);
+  await page.screenshot({ path: '/tmp/notlinear-canvas-navigation-shown.png' });
+});
+
+
+test('pasted canvas images preview, stack, reload, and stay available for follow-up', async ({ page }) => {
+  const requests = await seed(page, 'I can see both images.');
+  await openProject(page); await newCanvas(page);
+  const surface = page.getByLabel('Canvas workspace', { exact: true });
+  await surface.focus();
+  await surface.evaluate(el => {
+    const data = new DataTransfer();
+    for (const name of ['first.png', 'second.png']) {
+      const image = document.createElement('canvas'); image.width = 240; image.height = 100;
+      const ctx = image.getContext('2d')!;
+      ctx.fillStyle = 'white'; ctx.fillRect(0, 0, 240, 100);
+      ctx.fillStyle = 'black'; ctx.font = '20px sans-serif'; ctx.fillText(name, 20, 55);
+      const bytes = Uint8Array.from(atob(image.toDataURL('image/png').split(',')[1]!), c => c.charCodeAt(0));
+      data.items.add(new File([bytes], name, { type: 'image/png' }));
+    }
+    el.dispatchEvent(new ClipboardEvent('paste', { clipboardData: data, bubbles: true, cancelable: true }));
+  });
+  const composer = page.getByTestId('ink-composer');
+  await expect(composer.getByRole('img')).toHaveCount(2);
+  const preview = composer.getByRole('img').first();
+  expect((await preview.boundingBox())!.height).toBeGreaterThan(50);
+  await preview.click();
+  await expect(page.getByRole('dialog', { name: 'Image preview' })).toBeVisible();
+  await page.keyboard.press('Escape');
+  await ask(page, 'Compare these images');
+  const pictures = page.locator('.react-flow button[aria-label^="Preview "] img');
+  await expect(pictures).toHaveCount(2);
+  await expect.poll(() => pictures.first().evaluate(el => (el as HTMLImageElement).naturalWidth)).toBe(240);
+  const first = (await pictures.nth(0).boundingBox())!;
+  const second = (await pictures.nth(1).boundingBox())!;
+  expect(second.y).toBeGreaterThanOrEqual(first.y + first.height);
+  await expect(page.getByTestId('canvas-save-state')).toHaveText('Saved');
+  expect(JSON.stringify(requests.at(-1))).toContain('"type":"image"');
+  await page.reload();
+  await expect(pictures).toHaveCount(2);
+  await pictures.first().click();
+  await expect(page.getByRole('dialog', { name: 'Image preview' })).toBeVisible();
+  await page.keyboard.press('Escape');
+  // Clicking the card targets a continuation of the saved thread.
+  await page.locator('.react-flow [data-message]').first().getByText('You', { exact: true }).click();
+  await ask(page, 'What do they have in common?');
+  await expect.poll(() => requests.length).toBe(2);
+  const content = requests.at(-1)!.messages[0]!.content as unknown as { type: string }[];
+  expect(content.filter(b => b.type === 'image')).toHaveLength(2);
+  await page.screenshot({ path: '/private/tmp/notlinear-image-previews.png' });
+});
+
+// A held provider request is essential: an instant mock never exposes a workspace-wide lock.
+test('a generating Canvas branch does not block another selected source', async ({ page }) => {
+  await seed(page);
+  await openProject(page); await newCanvas(page); await ask(page, 'Explain widgets');
+  const source = page.locator('.react-flow [data-part] p').filter({ hasText: 'A widget has a sprocket and a flange.' }).first();
+  await expect(source).toBeVisible();
+  const held: { release(): void; text: string }[] = [];
+  await page.route('https://api.anthropic.com/v1/messages', async route => {
+    const index = held.length;
+    await new Promise<void>(release => { held.push({ release, text: `Concurrent answer ${index + 1}` }); });
+    const events = [
+      { type: 'message_start', message: { usage: { input_tokens: 7 } } },
+      { type: 'content_block_start', index: 0, content_block: { type: 'text' } },
+      { type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: `Concurrent answer ${index + 1}` } },
+      { type: 'message_delta', delta: { stop_reason: 'end_turn' }, usage: { output_tokens: 9 } },
+    ];
+    await route.fulfill({ status: 200, headers: { 'content-type': 'text/event-stream' }, body: events.map(e => `data: ${JSON.stringify(e)}\n\n`).join('') }).catch(() => undefined);
+  });
+  const pick = async () => {
+    await source.evaluate(el => {
+      const range = document.createRange(); range.selectNodeContents(el);
+      const selection = window.getSelection()!; selection.removeAllRanges(); selection.addRange(range);
+      document.dispatchEvent(new Event('selectionchange'));
+    });
+    await page.getByTestId('add-source').click();
+  };
+  try {
+    await pick(); await ask(page, 'First concurrent branch');
+    await expect.poll(() => held.length).toBe(1);
+    const firstId = await page.locator('.react-flow [data-thread]').last().getAttribute('data-thread');
+    await pick();
+    const composer = page.getByTestId('ink-composer');
+    await composer.getByRole('textbox').fill('Second concurrent branch');
+    await expect(composer.getByRole('button', { name: 'Send', exact: true })).toBeEnabled();
+    await composer.getByRole('button', { name: 'Send', exact: true }).click();
+    await expect.poll(() => held.length).toBe(2);
+    const secondId = await page.locator('.react-flow [data-thread]').last().getAttribute('data-thread');
+    // Completing the first must not clear the second's Stop control.
+    held[0]!.release();
+    const first = page.locator(`.react-flow [data-thread="${firstId}"]`);
+    await first.locator('header').dispatchEvent('click');
+    await expect(first).toContainText('Concurrent answer 1');
+    const second = page.locator(`.react-flow [data-thread="${secondId}"]`);
+    await second.locator('header').dispatchEvent('click');
+    await expect(composer.getByRole('button', { name: 'Stop', exact: true })).toBeVisible();
+    await composer.getByRole('button', { name: 'Stop', exact: true }).click();
+    await expect(composer.getByRole('button', { name: 'Stop', exact: true })).toHaveCount(0);
+    await expect(first).toContainText('Concurrent answer 1');
+  } finally {
+    held.forEach(h => h.release());
+  }
+});
+
+
+test('Canvas branches stay beside the selected passage and the newest overlapping card is in front', async ({ page }) => {
+  await seed(page);
+  await openProject(page); await newCanvas(page); await ask(page, 'Explain widgets');
+  const source = page.locator('.react-flow [data-part] p').filter({ hasText: 'A widget has a sprocket and a flange.' }).first();
+  await expect(source).toBeVisible();
+  const pick = async () => {
+    let previous: string | null = null;
+    await expect.poll(async () => {
+      const current = await page.locator('.react-flow__viewport').getAttribute('style');
+      const settled = previous === current; previous = current; return settled;
+    }).toBe(true);
+    await source.evaluate(el => {
+      const range = document.createRange(); range.selectNodeContents(el);
+      const selection = window.getSelection()!; selection.removeAllRanges(); selection.addRange(range);
+      document.dispatchEvent(new Event('selectionchange'));
+    });
+    await page.getByTestId('add-source').click();
+  };
+  await pick(); await ask(page, 'First nearby branch');
+  const cards = page.locator('.react-flow__node');
+  await expect(cards).toHaveCount(2);
+  await expect(cards.nth(1)).toContainText('A widget has a sprocket and a flange.');
+  const firstId = (await cards.nth(1).getAttribute('data-id'))!;
+  const firstY = await cards.nth(1).evaluate(el => new DOMMatrix(getComputedStyle(el).transform).m42);
+  await pick(); await ask(page, 'Second nearby branch');
+  await expect(cards).toHaveCount(3);
+  const second = cards.nth(2);
+  await expect(second).toContainText('A widget has a sprocket and a flange.');
+  const secondId = (await second.getAttribute('data-id'))!;
+  await expect.poll(async () => Math.abs(await second.evaluate(el => new DOMMatrix(getComputedStyle(el).transform).m42) - firstY)).toBeLessThan(2);
+  const first = page.locator(`.react-flow__node[data-id="${firstId}"]`);
+  expect(await second.evaluate(el => Number(getComputedStyle(el).zIndex))).toBeGreaterThan(await first.evaluate(el => Number(getComputedStyle(el).zIndex)));
+  await expect.poll(() => second.locator('header').evaluate(el => {
+    const rect = el.getBoundingClientRect();
+    return el.contains(document.elementFromPoint(rect.left + Math.min(30, rect.width / 2), rect.top + rect.height / 2));
+  })).toBe(true);
+  // Saved placement survives remount; the existing collapse-on-open rule still applies.
+  await expect(page.getByTestId('canvas-workspace')).toContainText('Saved');
+  await page.reload();
+  const restored = page.locator(`.react-flow__node[data-id="${secondId}"]`);
+  await expect(restored).toBeVisible();
+  expect(Math.abs(await restored.evaluate(el => new DOMMatrix(getComputedStyle(el).transform).m42) - firstY)).toBeLessThan(2);
+});
+
+
+test('a child keeps its parent expanded and in focus while unrelated branches collapse', async ({ page }) => {
+  await seed(page);
+  await openProject(page); await newCanvas(page); await ask(page, 'Main question');
+  const pick = async (cardIndex: number) => {
+    let previous: string | null = null;
+    await expect.poll(async () => {
+      const current = await page.locator('.react-flow__viewport').getAttribute('style');
+      const settled = previous === current; previous = current; return settled;
+    }).toBe(true);
+    const paragraph = page.locator('.react-flow [data-thread]').nth(cardIndex).locator('[data-part] p').filter({ hasText: 'A widget has a sprocket and a flange.' }).first();
+    await expect(paragraph).toBeVisible();
+    await paragraph.evaluate(el => {
+      const range = document.createRange(); range.selectNodeContents(el);
+      const selection = window.getSelection()!; selection.removeAllRanges(); selection.addRange(range);
+      document.dispatchEvent(new Event('selectionchange'));
+    });
+    await page.getByTestId('add-source').click();
+  };
+  await pick(0); await ask(page, 'Unrelated branch');
+  await expect(page.locator('.react-flow [data-thread]').nth(1)).toContainText('A widget has a sprocket and a flange.');
+  await pick(0); await ask(page, 'Parent branch');
+  const cards = page.locator('.react-flow [data-thread]');
+  await expect(cards.nth(2)).toContainText('A widget has a sprocket and a flange.');
+  await page.getByRole('button', { name: 'Fit View', exact: true }).click();
+  await expect(page.getByTestId('canvas-save-state')).toHaveText('Saved');
+  await pick(2);
+  await ask(page, 'Child branch');
+  await expect(cards).toHaveCount(4);
+  await expect(cards.nth(3)).toContainText('A widget has a sprocket and a flange.');
+  await expect(cards.nth(2)).toContainText('Parent branch');
+  await expect(cards.nth(2).getByRole('button', { name: 'Minimize branch' })).toBeVisible();
+  await expect(cards.nth(3).getByRole('button', { name: 'Minimize branch' })).toBeVisible();
+  await expect(cards.nth(1).getByRole('button', { name: 'Expand branch' })).toBeVisible();
+  await expect(cards.nth(0)).toContainText('Main question');
+  await expect(page.getByTestId('canvas-save-state')).toHaveText('Saved');
+  await expect.poll(async () => {
+    const parent = await cards.nth(2).boundingBox();
+    const child = await cards.nth(3).boundingBox();
+    const pane = await page.locator('.react-flow').boundingBox();
+    return !!parent && !!child && !!pane && parent.x >= pane.x && parent.x + parent.width <= pane.x + pane.width && child.x < pane.x + pane.width - 50;
+  }).toBe(true);
+  const viewport = await page.locator('.react-flow__viewport').getAttribute('style');
+  // Settling node measurements must not reframe onto the child.
+  await expect(page.getByTestId('canvas-save-state')).toHaveText('Saved');
+  await expect(page.locator('.react-flow__viewport')).toHaveAttribute('style', viewport!);
+  await page.screenshot({ path: test.info().outputPath('parent-and-child.png'), animations: 'disabled' });
+});
+
+test('Canvas notifications open the originating thread and keep read history', async ({ page }) => {
+  await seed(page);
+  await openProject(page);
+  await newCanvas(page);
+  await ask(page, 'Explain the widget');
+  await expect(page.getByRole('button', { name: 'Notifications, 1 unread' })).toBeVisible();
+  await page.getByRole('button', { name: 'Notifications, 1 unread' }).click();
+  const panel = page.getByRole('region', { name: 'Canvas notifications' });
+  await expect(panel.getByText('Your reply is ready')).toBeVisible();
+  await panel.getByRole('button').filter({ hasText: 'Your reply is ready' }).click();
+  await expect(panel).not.toBeVisible();
+  await expect(page.getByRole('button', { name: 'Notifications, 0 unread' })).toBeVisible();
+  await page.getByRole('button', { name: 'Notifications, 0 unread' }).click();
+  await expect(panel.getByText('Your reply is ready')).toBeVisible();
+  await panel.getByRole('button', { name: 'Unread · 0' }).click();
+  await expect(panel.getByText('All caught up')).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(panel).not.toBeVisible();
+  await expect(page.getByRole('button', { name: 'Notifications, 0 unread' })).toBeFocused();
 });

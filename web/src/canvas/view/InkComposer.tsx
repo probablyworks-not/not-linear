@@ -68,7 +68,8 @@ export function InkComposer({ canvasId, target, sources, onRemoveSource, onSend,
   const [text, setText] = useState('');
   const [loaded, setLoaded] = useState(false);
   const ref = useRef<HTMLTextAreaElement>(null);
-  const skills = useSkillPicker(text, setText, ref, sources.length ? 'Ask about the selected source…' : 'what’s up?');
+  const boxRef = useRef<HTMLDivElement>(null);
+  const skills = useSkillPicker(text, setText, ref, sources.length ? 'Ask about the selected source…' : 'what’s up?', boxRef);
 
   // The idle, collapsed "Ask" launcher only stands in for the default, un-anchored "new question"
   // composer — one that's scoped to a selected source or a reply thread is already an answer to
@@ -78,8 +79,7 @@ export function InkComposer({ canvasId, target, sources, onRemoveSource, onSend,
   const isIdleAsk = target.key === 'new' && !target.anchor && sources.length === 0 && files.length === 0;
   const [focused, setFocused] = useState(false);
   const wantsFocusRef = useRef(false);
-  const expanded = !isIdleAsk || focused || text.trim().length > 0;
-  const boxRef = useRef<HTMLDivElement>(null);
+  const expanded = !isIdleAsk || focused || text.trim().length > 0 || files.length > 0;
   const [boxSize, setBoxSize] = useState({ width: W, height: H });
   useEffect(() => {
     const el = boxRef.current;

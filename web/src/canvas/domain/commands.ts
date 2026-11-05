@@ -66,14 +66,15 @@ function resolveOverlap(doc: CanvasDoc, entityId: string, layoutId = DEFAULT_LAY
  * level with the text it came from instead of near the card's top (bug: branch always looked like
  * it came from the top of the source regardless of where in it the quote was).
  */
-export function placeBeside(doc: CanvasDoc, entityId: string, sourceEntityId: string | null, layoutId = DEFAULT_LAYOUT_ID, besideY?: number): void {
+// Branches allow overlap so collision avoidance cannot move them away from their source.
+export function placeBeside(doc: CanvasDoc, entityId: string, sourceEntityId: string | null, layoutId = DEFAULT_LAYOUT_ID, besideY?: number, allowOverlap = false): void {
   const layout = layoutOf(doc, layoutId);
   const src = sourceEntityId ? layout.entries[sourceEntityId] : undefined;
   const jitter = ((hashText(entityId).charCodeAt(0) % 9) - 4) * 10;
   layout.entries[entityId] = src
     ? { entityId, x: src.x + src.w + GAP_X, y: besideY ?? (src.y + jitter), w: NODE_W, h: NODE_H }
     : { entityId, x: 0, y: 0, w: NODE_W, h: NODE_H };
-  resolveOverlap(doc, entityId, layoutId);
+  if (!allowOverlap) resolveOverlap(doc, entityId, layoutId);
 }
 
 /**
@@ -178,7 +179,7 @@ function createThread(doc: CanvasDoc, input: CreateThreadInput, ctx: Ctx): { thr
   doc.threads.push(thread);
   const message = addMessage(doc, { threadId: thread.id, author: { kind: 'human' }, parts: [textPart(input.prompt)] }, ctx);
   if (input.placement === 'below') placeBelowAll(doc, thread.id);
-  else placeBeside(doc, thread.id, input.besideEntityId ?? null, DEFAULT_LAYOUT_ID, input.besideY);
+  else placeBeside(doc, thread.id, input.besideEntityId ?? null, DEFAULT_LAYOUT_ID, input.besideY, input.kind === 'branch');
   return { thread, message };
 }
 

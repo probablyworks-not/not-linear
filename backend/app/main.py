@@ -18,6 +18,7 @@ from .middleware.local_only import LocalOriginMiddleware
 from .routers.endpoints import router as legacy_router
 from .routers.notes import router as notes_router
 from .routers.voice import router as voice_router
+from .routers.subscriptions import router as subscriptions_router
 
 
 def create_app(port: int = config.DEFAULT_PORT) -> FastAPI:
@@ -32,6 +33,7 @@ def create_app(port: int = config.DEFAULT_PORT) -> FastAPI:
     app.include_router(legacy_router)
     app.include_router(notes_router)
     app.include_router(voice_router)
+    app.include_router(subscriptions_router)
 
     @app.get("/CHANGELOG.md")
     async def changelog() -> FileResponse:

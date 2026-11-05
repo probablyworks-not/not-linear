@@ -24,10 +24,10 @@ function useViewportWidth(): number {
 
 /**
  * A note beside the chat, on the right. The chat column makes room for it (ChatView reads the same
- * layout), the left edge is a drag handle, and the width is remembered. Below 900px it covers the
+ * layout), the left edge is a drag handle, and the width is remembered. With a branch open or insufficient room it covers the
  * chat instead. The pane writes `--note-pane-room` so the branch drawer sits to its left.
  */
-export function NotePane({ noteId }: { noteId: string }) {
+export function NotePane({ noteId, overlay = false }: { noteId: string; overlay?: boolean }) {
   const requested = useUiStore(s => s.notePaneWidth);
   const setWidth = useUiStore(s => s.setNotePaneWidth);
   const close = useUiStore(s => s.closeNotePane);
@@ -39,7 +39,7 @@ export function NotePane({ noteId }: { noteId: string }) {
   const live = useRef(requested);
   const sidebarOpen = useUiStore(s => s.sidebarOpen);
   const reserved = sidebarOpen ? SIDEBAR_PX : 0;
-  const layout = paneLayout(requested, viewport, reserved);
+  const layout = paneLayout(requested, viewport, reserved, overlay);
 
   // The store is normally filled by the Notes view; a chat can open a note without ever visiting it.
   useEffect(() => { void load(); }, [load]);
@@ -102,7 +102,7 @@ export function NotePane({ noteId }: { noteId: string }) {
     <aside
       aria-label="Note" data-testid="note-pane" data-beside={layout.beside}
       className="fixed bottom-0 right-0 z-20 flex flex-col border-l border-rule-2 bg-bg shadow-lg"
-      style={{ top, width: layout.width, transition: dragging ? 'none' : 'top 150ms ease-out' }}
+      style={{ top, width: layout.width, zIndex: layout.beside ? 20 : 50, transition: dragging ? 'none' : 'top 150ms ease-out' }}
     >
       <div
         role="separator" aria-orientation="vertical" aria-label="Resize note" aria-valuemin={0} aria-valuenow={layout.width} tabIndex={0}

@@ -309,7 +309,8 @@ body.resizing-branch.resize-nw-se{cursor:nwse-resize}
 :is(.msg.ai,.nl-md) :is(h1,h2,h3,h4) + :is(h2,h3,h4){margin-top:.8em}
 :is(.msg.ai,.nl-md) strong{font-weight:650;color:var(--text)}
 :is(.msg.ai,.nl-md) em{color:inherit}
-:is(.msg.ai,.nl-md) ul,:is(.msg.ai,.nl-md) ol{padding-left:1.5em;margin:.35em 0 .7em}
+:is(.msg.ai,.nl-md) ul,:is(.msg.ai,.nl-md) ol{padding-inline-start:2em;margin:.35em 0 .7em;list-style-position:outside}
+:is(.msg.ai,.nl-md) li>ul,:is(.msg.ai,.nl-md) li>ol{margin:.25em 0;padding-inline-start:2em}
 :is(.msg.ai,.nl-md) li{margin:.2em 0;line-height:inherit;font-size:inherit;padding-left:.25em}
 :is(.msg.ai,.nl-md) li::marker{color:var(--syn-function);font-weight:600}
 :is(.msg.ai,.nl-md) hr{border:none;border-top:1px solid var(--rule);margin:1em 0}
@@ -326,3 +327,6 @@ body.resizing-branch.resize-nw-se{cursor:nwse-resize}
 
 :is(.msg.ai,.nl-md) hr + :is(h1,h2,h3,h4){margin-top:.65em;padding-top:0;border-top:0}
 :is(.msg.ai,.nl-md) li > p{margin-bottom:.25em}
+
+/* Typeset equations in chat, canvas parts and live replies. */
+.nl-md .md-math-block,.msg.ai .md-math-block{max-width:100%;overflow-x:auto;margin:8px 0 12px;color:inherit}

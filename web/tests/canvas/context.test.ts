@@ -106,3 +106,22 @@ describe('quoteBlock', () => {
     expect(quoteBlock([])).toBe('');
   });
 });
+
+
+it('retains saved images in follow-up and ancestor context without depending on geometry', () => {
+  const { d, rootId, replyId, partId } = conversation();
+  const human = d.messages.find(m => m.threadId === rootId && m.author.kind === 'human')!;
+  for (const [i, data] of ['YWJj', 'ZGVm'].entries()) {
+    d.assets.push({ id: `as_${i}`, mime: 'image/png', bytes: 3, hash: '', state: 'ready', createdAt: 1, location: { kind: 'inline', data } });
+    human.parts.push({ id: `pt_${i}`, kind: 'attachment', state: 'ready', name: `${i}.png`, mime: 'image/png', bytes: 3, assetId: `as_${i}` });
+  }
+  const snap = freezeSelection(d, replyId, partId, 'sprocket', 13, ctx)!;
+  const branch = branchFrom(d, { snapshotId: snap.id, prompt: 'Compare the images' }, ctx)!;
+  const restored = JSON.parse(JSON.stringify(d)) as CanvasDoc;
+  const messages = resolveContext(restored, branch.thread.id, { provider: 'openai' }).messages;
+  expect(Array.isArray(messages[0]!.content)).toBe(true);
+  expect(JSON.stringify(messages[0])).toContain('YWJj');
+  expect(JSON.stringify(messages[0])).toContain('ZGVm');
+  expect(messages.at(-1)!.content).toContain('Compare the images');
+  expect(typeof resolveContext(restored, branch.thread.id, { provider: 'deepseek' }).messages[0]!.content).toBe('string');
+});

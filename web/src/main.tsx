@@ -16,6 +16,7 @@ import { artifactSource } from './projects/extras/artifact-source';
 import { installRuntimeLogSync } from './lib/runtime-log-sync';
 import { branchCurrentSelection, copyLastReply, retryFailedTurn } from './chat/shortcuts';
 import './styles/app.css';
+import { installAnnotations } from './annotations';
 
 registerView({ id: 'chat', label: 'Chat' });
 registerView({ id: 'notes', label: 'Notes' });
@@ -55,6 +56,7 @@ async function boot(): Promise<void> {
     retryLastReply: () => { const id = activeChatThread(); if (id) void retryFailedTurn(id); },
   });
   installSwipeBack(goBack);
+  installAnnotations();
   // The other app may have changed the shared row while this one was hidden.
   window.addEventListener('focus', () => { void syncFromDisk(); useAppStore.getState().refreshApiKeys(); });
   document.addEventListener('visibilitychange', () => {

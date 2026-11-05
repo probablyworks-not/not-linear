@@ -1,3 +1,4 @@
+import { deleteAnnotations } from '../db/annotations-repo';
 import { useAppStore } from '../state/app-store';
 import { useUiStore } from '../state/ui-store';
 import { toast } from '../ui/toast';
@@ -33,7 +34,7 @@ const MODEL_IDS = new Set(MODELS.map(m => m.id));
 
 /** app.js:964 branchModelPref: a branch keeps its own model once it has one; otherwise it follows the default. */
 export function branchModelPref(b: { modelPref?: string | null } | undefined, defaultPref: string | undefined): string {
-  return b?.modelPref && MODEL_IDS.has(b.modelPref) ? b.modelPref : (defaultPref || 'sonnet');
+  return b?.modelPref && (MODEL_IDS.has(b.modelPref) || /^sub:(claude|chatgpt):.+/.test(b.modelPref)) ? b.modelPref : (defaultPref || 'sonnet');
 }
 
 export function specOf(b: OpenBranch): BranchSpec {
@@ -195,7 +196,7 @@ export async function touchRecent(id: string): Promise<void> {
 /** The branch's own model (ADR-045): changes this panel only, and is saved with the branch. */
 export async function setBranchModelPref(id: string, value: string): Promise<void> {
   const b = useBranchStore.getState().open[id];
-  if (!b || !MODEL_IDS.has(value)) return;
+  if (!b || (!MODEL_IDS.has(value) && !/^sub:(claude|chatgpt):.+/.test(value))) return;
   useBranchStore.getState().patch(id, { modelPref: value });
   const next = useBranchStore.getState().open[id]!;
   await capture([next], true);
@@ -281,6 +282,7 @@ export async function deleteBranch(id: string, threadId: string): Promise<boolea
     useBranchStore.getState().remove(gone);
   }
   await mutate(s => { const t = s.threads[threadId]; if (t) removeBranchRecordsIn(t, ids); });
+  await deleteAnnotations(threadId, ids).catch(() => toast('Could not remove saved annotations.'));
   toast(ids.size > 1 ? 'Branches deleted' : 'Branch deleted');
   return true;
 }

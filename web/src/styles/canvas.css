@@ -61,8 +61,69 @@
   .nl-ask-draw, .nl-ask-cursor { animation: none; }
 }
 
-/* Only the unfinished section animates. */
-.nl-html-pending { position:relative; isolation:isolate; overflow:hidden; min-height:180px; display:flex; align-items:center; justify-content:center; border:1px solid var(--cv-edge); border-radius:12px; background:var(--cv-card); color:var(--text-3); font-size:13px; }
-.nl-html-pending::before { content:''; position:absolute; z-index:-1; inset:-100%; background:linear-gradient(125deg,transparent 43%,color-mix(in srgb,var(--text-3) 12%,transparent) 50%,transparent 57%); transform:translateX(-35%); animation:nl-html-sweep 2.4s ease-in-out infinite; pointer-events:none; }
-@keyframes nl-html-sweep { to { transform:translateX(35%); } }
-@media(prefers-reduced-motion:reduce) { .nl-html-pending::before { animation:none; transform:none; } }
+/* Only unfinished content animates; completed HTML remains still. */
+.nl-html-pending { position:relative; isolation:isolate; overflow:hidden; padding:24px; border:1px solid var(--cv-edge); border-radius:12px; background:var(--cv-card); }
+.nl-html-pending-label { display:block; position:relative; z-index:1; margin-bottom:22px; color:var(--text-2); font-size:13px; }
+.nl-html-skeleton { display:grid; gap:12px; }
+.nl-html-skeleton i { display:block; height:12px; border-radius:6px; background:color-mix(in srgb,var(--text-3) 22%,var(--cv-card)); }
+.nl-html-skeleton i:first-child { width:42%; height:20px; margin-bottom:8px; }
+.nl-html-skeleton i:nth-child(3) { width:90%; }
+.nl-html-skeleton i:last-child { width:68%; }
+.nl-html-pending::before { content:''; position:absolute; z-index:1; inset:0; background:linear-gradient(100deg,transparent 15%,color-mix(in srgb,var(--cv-card) 75%,transparent) 50%,transparent 85%); transform:translateX(-100%); animation:nl-html-sweep 1.8s ease-in-out infinite; pointer-events:none; }
+@keyframes nl-html-sweep { to { transform:translateX(100%); } }
+@media(prefers-reduced-motion:reduce) { .nl-html-pending::before { animation:none; display:none; } }
+
+/* Pearl paper atmosphere: screen-space decoration, separate from the pan/zoom plane. */
+.nl-canvas-pearl { isolation: isolate; overflow: hidden; background: var(--cv-ground); }
+.nl-canvas-pearl::before, .nl-canvas-pearl::after {
+  content: ''; position: absolute; inset: -8%; pointer-events: none; z-index: -1;
+}
+.nl-canvas-pearl::before {
+  background: url('../assets/canvas-pearl.png') right center / cover no-repeat;
+  opacity: .30; filter: blur(8px);
+  animation: nl-pearl-drift 40s ease-in-out infinite alternate;
+}
+.nl-canvas-pearl::after {
+  background: radial-gradient(ellipse at 34% 40%, color-mix(in srgb, var(--cv-ground) 90%, transparent), transparent 85%);
+}
+@keyframes nl-pearl-drift {
+  from { transform: translate3d(-1%, 0, 0) scale(1); }
+  to { transform: translate3d(1%, 1.4%, 0) scale(1.05); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .nl-canvas-pearl::before { animation: none; }
+}
+
+/* Quiet, session-local Canvas activity. All surfaces inherit the active theme. */
+.cv-notifications { position: relative; color: var(--text); }
+.cv-notice-bell { position: relative; display: grid; place-items: center; width: 32px; height: 30px; border: 1px solid var(--rule-2); border-radius: 8px; color: var(--text-2); }
+.cv-notice-bell:hover, .cv-notice-close:hover { background: var(--bg-2); }
+.cv-notice-count { position: absolute; top: -6px; right: -6px; border-radius: 12px; padding: 1px 4px; background: var(--branch); color: var(--surface); font: 10px var(--mono); }
+.cv-notice-panel { position: absolute; top: calc(100% + 14px); right: 0; width: min(390px, calc(100vw - 32px)); background: var(--surface); border: 1px solid var(--rule-2); box-shadow: var(--shadow-lg); border-radius: 16px; overflow: hidden; }
+.cv-notice-heading { display: flex; align-items: flex-start; justify-content: space-between; padding: 22px 20px 16px; }
+.cv-notice-heading h2 { margin: 0 0 4px; font-size: 16px; font-weight: 500; }
+.cv-notice-heading p, .cv-notice-empty p { margin: 0; color: var(--text-3); font-size: 12px; }
+.cv-notice-close { padding: 4px; border-radius: 6px; }
+.cv-notice-filters { display: flex; align-items: center; justify-content: space-between; padding: 0 16px 14px; border-bottom: 1px solid var(--rule); font-size: 11px; color: var(--text-3); }
+.cv-notice-filters div { display: flex; gap: 4px; }
+.cv-notice-filters button { padding: 5px 8px; border-radius: 6px; }
+.cv-notice-filters button[aria-pressed=true] { background: var(--bg-2); color: var(--text); }
+.cv-notice-filters button:disabled { opacity: .45; }
+.cv-notice-list { max-height: min(440px, 55vh); overflow-y: auto; }
+.cv-notice-row { display: flex; align-items: center; gap: 12px; width: 100%; padding: 17px 20px; text-align: left; color: var(--text-2); border-bottom: 1px solid var(--rule); }
+.cv-notice-row:hover { background: var(--bg-2); }
+.cv-notice-row.unread { background: var(--branch-soft); }
+.cv-notice-icon { display: grid; place-items: center; flex: 0 0 38px; height: 38px; border: 1px solid var(--rule); border-radius: 12px; color: var(--branch); background: var(--surface); }
+.cv-notice-icon.failed { color: var(--text); }
+.cv-notice-copy { display: flex; flex: 1; min-width: 0; flex-direction: column; gap: 4px; font-size: 12px; }
+.cv-notice-copy strong { color: var(--text); font-weight: 500; }
+.cv-notice-copy > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cv-notice-copy small { color: var(--text-3); font-size: 10px; }
+.cv-notice-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--branch); }
+.cv-notice-empty { display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 42px 20px; color: var(--text-3); }
+.cv-notice-empty strong { color: var(--text-2); font-size: 13px; font-weight: 500; }
+.cv-notice-panel footer { padding: 12px 20px; border-top: 1px solid var(--rule); font: 9px var(--mono); letter-spacing: .12em; color: var(--text-3); }
+.cv-notice-brief { position: fixed; bottom: 28px; right: 28px; display: flex; align-items: flex-start; width: min(350px, calc(100vw - 32px)); background: var(--surface); border: 1px solid var(--rule-2); border-radius: 14px; box-shadow: var(--shadow-lg); overflow: hidden; }
+.cv-notice-brief .cv-notice-row { border: 0; padding: 16px; }
+.cv-notice-brief > button { padding: 12px 10px 0 0; color: var(--text-3); }
+.cv-notifications button:focus-visible { outline: 2px solid var(--branch); outline-offset: -2px; }

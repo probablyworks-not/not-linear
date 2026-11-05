@@ -19,6 +19,8 @@ function segments(root){
 }
 function cleanText(fragment){return segments(fragment).text;}
 function reportSelection(){
+  // Native double-click/blur events must not replace the outlined component.
+  if(inspected)return;
   var sel = window.getSelection();
   var range = sel && sel.rangeCount ? sel.getRangeAt(0) : null;
   var text = range ? cleanText(range.cloneContents()).trim() : '';
@@ -33,6 +35,16 @@ function reportSelection(){
 document.addEventListener('selectionchange', reportSelection);
 // Element inspection stays inside the opaque sandbox; the host receives only the selected text.
 var inspected = null, previousOutline = '', crumb = null;
+var selectionPointer = null;
+document.addEventListener('pointerdown',function(e){
+  selectionPointer=e.button===0 && !e.target.closest('[data-nl-inspector]') ? {x:e.clientX,y:e.clientY} : null;
+});
+document.addEventListener('pointermove',function(e){
+  if(selectionPointer && (e.buttons&1) && Math.hypot(e.clientX-selectionPointer.x,e.clientY-selectionPointer.y)>4){
+    selectionPointer=null;clearInspection();
+  }
+});
+document.addEventListener('pointerup',function(){selectionPointer=null;});
 function clearInspection(){
   if(inspected)inspected.style.outline=previousOutline;
   inspected=null;
@@ -62,6 +74,7 @@ function chooseElement(el){
   if(!el)return;
   if(inspected)inspected.style.outline=previousOutline;
   inspected=el; previousOutline=el.style.outline; el.style.outline='2px solid var(--nl-selection)';
+  window.getSelection().removeAllRanges();
   var text=cleanText(el).trim(), tag=el.tagName.toLowerCase(), nonText=!text && /^(img|svg|canvas)$/.test(tag), before=document.createRange();
   if(nonText) text=(el.getAttribute('alt') || el.getAttribute('aria-label') || el.getAttribute('title') || tag).trim();
   before.selectNodeContents(document.body); before.setEndBefore(el);
@@ -84,37 +97,44 @@ document.addEventListener('dblclick',function(e){
 });
 
 window.addEventListener('keydown',function(e){if(e.key==='Escape'){e.preventDefault();if(inspected){var chain=candidates(inspected), parent=chain[1];if(parent)chooseElement(parent);else {clearInspection();post({type:'selection',text:''});}}else post({type:'escape'});}});
+var paintedRanges=[], paintedNames=[], savedHighlightMarks=[];
+var highlightStyle=document.createElement('style');highlightStyle.dataset.nlHighlights='';
 function reportMarks(){
-  var seen = {}, marks = [];
-  document.querySelectorAll('mark[data-snapshot-id]').forEach(function(mark){
-    var id = mark.dataset.snapshotId;
-    if (seen[id]) return; seen[id] = true;
-    var r = mark.getBoundingClientRect();
-    marks.push({id:id, rect:{left:r.left,top:r.top,width:r.width,height:r.height}});
+  var marks=[];
+  paintedRanges.forEach(function(entry){
+    for(var i=0;i<entry.ranges.length;i++){
+      var rects=entry.ranges[i].getClientRects(), r=Array.from(rects).find(function(box){return box.width>0 && box.height>0;});
+      if(r){marks.push({id:entry.id,rect:{left:r.left,top:r.top,width:r.width,height:r.height}});break;}
+    }
   });
-  post({type:'anchors', marks:marks});
+  post({type:'anchors',marks:marks});
 }
 function paint(marks){
-  var keep = {};
-  marks.forEach(function(m){keep[m.id]=true;});
-  document.querySelectorAll('mark[data-snapshot-id]').forEach(function(mark){
-    if (keep[mark.dataset.snapshotId]) return;
-    var p=mark.parentNode; while(mark.firstChild) p.insertBefore(mark.firstChild,mark); mark.remove(); p.normalize();
-  });
+  savedHighlightMarks=marks;
+  var registry=window.CSS && CSS.highlights;
+  paintedNames.forEach(function(name){if(registry)registry.delete(name);});
+  paintedNames=[];paintedRanges=[];
+  var semantic=segments(document.body), full=semantic.text, rules=[];
   marks.forEach(function(h){
-    if (!h.quote || Array.from(document.querySelectorAll('mark[data-snapshot-id]')).some(function(m){return m.dataset.snapshotId===h.id;})) return;
-    var semantic=segments(document.body), full=semantic.text;
+    if(!h.quote)return;
     var at=-1;
     for(var i=0;i<=h.occurrence;i++){at=full.indexOf(h.quote,at<0?0:at+h.quote.length);if(at<0)break;}
     if(at<0)return;
+    var ranges=[];
     semantic.runs.forEach(function(run){
-      var n=run.node, lo=Math.max(0,at-run.start), hi=Math.min(run.end-run.start,at+h.quote.length-run.start);
-      if(hi>lo){
-        var r=document.createRange();r.setStart(n,lo);r.setEnd(n,hi);
-        var mark=document.createElement('mark');mark.dataset.snapshotId=h.id;mark.style.backgroundColor=h.color;mark.style.color='var(--nl-ink)';r.surroundContents(mark);
-      }
+      var lo=Math.max(0,at-run.start), hi=Math.min(run.end-run.start,at+h.quote.length-run.start);
+      if(hi>lo){var r=document.createRange();r.setStart(run.node,lo);r.setEnd(run.node,hi);ranges.push(r);}
     });
+    paintedRanges.push({id:h.id,ranges:ranges});
+    // Paint ranges without inserting children into authored tables, flex or grid.
+    if(registry && window.Highlight && CSS.supports('color',h.color)){
+      var name='nl-source-'+paintedNames.length;
+      registry.set(name,new Highlight(...ranges));paintedNames.push(name);
+      rules.push('::highlight('+name+'){background-color:color-mix(in srgb,'+h.color+' var(--nl-highlight-strength,35%),transparent);}');
+    }
   });
+  highlightStyle.textContent=rules.join('');
+  if(!highlightStyle.isConnected)document.head.appendChild(highlightStyle);
   reportMarks();
 }
 window.addEventListener('message',function(e){
@@ -123,18 +143,20 @@ window.addEventListener('message',function(e){
   if(e.data.__nlHtmlCommand==='marks' && Array.isArray(e.data.marks))paint(e.data.marks);
 });
 var markFrame=0;
-function scheduleMarks(){if(!markFrame)markFrame=requestAnimationFrame(function(){markFrame=0;reportMarks();});}
+function scheduleMarks(){if(!markFrame)markFrame=requestAnimationFrame(function(){markFrame=0;paint(savedHighlightMarks);});}
 window.addEventListener('scroll',scheduleMarks,true);
 window.addEventListener('resize',scheduleMarks);
 window.addEventListener('nl-pagination-layout',scheduleMarks);
 if(document.fonts){document.fonts.addEventListener('loadingdone',scheduleMarks);document.fonts.ready.then(scheduleMarks);}
 window.addEventListener('wheel',function(e){
-  var scroll=e.target.nodeType===1?e.target:e.target.parentElement;
+  var scroll=e.target.nodeType===1?e.target:e.target.parentElement, ownsVertical=false;
   if(!e.ctrlKey){
     while(scroll){
       var style=getComputedStyle(scroll);
       if(scroll===document.scrollingElement || /auto|scroll/.test(style.overflow+style.overflowY+style.overflowX)){
         var canY=e.deltaY<0?scroll.scrollTop>0:e.deltaY>0&&scroll.scrollTop+scroll.clientHeight<scroll.scrollHeight-1;
+        var vertical=/auto|scroll/.test(style.overflowY) || scroll===document.scrollingElement;
+        if(vertical && (scroll!==document.scrollingElement || !document.documentElement.dataset.nlHtmlExpanded) && scroll.scrollHeight>scroll.clientHeight+1 && e.deltaY && Math.abs(e.deltaY)>=Math.abs(e.deltaX))ownsVertical=true;
         var horizontal=/auto|scroll/.test(style.overflowX) || scroll===document.scrollingElement;
         var hasX=horizontal && scroll.scrollWidth>scroll.clientWidth+1;
         // Keep horizontal gestures in their HTML scroller even at its boundary.
@@ -148,6 +170,8 @@ window.addEventListener('wheel',function(e){
       scroll=scroll.parentElement;
     }
   }
+  // A bounded HTML reader owns vertical gestures at both ends; pinch still reaches Canvas.
+  if(ownsVertical){e.preventDefault();return;}
   e.preventDefault();
   post({type:'wheel',deltaX:e.deltaX,deltaY:e.deltaY,deltaMode:e.deltaMode,ctrlKey:e.ctrlKey,metaKey:e.metaKey,clientX:e.clientX,clientY:e.clientY});
 },{passive:false});

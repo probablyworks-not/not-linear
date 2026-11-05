@@ -8,6 +8,11 @@ import react from '@vitejs/plugin-react';
 export default defineConfig({
   base: '/web/',
   plugins: [react()],
+  // The bundled skills library's SKILL.md files (imported via import.meta.glob
+  // with query: '?raw' in web/src/skills/builtin.ts) live outside this project
+  // root. For out-of-root files the dev server's raw-query detection can miss,
+  // so force .md to be treated as a static asset regardless of query string.
+  assetsInclude: ['**/*.md'],
   server: {
     // The bundled skills library (../notlinear-skills) lives outside this project root.
     fs: { allow: [".."] },

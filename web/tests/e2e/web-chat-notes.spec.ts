@@ -179,3 +179,62 @@ test('a note holding a code block in an unhighlightable language still opens', a
   await expect(pane.locator('.bn-editor')).toContainText('That is the shape.');
   expect(errors).toEqual([]);
 });
+
+test('opening a note alongside a branch preserves the chat width', async ({ page }) => {
+  await page.setViewportSize({ width: 1470, height: 900 });
+  await seed(page);
+  await scriptClaude(page, FILED);
+  await newChat(page);
+  await ask(page, 'write me a launch plan');
+  const card = page.locator('[data-chat-stream] .note-ref');
+  await expect(card).toBeVisible();
+  await page.evaluate(() => {
+    const root = document.querySelector('[data-chat-stream] .ai-content')!;
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+    while (walker.nextNode()) {
+      const node = walker.currentNode;
+      if (!node.textContent?.includes('Saved the plan')) continue;
+      const range = document.createRange();
+      range.selectNodeContents(node);
+      const selection = window.getSelection()!;
+      selection.removeAllRanges(); selection.addRange(range);
+      return;
+    }
+    throw new Error('Reply text missing');
+  });
+  await expect(page.getByTestId('selection-popover')).toBeVisible();
+  await page.keyboard.press('b');
+  await expect(page.locator('[data-testid="branch-stack"] .branch')).toHaveCount(1);
+  const column = page.getByTestId('chat-stream');
+  await expect.poll(async () => (await column.boundingBox())!.width).toBeGreaterThanOrEqual(360);
+  // Let the existing branch margin transition settle before comparing with the note open.
+  await page.waitForTimeout(300);
+  const before = (await column.boundingBox())!.width;
+  await card.click();
+  const pane = page.getByTestId('note-pane');
+  await expect(pane).toHaveAttribute('data-beside', 'false');
+  await expect.poll(async () => (await column.boundingBox())!.width).toBeGreaterThanOrEqual(before - 1);
+  await pane.getByRole('button', { name: 'Close note', exact: true }).click();
+  await expect(pane).toBeHidden();
+  await expect(page.locator('[data-testid="branch-stack"] .branch')).toHaveCount(1);
+});
+
+test('a sidebar at the narrow desktop breakpoint leaves chat width intact', async ({ page }) => {
+  await page.setViewportSize({ width: 900, height: 800 });
+  await seed(page);
+  await scriptClaude(page, FILED);
+  await newChat(page);
+  await ask(page, 'write me a launch plan');
+  const card = page.locator('[data-chat-stream] .note-ref');
+  await expect(card).toBeVisible();
+  await page.getByRole('button', { name: 'Open left pane' }).click();
+  await page.waitForTimeout(300);
+  const column = page.getByTestId('chat-stream');
+  const before = (await column.boundingBox())!.width;
+  await card.click();
+  const pane = page.getByTestId('note-pane');
+  await expect(pane).toHaveAttribute('data-beside', 'false');
+  await expect.poll(async () => (await column.boundingBox())!.width).toBeGreaterThanOrEqual(before - 1);
+  await pane.getByRole('button', { name: 'Close note', exact: true }).click();
+  await expect(pane).toBeHidden();
+});

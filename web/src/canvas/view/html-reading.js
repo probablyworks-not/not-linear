@@ -6,7 +6,7 @@ export function installHtmlReading() {
   // Keep authored chart fills, accents and matching foregrounds intact. Only
   // supply a light default canvas and a consistent, readable selection palette.
   style.textContent = `
-    :root { color-scheme: light; --nl-paper: white; --nl-ink: black; --nl-selection: #b8d8ff; }
+    :root { color-scheme: light; --nl-paper: white; --nl-ink: black; --nl-selection: #b8d8ff; --nl-highlight-strength: 35%; }
     html, body { background: var(--nl-paper); color: var(--nl-ink); }
     mark[data-snapshot-id], mark[data-snapshot-id] * {
       color: var(--nl-ink) !important;

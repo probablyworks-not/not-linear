@@ -84,3 +84,18 @@ tests/           server tests (pytest)
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) and [SECURITY.md](SECURITY.md). Licensed under the terms in
 [LICENSE](LICENSE); third-party notices are in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+
+
+### Sketch inside Canvas
+
+Open a Canvas and click **Sketch** in its toolbar. The flow editor opens as a card in that Canvas. Describe a flow or attach/paste/drop a reference image, then choose **Create Sketch**. Use **Ask** for questions and **Edit** for graph changes. Drag the grip header to move the card; resize, collapse or remove it without deleting the saved Sketch. Pan/zoom inside the flow; **Fit** gives an overview and **Arrange** cleans up an existing layout.
+
+The **Sketches** library retains existing independent documents; **Add to current Canvas** places one on the Canvas last opened. Image input requires a vision-capable model (Claude, OpenAI or Gemini); text-only providers report that limitation rather than ignoring the image. System dictation uses the standard text field; native transcription and workflow execution are not included.
+
+Sketch inherits its Canvas's project knowledge: project rules and uploaded files, Canvas memory/files, linked-folder context and the same configured research/repository tools. Use Ask to inspect the project without changing the graph, or Edit to build the flow from that evidence. The chat shows the project name. A Sketch reused across projects uses the Canvas where you opened it; library-only ambiguous associations must be opened from the intended Canvas.
+
+### Subscription agents (test build)
+
+The isolated desktop test build supports connecting Claude and ChatGPT subscriptions in **Settings → Models & keys → Subscriptions**. Choose a subscription model from the composer; the list is refreshed from connected accounts. First install the optional companion with `python3 backend/agent_runtime/setup.py` and restart the server. Claude uses its own official sign-in; ChatGPT uses the official browser authorization flow. Existing API-key connections remain available.
+
+This integration is a prototype: full verification of Notes, branches, canvas, attachments and cancellation is pending. The subscription request path does not silently switch to paid API usage. See [SUBSCRIPTIONS.md](SUBSCRIPTIONS.md) for the verification and performance plan.

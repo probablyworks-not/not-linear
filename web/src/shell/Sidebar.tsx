@@ -1,3 +1,4 @@
+import { openSketch } from '../sketch/open-sketch';
 import { useMemo, useState } from 'react';
 import { clsx } from 'clsx';
 import { FileText, MessageSquare, PanelLeftClose, Pencil, Search, Settings, Trash2 } from 'lucide-react';
@@ -149,6 +150,7 @@ export function Sidebar() {
 
           {flags.notesV2 && <NotesSidebarSection />}
 
+          <button type="button" className={`${SIDE_ITEM} px-2 py-2`} onClick={() => openSketch()}>Sketches</button>
           {flags.canvas && <CanvasesSidebarSection />}
 
           {flags.chat && <RecentBranches />}

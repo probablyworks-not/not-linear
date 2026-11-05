@@ -269,3 +269,8 @@ Notes:
 - Space Grotesk and Space Mono — SIL Open Font License 1.1, via Google Fonts
 - Tabler Icons webfont 3.0.0 — MIT, via jsDelivr
 - pdf.js (pdfjs-dist) — Apache-2.0, via jsDelivr, only when a PDF is attached
+
+
+## AntV X6 2.18.1 — Sketch editor
+
+MIT licensed. Unmodified published browser distributions served from `web/public/vendor/x6-2.18.1/`. Copyright and full MIT license included in that directory, with source URLs and SHA-256 hashes in README.md. No npm dependency change.

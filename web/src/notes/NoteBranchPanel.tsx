@@ -5,6 +5,7 @@ import { useAppStore } from '../state/app-store';
 import { useChatStore } from '../chat/chat-store';
 import { claudeProvider } from '../providers/claude';
 import { deepseekProvider } from '../providers/deepseek';
+import { subscriptionProvider } from '../providers/subscription';
 import { planModel } from '../chat/models';
 import { BranchComposer } from '../branch/BranchComposer';
 import { branchAttachKey, useAttachments } from '../attachments/attachments-store';
@@ -46,7 +47,7 @@ async function runReply(
   if (!plan.supported || (plan.provider !== 'claude' && plan.provider !== 'deepseek')) {
     return { text: '', error: 'Notes branches support Claude and DeepSeek models for now — pick one from the model menu.' };
   }
-  const provider = plan.provider === 'claude' ? claudeProvider : deepseekProvider;
+  const provider = plan.modelId.startsWith('sub:') ? subscriptionProvider : plan.provider === 'claude' ? claudeProvider : deepseekProvider;
   const skillsKey = skillsKeyFor(br.bid);
   const lastUserText = br.messages[br.messages.length - 1]?.content ?? '';
   const picked = flags.skills ? await selectForTurn(lastUserText, lastAssistantText(br.messages), skills) : [];

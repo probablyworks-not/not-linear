@@ -5,6 +5,14 @@ import type { LayoutEntry } from '../../src/canvas/types';
 const entry = (entityId: string, x: number, y: number, h = 100): LayoutEntry => ({ entityId, x, y, w: 880, h });
 afterEach(() => liveText.clearAll());
 describe('stacked report layout', () => {
+  it('preserves overlapping source-anchored branches while still making room for root cards', () => {
+    const entries = { report: entry('report', 0, 0, 2000), branch: entry('branch', 0, 200), nested: entry('nested', 0, 250), root: entry('root', 0, 600) };
+    makeRoomForReport(entries, 'report', new Set(['branch', 'nested']));
+    expect(entries.branch.y).toBe(200);
+    expect(entries.nested.y).toBe(250);
+    expect(entries.root.y).toBe(2024);
+  });
+
   it('moves overlapping cards below an expanded report and cascades without moving side branches', () => {
     const entries = { report: entry('report', 0, 0, 2000), below: entry('below', 0, 600), last: entry('last', 0, 850), side: entry('side', 1000, 600) };
     makeRoomForReport(entries, 'report');

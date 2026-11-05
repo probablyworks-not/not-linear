@@ -223,6 +223,24 @@ describe('outputs', () => {
 });
 
 describe('layout is separate from content', () => {
+  it('keeps sibling and nested branches beside their highlight even when another card occupies that spot', () => {
+    const { d, threadId, replyId, partId } = seeded();
+    const snap = freezeSelection(d, replyId, partId, 'beta', 6, ctx)!;
+    const first = branchFrom(d, { snapshotId: snap.id, prompt: 'first', besideY: 200 }, ctx)!;
+    setGeometry(d, first.thread.id, { h: 2000 });
+    const before = structuredClone(d.layouts[0]!.entries);
+    const second = branchFrom(d, { snapshotId: snap.id, prompt: 'second', besideY: 200 }, ctx)!;
+    const entries = d.layouts[0]!.entries;
+    expect(entries[second.thread.id]).toMatchObject({ x: entries[threadId]!.x + entries[threadId]!.w + 80, y: 200 });
+    for (const [id, geo] of Object.entries(before)) expect(entries[id]).toEqual(geo);
+    const reply = addMessage(d, { threadId: second.thread.id, author: { kind: 'human' }, parts: [textPart('nested source')] }, ctx);
+    const nestedSource = freezeSelection(d, reply.id, reply.parts[0]!.id, 'nested', 0, ctx)!;
+    const nested = branchFrom(d, { snapshotId: nestedSource.id, prompt: 'nested', besideY: 250 }, ctx)!;
+    setGeometry(d, nested.thread.id, { h: 2000 });
+    const another = branchFrom(d, { snapshotId: nestedSource.id, prompt: 'nested again', besideY: 250 }, ctx)!;
+    expect(entries[another.thread.id]).toMatchObject({ x: entries[second.thread.id]!.x + entries[second.thread.id]!.w + 80, y: 250 });
+  });
+
   it('a new card goes beside its source and moves nothing else', () => {
     const { d, threadId, replyId, partId } = seeded();
     setGeometry(d, threadId, { x: 100, y: 200 });

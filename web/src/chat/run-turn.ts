@@ -1,4 +1,5 @@
 import type { ChatMessage, ChatProvider, ProviderEvent, ProviderId, ToolRunnerLike, ToolSpecLike } from '../providers/types';
+import { subscriptionProvider } from '../providers/subscription';
 import type { ModelPlan } from './models';
 
 // One reply, start to finish, as a stream of events. DOM-free and store-free so
@@ -38,7 +39,7 @@ export async function* runTurn(input: RunTurnInput, deps: RunTurnDeps): AsyncGen
   let plan = input.plan;
   let switched = false;
   while (true) {
-    const provider = deps.providers[plan.provider];
+    const provider = plan.modelId.startsWith('sub:') ? subscriptionProvider : deps.providers[plan.provider];
     if (!provider) {
       yield { ev: { t: 'error', kind: 'config', message: `No ${plan.provider} provider is available.` }, plan };
       return;
@@ -51,7 +52,7 @@ export async function* runTurn(input: RunTurnInput, deps: RunTurnDeps): AsyncGen
     })) {
       if (ev.t === 'delta' && ev.text) streamedText = true;
       // Only before any text has streamed: a half-written answer is kept, not replaced.
-      if (ev.t === 'error' && ev.kind === 'rate_limit' && plan.provider === 'claude' && !switched && !streamedText && deps.canFallBackToDeepSeek) {
+      if (ev.t === 'error' && ev.kind === 'rate_limit' && plan.provider === 'claude' && !plan.modelId.startsWith('sub:') && !switched && !streamedText && deps.canFallBackToDeepSeek) {
         retryOnDeepSeek = true;
         break;
       }

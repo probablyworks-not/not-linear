@@ -19,7 +19,7 @@ const OPENAI_PRICING: Record<string, { in: number; out: number }> = {
 const GEMINI_FLASH = { in: 0.1 / 1e6, out: 0.4 / 1e6 };
 const GEMINI_DEFAULT = { in: 1.25 / 1e6, out: 10 / 1e6 };
 
-export type UsageProvider = 'anthropic' | 'deepseek' | 'openai' | 'gemini';
+export type UsageProvider = 'anthropic' | 'deepseek' | 'openai' | 'gemini' | 'subscription';
 
 export interface TurnUsage {
   inputTokens: number;
@@ -30,6 +30,7 @@ export interface TurnUsage {
 }
 
 export function responseCost(u: TurnUsage): number {
+  if (u.provider === 'subscription') return 0;
   if (!u.inputTokens && !u.outputTokens) return 0;
   if (u.provider === 'deepseek') {
     const hit = u.cacheHitTokens || 0;
@@ -85,7 +86,7 @@ export function formatUsage(b: UsageBucket): string | null {
   const tOut = b.tokenOut || 0;
   if (!tIn && !tOut) return null;
   const cost = b.cost || 0;
-  const usd = fmtUsd(cost);
+  const usd = b.provider === 'subscription' ? 'Subscription' : fmtUsd(cost);
   const hit = b.tokenCacheHit || 0;
   const cached = hit > 0 && tIn > 0 ? ` · ${Math.round(hit / tIn * 100)}% cached` : '';
   return `${fmtTokenCount(tIn + tOut)} tok · ${usd}${cached}`;

@@ -1,3 +1,8 @@
+import { SketchNode, type SketchNodeType } from '../../sketch/SketchNode';
+import { useSketchStore } from '../../sketch/store';
+import { newSketch } from '../../sketch/open-sketch';
+import { CanvasNotifications } from './CanvasNotifications';
+import { notifyCanvasRun } from '../notifications';
 import { makeRoomForReport } from './section-layout';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -6,9 +11,11 @@ import {
   type Edge, type NodeChange, type Viewport,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
-import { BookOpen, Frame, Layers, LayoutPanelTop, Undo2, Waypoints } from 'lucide-react';
+import { BookOpen, Frame, GitBranch, Layers, LayoutPanelTop, Undo2, Waypoints } from 'lucide-react';
 import { ESC_PRIORITY, useEscLayer } from '../../lib/keyboard';
 import { useCanvasDoc } from '../canvas-doc-store';
+import { useCanvasStore } from '../canvas-store';
+import { GlyphButton } from '../../ui/GlyphButton';
 import {
   highlightsByMessage as highlightsByMessageFn, messageText, resolveAnchor, wholeHighlightsByThread, type TextHighlight,
 } from '../anchors';
@@ -22,6 +29,7 @@ import { saveOutputToArtifacts } from '../save-output';
 import { toast } from '../../ui/toast';
 import { useAppStore } from '../../state/app-store';
 import { canvasTurnDeps, newSubmissionId, runCanvasTurn } from '../exec/run-canvas-turn';
+import { canvasRunKey, startCanvasRun, useCanvasRuns } from '../exec/live-runs';
 import { HTML_REPLY_INSTRUCTIONS, TEXT_REPLY_INSTRUCTIONS, wantsHtmlReply } from '../exec/html-trigger';
 import { planModel } from '../../chat/models';
 import { awaitAnswers, renderClarifyBlock, runClarify, shouldClarify } from '../../chat/clarify';
@@ -37,9 +45,11 @@ import { InkComposer, type ComposerTarget } from './InkComposer';
 import { ReadingView } from './ReadingView';
 import { OutputDetailView } from './OutputDetailView';
 import { ContextIslandsPanel } from './ContextIslandsPanel';
+import { CanvasHierarchy } from './CanvasHierarchy';
 import { useCanvasSelection } from './useCanvasSelection';
 import { registerCanvasHandlers } from './canvas-bridge';
-import { newId } from '../ids';
+import { hashText, newId } from '../ids';
+import { addPastedFiles, imagesFromClipboard } from '../../attachments/attach-actions';
 import { useAttachments } from '../../attachments/attachments-store';
 import { flags } from '../../flags';
 import { useChatStore } from '../../chat/chat-store';
@@ -47,6 +57,7 @@ import type { ChatMessage } from '../../providers/types';
 import { selectForTurn } from '../../skills/skills-store';
 import { renderSkillsBlock } from '../../skills/skills-prompt';
 
+type WorkspaceNode = ThreadNodeType | SketchNodeType;
 const NODE_W = 360, NODE_H = 300;
 /** The active thread gets a wider card while it grows — a 360px column turns a long reply into
  * an absurdly tall, hard-to-read strip. */
@@ -91,11 +102,13 @@ function Workspace({ canvasId }: { canvasId: string }) {
 
   const [reading, setReading] = useState(false);
   const [readingBranch, setReadingBranch] = useState<string | null>(null);
-  const [minimizedBranches, setMinimizedBranches] = useState<Set<string>>(() => new Set());
-  const toggleBranchMinimized = useCallback((id: string) => setMinimizedBranches(previous => {
+  // Expansion is session-only: saved branches start closed without changing their geometry.
+  const [expandedBranches, setExpandedBranches] = useState<Set<string>>(() => new Set());
+  const toggleBranchMinimized = useCallback((id: string) => setExpandedBranches(previous => {
     const next = new Set(previous); if (next.has(id)) next.delete(id); else next.add(id); return next;
   }), []);
   const [contextOpen, setContextOpen] = useState(false);
+  const [hierarchyOpen, setHierarchyOpen] = useState(false);
   const [detailMessageId, setDetailMessageId] = useState<string | null>(null);
   const [pickedSources, setPickedRaw] = useState<string[]>([]);
   // Every `setPicked` call in this component goes through here instead of `setPickedRaw`
@@ -140,10 +153,7 @@ function Workspace({ canvasId }: { canvasId: string }) {
   // Bumped by any source card's body resize, so highlight-anchored edges re-measure their mark.
   const [resizeTick, setResizeTick] = useState(0);
   const onBodyResize = useCallback(() => setResizeTick(t => t + 1), []);
-  const [busy, setBusy] = useState(false);
   const [sendError, setSendError] = useState('');
-  const [status, setStatus] = useState<string | null>(null);
-  const abortRef = useRef<AbortController | null>(null);
   // The thread currently being sent to grows to fit its content and pulls the camera with it;
   // every other node keeps its fixed, scrollable card — except a thread holding a generated-HTML
   // reply, which auto-grows tall *and* wide permanently (see `hasHtml` in the node builder below):
@@ -161,6 +171,27 @@ function Workspace({ canvasId }: { canvasId: string }) {
   const projects = useAppStore(s => s.projects);
   const project = doc?.summary.projectId ? projects[doc.summary.projectId] : undefined;
   const rf = useReactFlow();
+  const sketchPlacements = useSketchStore(s => s.placements);
+  const [selectedSketchId,setSelectedSketchId] = useState<string|null>(null);
+  const [focusSketch,setFocusSketch] = useState<string|null>(null);
+  useEffect(() => { void useSketchStore.getState().load().catch(e => toast(String(e))); }, []);
+  const sketchNodes = useMemo<SketchNodeType[]>(() => Object.values(sketchPlacements).filter(p => p.canvasId === canvasId).map(p => ({
+    id:'sketch-card:' + p.id,type:'sketch',selected:selectedSketchId==='sketch-card:'+p.id,position:{x:p.x,y:p.y},width:p.width,height:p.collapsed?40:p.height,
+    style:{width:p.width,height:p.collapsed?40:p.height},dragHandle:'.sketch-card-drag',
+    data:{placementId:p.id,documentId:p.documentId},
+  })),[sketchPlacements,canvasId,selectedSketchId]);
+  const createSketchHere = useCallback(async () => {
+    const bounds=document.querySelector('[aria-label="Canvas workspace"]')?.getBoundingClientRect();
+    const position=rf.screenToFlowPosition({x:(bounds?.left??0)+80,y:(bounds?.top??0)+80});
+    const id=await newSketch(canvasId,position);
+    if(id&&useCanvasDoc.getState().canvasId===canvasId){setReading(false);setSelectedSketchId('sketch-card:'+id);setFocusSketch('sketch-card:'+id);}
+  },[canvasId,rf]);
+  useEffect(() => {
+    if(!focusSketch||reading||!sketchNodes.some(n=>n.id===focusSketch))return;
+    const frame=requestAnimationFrame(()=>{void rf.fitView({nodes:[{id:focusSketch}],padding:.04,minZoom:.4,maxZoom:1,duration:180});setFocusSketch(null);});
+    return()=>cancelAnimationFrame(frame);
+  },[focusSketch,reading,sketchNodes,rf]);
+
   const highlightAnchors = useHighlightAnchors(doc, resizeTick, rf, !reading);
 
   const partTextOf = useMemo(() => partTextLookup(doc), [doc]);
@@ -277,7 +308,7 @@ function Workspace({ canvasId }: { canvasId: string }) {
     const liveIds = new Set(doc.threads.map(t => t.id));
     for (const id of cache.keys()) if (!liveIds.has(id)) cache.delete(id);
 
-    return doc.threads.map(thread => {
+    return doc.threads.map((thread, index) => {
       const geo = layout?.entries[thread.id];
       const sources = doc.relations
         .filter(r => r.toThreadId === thread.id && r.snapshotId)
@@ -285,7 +316,7 @@ function Workspace({ canvasId }: { canvasId: string }) {
         .filter((s): s is SourceSnapshot => !!s)
         .map(s => ({ id: s.id, label: s.label, status: resolveAnchor(s, doc).status, highlightTone: s.highlightTone }));
       const isActive = thread.id === activeThreadId;
-      const minimized = thread.kind !== 'root' && minimizedBranches.has(thread.id);
+      const minimized = thread.kind !== 'root' && !expandedBranches.has(thread.id);
       const autoSize = autoSizes[thread.id];
       const messages = doc.messages.filter(m => m.threadId === thread.id).sort((a, b) => a.seq - b.seq);
       // HTML uses a fixed preview viewport. Fit the card height around it without deriving
@@ -331,6 +362,8 @@ function Workspace({ canvasId }: { canvasId: string }) {
       return {
         id: thread.id,
         type: 'thread' as const,
+        // Newer cards sit in front; selecting an older card brings it forward without moving it.
+        zIndex: thread.id === targetThread ? doc.threads.length + 2 : isActive ? doc.threads.length + 1 : index + 1,
         position: { x: geo?.x ?? 0, y: geo?.y ?? 0 },
         width: hasHtml
           ? (geo?.w ?? HTML_W)
@@ -342,7 +375,7 @@ function Workspace({ canvasId }: { canvasId: string }) {
         data,
       };
     });
-  }, [doc, onSaveOutput, activeThreadId, autoSizes, onContentSize, onBodyResize, pickBlock, pickWhole, nodeDataCache, minimizedBranches, toggleBranchMinimized]);
+  }, [doc, onSaveOutput, activeThreadId, autoSizes, onContentSize, onBodyResize, pickBlock, pickWhole, nodeDataCache, expandedBranches, toggleBranchMinimized, targetThread]);
 
   const activeOrHovered = targetThread ?? hoverThreadId;
   const edges = useMemo<Edge[]>(() => {
@@ -395,7 +428,7 @@ function Workspace({ canvasId }: { canvasId: string }) {
       const chosen = source?.layouts.find(l => l.id === DEFAULT_LAYOUT_ID)?.entries[n.id]?.w;
       return html && !explicitResize ? (chosen ?? HTML_W) : (n.width ?? NODE_W);
     };
-    const heightOf = (n: ThreadNodeType) => minimizedBranches.has(n.id) ? (current[n.id]?.h ?? NODE_H) : (n.height ?? NODE_H);
+    const heightOf = (n: ThreadNodeType) => n.data.minimized ? (current[n.id]?.h ?? NODE_H) : (n.height ?? NODE_H);
     const moved = next.filter(n => {
       const was = current[n.id];
       return !was
@@ -411,11 +444,25 @@ function Workspace({ canvasId }: { canvasId: string }) {
         const automatic = changes.some(c => c.type === 'dimensions' && c.id === n.id && !c.resizing);
         if (was && automatic && (n.height ?? NODE_H) > was.h && d.messages.some(m => m.threadId === n.id && m.parts.some(p => p.kind === 'html'))) {
           const entries = d.layouts.find(l => l.id === DEFAULT_LAYOUT_ID)?.entries;
-          if (entries) makeRoomForReport(entries, n.id);
+          if (entries) makeRoomForReport(entries, n.id, new Set(d.threads.filter(t => t.kind === 'branch').map(t => t.id)));
         }
       }
     });
-  }, [nodes, applyGeometry, beginGesture, gesture, minimizedBranches]);
+  }, [nodes, applyGeometry, beginGesture, gesture]);
+
+  // Sketch geometry belongs to Sketch, never to a thread's layout/snapshot history.
+  const onWorkspaceNodesChange = useCallback((changes:NodeChange<WorkspaceNode>[]) => {
+    for(const change of changes){
+      if(!('id' in change)||!change.id.startsWith('sketch-card:'))continue;
+      const id=change.id.slice(12),store=useSketchStore.getState(),p=store.placements[id];
+      if(!p||p.canvasId!==canvasId)continue;
+      if(change.type==='select')setSelectedSketchId(current=>change.selected?change.id:current===change.id?null:current);
+      if(change.type==='position'&&change.position)store.place(id,{x:change.position.x,y:change.position.y},change.dragging!==true);
+      if(change.type==='dimensions'&&change.dimensions&&change.resizing!==undefined&&!p.collapsed)store.place(id,{width:change.dimensions.width,height:change.dimensions.height},change.resizing!==true);
+    }
+    const threadChanges=changes.filter(c=>!('id' in c)||!c.id.startsWith('sketch-card:')) as NodeChange<ThreadNodeType>[];
+    if(threadChanges.length)onNodesChange(threadChanges);
+  },[canvasId,onNodesChange]);
 
   const snapshots = useMemo(
     () => (doc ? pickedSources.map(id => doc.snapshots.find(s => s.id === id)).filter((s): s is SourceSnapshot => !!s) : []),
@@ -466,7 +513,13 @@ function Workspace({ canvasId }: { canvasId: string }) {
   const files = useAttachments(s => s.files[attachKey]) ?? [];
   const skillsKey = useMemo(() => `canvas:${canvasId}:${target.key}`, [canvasId, target.key]);
 
+  const currentRun = useCanvasRuns(s => snapshots.length === 0 && targetThread
+    ? s.runs[canvasRunKey(canvasId, targetThread)] : undefined);
+  const busy = !!currentRun;
+  const status = currentRun?.status ?? null;
+
   const send = useCallback(async (text: string, skills?: string[]) => {
+    if (snapshots.length === 0 && targetThread && useCanvasRuns.getState().runs[canvasRunKey(canvasId, targetThread)]) return;
     const now = Date.now();
     const files = useAttachments.getState().files[attachKey] ?? [];
     // The question is written first, and on its own: if the model never answers, the user still has
@@ -483,108 +536,126 @@ function Workspace({ canvasId }: { canvasId: string }) {
     setPickFlowY(null);
     setTargetThread(null);
     if (!threadId) return;
-
-    // C9. The attachments ride on the question that was just written, purely for display and
-    // disclosure on the canvas itself — Canvas has no asset store yet (C5), so `assetId` is empty
-    // and nothing ever dereferences it. The real bytes reach the model separately, below.
-    if (files.length) {
-      await apply(d => {
-        const msgs = d.messages.filter(m => m.threadId === threadId && m.author.kind === 'human');
-        const last = msgs[msgs.length - 1];
-        if (!last) return;
-        for (const f of files) {
-          last.parts.push({ id: newId('pt'), state: 'ready', kind: 'attachment', assetId: '', name: f.name, mime: f.type, bytes: f.size });
-        }
-      });
-      useAttachments.getState().clear(attachKey);
-    }
-
-    const newBranch = snapshots.length > 0;
-    if (newBranch) {
-      const current = useCanvasDoc.getState().doc;
-      setMinimizedBranches(new Set((current?.threads ?? []).filter(t => t.kind !== 'root' && t.id !== threadId).map(t => t.id)));
-    }
-    if (reading) setReadingBranch(threadId);
-    setActiveThreadId(threadId);
-    userFramedRef.current = false;
-    setBusy(true);
-    setSendError('');
-    const projectId = useCanvasDoc.getState().doc?.summary.projectId;
-    // Branch replies are a scoped follow-up on a highlighted quote — default to brief. HTML
-    // rendering is opt-in only, from an explicit phrase in the prompt, never inferred.
-    const thread = useCanvasDoc.getState().doc?.threads.find(t => t.id === threadId);
-    const isBranch = thread?.kind === 'branch';
-    const wantsHtml = wantsHtmlReply(text);
-    // C10. Memory and Files are whole-canvas context, not per-thread — folded in here rather than
-    // through resolveContext's per-message loop. canvasContextBlock() is the exact same read the
-    // Context Islands panel renders, so "included" there can never drift from what was sent.
-    const canvasContext = doc ? canvasContextBlock(doc) : '';
-    // P7 skills, same seam chat/Notes use: a pure selection, folded into extraContext, with the
-    // picks recorded for SkillsUsedLine (shared, in-memory `useChatStore` map — no persistence).
-    const threadMsgs = useCanvasDoc.getState().doc?.messages.filter(m => m.threadId === threadId) ?? [];
-    const lastModelMsg = [...threadMsgs].reverse().find(m => m.author.kind === 'model');
-    const picked = flags.skills ? await selectForTurn(text, lastModelMsg ? messageText(lastModelMsg) : '', skills) : [];
-    if (flags.skills) useChatStore.getState().setSkillsUsed(skillsKey, picked.map(p => ({ name: p.skill.name, reason: p.reason, score: p.score })));
-
-    // Questions before answers: same "clarify intent first" pre-flight chat runs
-    // (run-and-persist.ts), ported here since canvas calls runTurn directly and skips it
-    // otherwise. The pre-flight's own AbortController lives in abortRef so Stop cancels it too;
-    // runCanvasTurn below installs its own controller once the real turn starts.
-    let clarifiedBlock = '';
-    const clarifyPlan = planModel(prefs.model as string | undefined, !!prefs.thinking);
-    if (clarifyPlan.supported && shouldClarify({ enabled: flags.clarify && getClarifyFirst(), userText: text, alreadyClarified: false })) {
-      const clarifyController = new AbortController();
-      abortRef.current = clarifyController;
-      setStatus('Understanding your request…');
-      // threadMsgs' last entry is the user message just written for this send — clarify.ts takes
-      // that separately as `userText`, so history is everything before it.
-      const history: ChatMessage[] = threadMsgs
-        .slice(0, -1)
-        .map(m => ({ role: m.author.kind === 'model' ? 'assistant' : 'user', content: messageText(m) }));
-      // Same digest chat/branch sends build (clarify-brief.ts) — without it, the clarify pre-pass
-      // is blind to the highlighted passage this branch/synthesis was opened from and asks what
-      // "this" refers to instead of assuming it, same as a chat branch would. Covers both a fresh
-      // branch/synthesis (snapshots, just picked) and a follow-up inside an existing thread (its
-      // own frozen sources, via doc.relations — snapshots is empty there since picks were cleared).
-      const threadQuote = (useCanvasDoc.getState().doc?.relations ?? [])
-        .filter(r => r.toThreadId === threadId && r.snapshotId)
-        .map(r => useCanvasDoc.getState().doc?.snapshots.find(s => s.id === r.snapshotId))
-        .filter((s): s is SourceSnapshot => !!s)
-        .map(s => s.content);
-      const quote = (snapshots.length ? snapshots.map(s => s.content) : threadQuote).join('\n\n');
-      const brief = buildClarifyBrief({ project, quote });
-      const questions = await runClarify(
-        { plan: clarifyPlan, userText: text, history, ...(brief ? { brief } : {}), signal: clarifyController.signal },
-        canvasTurnDeps(),
-      );
-      if (!clarifyController.signal.aborted && questions.length) {
-        useChatStore.getState().setLive(threadId, {
-          turnId: threadId, userText: text, text: '', thinking: '', status: null, clarify: questions,
-        });
-        const answers = await awaitAnswers(threadId, clarifyController.signal);
-        useChatStore.getState().setLive(threadId, undefined);
-        clarifiedBlock = renderClarifyBlock(answers ?? []);
-      }
-      setStatus(null);
-      if (clarifyController.signal.aborted) {
-        setBusy(false);
-        abortRef.current = null;
-        setActiveThreadId(null);
-        return;
-      }
-    }
-
-    const extraContext = [
-      isBranch
-        ? 'This is a branch reply to a scoped follow-up question on a highlighted quote. Default to the shortest answer that fully answers it — 1-3 sentences for a definitional or clarifying question ("what does this mean", "why"). Only write multiple paragraphs, a list, or sections if the question itself explicitly asks for elaboration, a how-to, or a comparison.'
-        : '',
-      renderSkillsBlock(picked),
-      canvasContext,
-      clarifiedBlock,
-      wantsHtml ? HTML_REPLY_INSTRUCTIONS : TEXT_REPLY_INSTRUCTIONS,
-    ].filter(Boolean).join('\n\n');
+    const run = startCanvasRun(canvasId, threadId);
+    if (!run) return;
     const liveMessages = new Set<string>();
+    const setStatus = run.setStatus;
     try {
+
+      // Keep image bytes in the existing asset collection so previews and follow-up questions survive reload.
+      if (files.length) {
+        await apply(d => {
+          const msgs = d.messages.filter(m => m.threadId === threadId && m.author.kind === 'human');
+          const last = msgs[msgs.length - 1];
+          if (!last) return;
+          for (const f of files) {
+            let assetId = '';
+            if (f.kind === 'image' && f.base64 && !f.tooBig) {
+              assetId = newId('as');
+              d.assets.push({ id: assetId, mime: f.type, bytes: f.size, hash: hashText(f.base64),
+                location: { kind: 'inline', data: f.base64 }, state: 'ready', createdAt: Date.now() });
+            }
+            last.parts.push({ id: newId('pt'), state: 'ready', kind: 'attachment', assetId, name: f.name, mime: f.type, bytes: f.size });
+          }
+        });
+        useAttachments.getState().clear(attachKey);
+      }
+
+      const newBranch = snapshots.length > 0;
+      if (newBranch) {
+        const parentId = useCanvasDoc.getState().doc?.relations.find(r => r.kind === 'branch' && r.toThreadId === threadId)?.fromThreadId;
+        setExpandedBranches(new Set(parentId ? [parentId, threadId] : [threadId]));
+        // Keep the source as the reading focus, with a preview of its new child to the right.
+        const parent = parentId ? rf.getNode(parentId) : undefined;
+        const bounds = document.querySelector('.react-flow')?.getBoundingClientRect();
+        if (!reading && parent && bounds) {
+          const viewport = rf.getViewport();
+          const readingWidth = (parent.width ?? NODE_W) + 80 + 180;
+          const zoom = Math.min(viewport.zoom, bounds.width / (readingWidth + 64));
+          const sourceY = pickFlowY ?? parent.position.y;
+          // Preserve the passage's screen Y; never shrink a long parent to fit its full height.
+          void rf.setViewport({
+            x: (bounds.width - readingWidth * zoom) / 2 - parent.position.x * zoom,
+            y: viewport.y + sourceY * (viewport.zoom - zoom), zoom,
+          }, { duration: 200 });
+        }
+      }
+      if (reading) setReadingBranch(threadId);
+      setActiveThreadId(threadId);
+      // A source branch must not pull the camera off its parent as the child answer grows.
+      userFramedRef.current = snapshots.length === 1 && !reading;
+      setSendError('');
+      const projectId = useCanvasDoc.getState().doc?.summary.projectId;
+      // Branch replies are a scoped follow-up on a highlighted quote — default to brief. HTML
+      // rendering is opt-in only, from an explicit phrase in the prompt, never inferred.
+      const thread = useCanvasDoc.getState().doc?.threads.find(t => t.id === threadId);
+      const isBranch = thread?.kind === 'branch';
+      const wantsHtml = wantsHtmlReply(text);
+      // C10. Memory and Files are whole-canvas context, not per-thread — folded in here rather than
+      // through resolveContext's per-message loop. canvasContextBlock() is the exact same read the
+      // Context Islands panel renders, so "included" there can never drift from what was sent.
+      const canvasContext = doc ? canvasContextBlock(doc) : '';
+      // P7 skills, same seam chat/Notes use: a pure selection, folded into extraContext, with the
+      // picks recorded for SkillsUsedLine (shared, in-memory `useChatStore` map — no persistence).
+      const threadMsgs = useCanvasDoc.getState().doc?.messages.filter(m => m.threadId === threadId) ?? [];
+      const lastModelMsg = [...threadMsgs].reverse().find(m => m.author.kind === 'model');
+      const picked = flags.skills ? await selectForTurn(text, lastModelMsg ? messageText(lastModelMsg) : '', skills) : [];
+      if (flags.skills) useChatStore.getState().setSkillsUsed(skillsKey, picked.map(p => ({ name: p.skill.name, reason: p.reason, score: p.score })));
+
+      if (run.signal.aborted) return;
+
+      // Questions before answers: same "clarify intent first" pre-flight chat runs
+      // (run-and-persist.ts), ported here since canvas calls runTurn directly and skips it
+      // otherwise. The pre-flight controller belongs to this thread, so its Stop cancels it too;
+      // runCanvasTurn below installs its own controller once the real turn starts.
+      let clarifiedBlock = '';
+      const clarifyPlan = planModel(prefs.model as string | undefined, !!prefs.thinking);
+      if (clarifyPlan.supported && shouldClarify({ enabled: flags.clarify && getClarifyFirst(), userText: text, alreadyClarified: false })) {
+        const clarifyController = new AbortController();
+        run.register(clarifyController);
+        setStatus('Understanding your request…');
+        // threadMsgs' last entry is the user message just written for this send — clarify.ts takes
+        // that separately as `userText`, so history is everything before it.
+        const history: ChatMessage[] = threadMsgs
+          .slice(0, -1)
+          .map(m => ({ role: m.author.kind === 'model' ? 'assistant' : 'user', content: messageText(m) }));
+        // Same digest chat/branch sends build (clarify-brief.ts) — without it, the clarify pre-pass
+        // is blind to the highlighted passage this branch/synthesis was opened from and asks what
+        // "this" refers to instead of assuming it, same as a chat branch would. Covers both a fresh
+        // branch/synthesis (snapshots, just picked) and a follow-up inside an existing thread (its
+        // own frozen sources, via doc.relations — snapshots is empty there since picks were cleared).
+        const threadQuote = (useCanvasDoc.getState().doc?.relations ?? [])
+          .filter(r => r.toThreadId === threadId && r.snapshotId)
+          .map(r => useCanvasDoc.getState().doc?.snapshots.find(s => s.id === r.snapshotId))
+          .filter((s): s is SourceSnapshot => !!s)
+          .map(s => s.content);
+        const quote = (snapshots.length ? snapshots.map(s => s.content) : threadQuote).join('\n\n');
+        const brief = buildClarifyBrief({ project, quote });
+        const questions = await runClarify(
+          { plan: clarifyPlan, userText: text, history, ...(brief ? { brief } : {}), signal: clarifyController.signal },
+          canvasTurnDeps(),
+        );
+        if (!clarifyController.signal.aborted && questions.length) {
+          useChatStore.getState().setLive(threadId, {
+            turnId: threadId, userText: text, text: '', thinking: '', status: null, clarify: questions,
+          });
+          const answers = await awaitAnswers(threadId, clarifyController.signal);
+          useChatStore.getState().setLive(threadId, undefined);
+          clarifiedBlock = renderClarifyBlock(answers ?? []);
+        }
+        setStatus(null);
+        if (clarifyController.signal.aborted) return;
+      }
+
+      const extraContext = [
+        isBranch
+          ? 'This is a branch reply to a scoped follow-up question on a highlighted quote. Default to the shortest answer that fully answers it — 1-3 sentences for a definitional or clarifying question ("what does this mean", "why"). Only write multiple paragraphs, a list, or sections if the question itself explicitly asks for elaboration, a how-to, or a comparison.'
+          : '',
+        renderSkillsBlock(picked),
+        canvasContext,
+        clarifiedBlock,
+        wantsHtml ? HTML_REPLY_INSTRUCTIONS : TEXT_REPLY_INSTRUCTIONS,
+      ].filter(Boolean).join('\n\n');
       const result = await runCanvasTurn(
         {
           threadId,
@@ -625,7 +696,7 @@ function Workspace({ canvasId }: { canvasId: string }) {
             }, canvasId).then(() => undefined));
           },
           onStatus: setStatus,
-          register: c => { abortRef.current = c; },
+          register: run.register,
         },
       );
       await streamWriter.flushAll();
@@ -633,18 +704,24 @@ function Workspace({ canvasId }: { canvasId: string }) {
       // A run can end badly without throwing. Say so here too, not only on the card, because the
       // card may be off-screen.
       if (result.error) setSendError(result.error);
+      if (result.status !== 'cancelled') notifyCanvasRun({
+        id: result.runId || newSubmissionId(), canvasId, threadId,
+        title: thread?.title || text.slice(0, 72),
+        kind: result.status === 'completed' ? 'completed' : 'failed',
+      });
     } catch (e) {
       // Never swallow. Before this, a throw here vanished into an unhandled rejection and the
       // canvas simply sat there — which is indistinguishable from the app being broken.
       setSendError(e instanceof Error ? e.message : String(e));
+      if (!run.signal.aborted) notifyCanvasRun({
+        id: newSubmissionId(), canvasId, threadId, title: text.slice(0, 72), kind: 'failed',
+      });
     } finally {
       for (const id of liveMessages) liveText.clear(id);
-      setBusy(false);
-      setStatus(null);
-      abortRef.current = null;
-      setActiveThreadId(null);
+      run.finish();
+      setActiveThreadId(current => current === threadId ? null : current);
     }
-  }, [apply, snapshots, targetThread, prefs, projects, project, attachKey, doc, pickFlowY, skillsKey, setPicked, canvasId, reading]);
+  }, [apply, snapshots, targetThread, prefs, projects, project, attachKey, doc, pickFlowY, skillsKey, setPicked, canvasId, reading, rf]);
 
   // A thread's grown height/width are only a floor once it settles (goes inactive) — persisted
   // the same way drag/resize geometry is, on gesture end rather than on every delta. Read the
@@ -693,13 +770,39 @@ function Workspace({ canvasId }: { canvasId: string }) {
 
   // Stop is best effort: it cannot reverse work the provider has already done, and whatever text
   // arrived stays on the card.
-  const stop = useCallback(() => { abortRef.current?.abort(); }, []);
+  const stop = useCallback(() => { currentRun?.stop(); }, [currentRun]);
 
-  const showOnCanvas = useCallback((threadId: string) => {
+  const [pendingFocus, setPendingFocus] = useState<string | null>(null);
+  const showOnCanvas = useCallback((threadId: string, keepHierarchy = false) => {
     setReading(false);
-    const n = nodes.find(x => x.id === threadId);
-    if (n) rf.setCenter(n.position.x + (n.width ?? NODE_W) / 2, n.position.y + (n.height ?? NODE_H) / 2, { zoom: 1, duration: 200 });
-  }, [nodes, rf]);
+    setDetailMessageId(null);
+    setContextOpen(false);
+    if (!keepHierarchy) setHierarchyOpen(false);
+    setExpandedBranches(previous => new Set(previous).add(threadId));
+    setTargetThread(threadId);
+    setPendingFocus(threadId);
+  }, []);
+
+  // Wait for the expanded card and pane layout before moving the camera. Tall saved
+  // answers must open at their heading, rather than thousands of pixels into the card.
+  useEffect(() => {
+    if (!pendingFocus || reading) return;
+    const n = nodes.find(x => x.id === pendingFocus);
+    if (!n) return;
+    const frame = requestAnimationFrame(() => {
+      const bounds = document.querySelector('.react-flow')?.getBoundingClientRect();
+      if (!bounds?.width || !bounds.height) return;
+      const width = n.width ?? NODE_W;
+      const zoom = Math.min(1, (bounds.width - 48) / width);
+      void rf.setViewport({
+        x: bounds.width / 2 - (n.position.x + width / 2) * zoom,
+        y: 24 - n.position.y * zoom,
+        zoom,
+      }, { duration: 200 });
+      setPendingFocus(null);
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [pendingFocus, reading, nodes, rf]);
 
   // The canvas search palette (UI-08) is mounted as AppShell's sibling, not this tree's descendant,
   // so it reaches the open workspace through this registration rather than a prop.
@@ -732,7 +835,7 @@ function Workspace({ canvasId }: { canvasId: string }) {
     return () => document.removeEventListener('keydown', onKey);
   }, [rf]);
 
-  const nodeTypes = useMemo(() => ({ thread: ThreadNode }), []);
+  const nodeTypes = useMemo(() => ({ thread: ThreadNode, sketch: SketchNode }), []);
   const edgeTypes = useMemo(() => ({ highlight: HighlightEdge }), []);
   if (!doc) return null;
 
@@ -766,7 +869,7 @@ function Workspace({ canvasId }: { canvasId: string }) {
       <>
         <WorkspaceHeader
           doc={doc} saving={saving} reading onToggleReading={() => setReading(false)} undoDepth={undoDepth} onUndo={undoGeometry}
-          onToggleContext={() => setContextOpen(v => !v)}
+          onToggleContext={() => setContextOpen(v => !v)} onOpenNotification={showOnCanvas} onSketch={() => {void createSketchHere();}}
         />
         {selectionPopover}
         <ReadingView doc={doc} onBlockPick={pickBlock} onBack={() => setReading(false)} onShowOnCanvas={showOnCanvas}
@@ -794,9 +897,18 @@ function Workspace({ canvasId }: { canvasId: string }) {
     <>
       <WorkspaceHeader
         doc={doc} saving={saving} reading={false} onToggleReading={() => setReading(true)} undoDepth={undoDepth} onUndo={undoGeometry}
-        onToggleContext={() => setContextOpen(v => !v)}
+        onToggleContext={() => setContextOpen(v => !v)} onOpenNotification={showOnCanvas} onSketch={() => {void createSketchHere();}}
+        hierarchyOpen={hierarchyOpen} onToggleHierarchy={() => setHierarchyOpen(v => !v)}
       />
-      <div className="relative min-h-0 flex-1">
+      <div tabIndex={0} aria-label="Canvas workspace" className="nl-canvas-pearl relative flex min-h-0 flex-1" onPaste={e => {
+        if ((e.target as HTMLElement).closest('textarea, input, [contenteditable="true"]')) return;
+        const images = imagesFromClipboard(e.clipboardData);
+        if (!images.length) return;
+        e.preventDefault();
+        void addPastedFiles(attachKey, images).then(() => {
+          document.querySelector<HTMLTextAreaElement>('textarea[aria-label="Ask about this canvas"]')?.focus();
+        });
+      }}>
         {/*
           React Flow's wrapper forces `height: 100%` inline and that percentage never resolves
           against a flex item's flex-grown size (the flex item's `height` CSS value stays `auto`
@@ -806,19 +918,21 @@ function Workspace({ canvasId }: { canvasId: string }) {
           wrapper sizes against the ancestor's actual layout box instead of its `height` value, so
           nest React Flow in one.
         */}
-        <div className="absolute inset-0">
-          <ReactFlow<ThreadNodeType>
-            nodes={nodes}
+        <div className="relative min-w-0 flex-1">
+          <div className="absolute inset-0">
+          <ReactFlow<WorkspaceNode>
+            nodes={[...nodes,...sketchNodes]}
             edges={edges}
             nodeTypes={nodeTypes}
             edgeTypes={edgeTypes}
-            onNodesChange={onNodesChange}
+            onNodesChange={onWorkspaceNodesChange}
             onNodeClick={(_, n) => {
-              if (minimizedBranches.has(n.id)) toggleBranchMinimized(n.id);
+              if(n.type==='sketch'){setSelectedSketchId(n.id);setTargetThread(null);return;}
+              if (n.data.minimized) toggleBranchMinimized(n.id);
               setTargetThread(n.id);
             }}
-            onPaneClick={() => { setTargetThread(null); setPicked([]); setPickScreenAnchor(null); setPickFlowAnchor(null); setPickFlowY(null); }}
-            onNodeMouseEnter={(_, n) => setHoverThreadId(n.id)}
+            onPaneClick={() => { setSelectedSketchId(null);setTargetThread(null); setPicked([]); setPickScreenAnchor(null); setPickFlowAnchor(null); setPickFlowY(null); }}
+            onNodeMouseEnter={(_, n) => {if(n.type!=='sketch')setHoverThreadId(n.id);}}
             onNodeMouseLeave={() => setHoverThreadId(null)}
             onMoveStart={onMoveStart}
             onMoveEnd={(_, v: Viewport) => setViewport(v)}
@@ -851,7 +965,14 @@ function Workspace({ canvasId }: { canvasId: string }) {
               </button>
             </Panel>
           </ReactFlow>
+          </div>
         </div>
+        {hierarchyOpen && <CanvasHierarchy doc={doc} selectedId={targetThread}
+          onLocate={id => {
+            showOnCanvas(id, true);
+          }}
+          onRead={id => { setReadingBranch(id); setTargetThread(id); setReading(true); }}
+          onClose={() => setHierarchyOpen(false)} />}
 
         {selectionPopover}
 
@@ -901,23 +1022,55 @@ function Workspace({ canvasId }: { canvasId: string }) {
   );
 }
 
-function WorkspaceHeader({ doc, saving, reading, onToggleReading, undoDepth, onUndo, onToggleContext }: {
+function WorkspaceHeader({ doc, saving, reading, onToggleReading, undoDepth, onUndo, onToggleContext, hierarchyOpen, onToggleHierarchy, onOpenNotification, onSketch }: {
   doc: CanvasDoc; saving: boolean; reading: boolean; onToggleReading(): void; undoDepth: number; onUndo(): void;
-  onToggleContext(): void;
+  onToggleContext(): void; onOpenNotification(threadId: string): void; onSketch():void;
+  hierarchyOpen?: boolean; onToggleHierarchy?(): void;
 }) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(doc.summary.title);
+  const cancelEdit = useRef(false);
+  const saveMetadata = async (patch: { title?: string; emoji?: string }) => {
+    try {
+      await useCanvasDoc.getState().apply(d => { Object.assign(d.summary, patch); }, doc.summary.id);
+      const store = useCanvasStore.getState();
+      await Promise.all([store.load(doc.summary.projectId ?? ''), store.loadAll()]);
+    } catch (err) {
+      toast(`Could not update canvas: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  };
+  const commitTitle = async () => {
+    setEditing(false);
+    if (cancelEdit.current) return;
+    const title = draft.trim();
+    if (title && title !== doc.summary.title) await saveMetadata({ title });
+  };
   return (
-    // `relative z-40`: the AppShell tab-strip/breadcrumb bar is a `fixed z-30` sibling that slides
-    // in whenever the pointer is within 36px of the window top (`useEdgeReveal`) — which is
-    // exactly where this header's own Undo/Context/Read buttons sit. Without a higher stacking
-    // context here, clicking any of them reveals that bar on top of this one, and because both
-    // occupy the same screen position it looks like the canvas's own toolbar vanished.
-    <header className="relative z-40 flex flex-none items-center gap-2.5 border-b border-cv-divider bg-cv-ground px-7 py-3">
-      <Frame size={16} aria-hidden className="text-sec-canvas" />
-      <h1 data-testid="canvas-title" className="m-0 truncate text-base font-medium text-text">{doc.summary.title}</h1>
+    <header className="relative z-10 flex flex-none items-center gap-2.5 border-b border-cv-divider bg-cv-ground px-7 py-3">
+      <GlyphButton value={doc.summary.emoji} cycle={[]} index={0} size={20}
+        fallback={<Frame size={16} aria-hidden className="text-sec-canvas" />}
+        title="Set canvas icon" onPick={token => { void saveMetadata({ emoji: token }); }} />
+      {editing ? (
+        <input autoFocus aria-label="Canvas name" value={draft}
+          className="min-w-0 rounded border border-rule-2 bg-bg px-1 text-base font-medium text-text"
+          onChange={e => setDraft(e.target.value)} onBlur={() => { void commitTitle(); }}
+          onKeyDown={e => {
+            if (e.key === 'Enter') { e.preventDefault(); e.currentTarget.blur(); }
+            if (e.key === 'Escape') { e.preventDefault(); cancelEdit.current = true; setEditing(false); }
+          }} />
+      ) : (
+        <h1 className="m-0 min-w-0 truncate text-base font-medium text-text">
+          <button type="button" data-testid="canvas-title" title="Rename canvas"
+            className="max-w-full truncate text-left" onClick={() => {
+              cancelEdit.current = false; setDraft(doc.summary.title); setEditing(true);
+            }}>{doc.summary.title}</button>
+        </h1>
+      )}
       <span className="font-mono text-xs text-text-3">
         {doc.summary.counts.threads} thread{doc.summary.counts.threads === 1 ? '' : 's'}
       </span>
       <span className="flex-1" />
+      <button type="button" onClick={onSketch} data-testid="canvas-sketch" className="rounded-md border border-rule-2 px-2 py-1 text-xs text-text-2 hover:text-text">Sketch</button>
       <button
         type="button" onClick={onUndo} disabled={undoDepth === 0} data-testid="canvas-undo"
         aria-label="Undo the last move or resize"
@@ -925,6 +1078,11 @@ function WorkspaceHeader({ doc, saving, reading, onToggleReading, undoDepth, onU
       >
         <Undo2 size={12} aria-hidden /> Undo
       </button>
+      {onToggleHierarchy && <button type="button" onClick={onToggleHierarchy} aria-pressed={hierarchyOpen}
+        data-testid="canvas-hierarchy-toggle" aria-label="Toggle canvas hierarchy"
+        className="flex items-center gap-1.5 rounded-md border border-rule-2 px-2 py-1 text-xs text-text-2 hover:text-text">
+        <GitBranch size={12} aria-hidden /> Hierarchy
+      </button>}
       <button
         type="button" onClick={onToggleContext} data-testid="canvas-context-toggle"
         className="flex items-center gap-1.5 rounded-md border border-rule-2 px-2 py-1 text-xs text-text-2 hover:text-text"
@@ -938,6 +1096,7 @@ function WorkspaceHeader({ doc, saving, reading, onToggleReading, undoDepth, onU
         {reading ? <Layers size={12} aria-hidden /> : <BookOpen size={12} aria-hidden />}
         {reading ? 'Canvas' : 'Read'}
       </button>
+      <CanvasNotifications canvasId={doc.summary.id} onOpen={onOpenNotification} />
       <span data-testid="canvas-save-state" className="font-mono text-xs text-text-3">{saving ? 'Saving…' : 'Saved'}</span>
     </header>
   );

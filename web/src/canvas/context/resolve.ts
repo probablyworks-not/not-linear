@@ -1,3 +1,6 @@
+import { userContentFor } from '../../chat/user-content';
+import type { Attachment } from '../../attachments/read-files';
+import type { ProviderId } from '../../providers/types';
 import type { ChatMessage } from '../../providers/types';
 import { ancestorChain } from '../domain/commands';
 import { newId } from '../ids';
@@ -45,6 +48,7 @@ export interface ResolvedContext {
  * `pendingText` is the message being sent right now, when it is not yet in the document.
  */
 export function resolveContext(doc: CanvasDoc, threadId: string, opts: {
+  provider?: ProviderId;
   inheritedRules?: string[];
   budgetTokens?: number;
 } = {}): ResolvedContext {
@@ -67,7 +71,13 @@ export function resolveContext(doc: CanvasDoc, threadId: string, opts: {
         // one the user asked while looking at them.
         const prefix = i === 0 && threadSnaps.length ? `${quoteBlock(threadSnaps)}\n\n` : '';
         if (i === 0) used.push(...threadSnaps);
-        messages.push({ role: 'user', content: prefix + body });
+        const images: Attachment[] = m.parts.flatMap(p => {
+          if (p.kind !== 'attachment' || !p.mime.startsWith('image/')) return [];
+          const asset = doc.assets.find(a => a.id === p.assetId);
+          if (asset?.state !== 'ready' || asset.location.kind !== 'inline') return [];
+          return [{ name: p.name, type: asset.mime, size: p.bytes, kind: 'image', content: null, base64: asset.location.data }];
+        });
+        messages.push({ role: 'user', content: images.length ? userContentFor(opts.provider ?? 'claude', prefix + body, images) : prefix + body });
       } else {
         messages.push({ role: 'assistant', content: body });
       }

@@ -5,6 +5,8 @@
 // markdown library. A test renders both and compares.
 
 import { labelIsUrl, linkDisplayText } from './link-text';
+import katex from 'katex';
+import 'katex/dist/katex.min.css';
 
 // esc: HTML-escape a string (&, <, >, ", '). The building block every other
 // function in this file uses before inserting raw text into HTML, so nothing
@@ -188,7 +190,7 @@ function proseBlockBreaks(text: string): string {
   let s = text;
   s = s.replace(/([a-z0-9][.!?])(?=[A-Z][a-z]{2,})/g, '$1\n\n');
   s = s.replace(/([^\n#])(\s*)(#{1,4}\s+)/g, '$1\n\n$3');
-  s = s.replace(/([^\n#])[ \t]+(\d{1,2}\.\s+(?=[A-Z][A-Za-z0-9&/()'' -]{1,70}(?:\s|$)))/g, '$1\n\n$2');
+  s = s.replace(/([^\n#\s])[ \t]+(\d{1,2}\.\s+(?=[A-Z][A-Za-z0-9&/()'' -]{1,70}(?:\s|$)))/g, '$1\n\n$2');
 
   // Known recurring "Label:" field names seen in model output (e.g. structured
   // comparisons) that should start their own line even when glued to prior
@@ -233,12 +235,36 @@ function proseBlockBreaks(text: string): string {
 // assistant messages and note bodies for display. Returns '<p></p>' for
 // empty input rather than an empty string, so callers always get a renderable node.
 export function renderMarkdown(text: unknown): string {
-  const lines = normalizeMarkdownForDisplay(text).split('\n');
+  // Protect complete equations before Markdown can split lines or interpret
+  // TeX underscores/asterisks. Skip code, including an unfinished code fence.
+  const source = String(text || '');
+  let mathPrefix = '\x04math';
+  while (source.includes(mathPrefix)) mathPrefix += 'x';
+  const equations: { token: string; rendered: string; displayMode: boolean }[] = [];
+  const protectedSource = source.replace(/^```\w*[^\n]*\n[\s\S]*?(?:^```[ \t]*(?=\n|$)|(?![\s\S]))|`[^`\n]+`|\\\[([\s\S]*?)\\\]|\$\$([\s\S]*?)\$\$|\\\(([^\n]*?)\\\)/gm,
+    (match, bracket, dollars, inline) => {
+      if (bracket === undefined && dollars === undefined && inline === undefined) return match;
+      const displayMode = inline === undefined;
+      let rendered = esc(match);
+      {
+        try {
+          rendered = katex.renderToString(bracket ?? dollars ?? inline,
+            { displayMode, throwOnError: false, trust: false, output: 'htmlAndMathml' });
+        } catch { /* Keep readable, escaped source if typesetting fails. */ }
+      }
+      const token = `${mathPrefix}${equations.length}\x05`;
+      equations.push({ token, rendered, displayMode });
+      return displayMode ? `\n\n${token}\n\n` : token;
+    });
+  const lines = normalizeMarkdownForDisplay(protectedSource).split('\n');
   let html = '';
-  let listTag: 'ul' | 'ol' | null = null; // 'ul' or 'ol'
+  const lists: {tag: string; indent: number}[] = [];
+  const listMatch = (line: string) => line.match(/^([ \t]*)(?:([-*+])|(\d+)[.)])[ \t]+(.+)$/);
+  const indentWidth = (indent: string) => indent.replace(/\t/g, '    ').length;
   const labelLineRe = /^([A-Za-z0-9][A-Za-z0-9’' -]{1,36}:)\s*(.*)$/;
 
-  const closeList = () => { if (listTag){ html += `</${listTag}>`; listTag = null; } };
+  const closeLevel = () => { html += `</li></${lists.pop()!.tag}>`; };
+  const closeList = () => { while (lists.length) closeLevel(); };
 
   for (let i = 0; i < lines.length; i++){
     const line = lines[i]!.trimEnd();
@@ -290,23 +316,43 @@ export function renderMarkdown(text: unknown): string {
     // hr
     if (/^[-*_]{3,}$/.test(line.trim())){ closeList(); html += '<hr>'; continue; }
 
-    // unordered list
-    const ulm = line.match(/^[-*+] (.+)/);
-    if (ulm){
-      if (listTag !== 'ul'){ closeList(); html += '<ul>'; listTag = 'ul'; }
-      html += `<li>${inlineMd(ulm[1]!)}</li>`; continue;
+    // Lists use indentation to retain mixed, arbitrarily nested levels.
+    const item = listMatch(line);
+    if (item){
+      const indent = indentWidth(item[1]!);
+      const tag = item[2] ? 'ul' : 'ol';
+      while (lists.length && indent < lists[lists.length - 1]!.indent) closeLevel();
+      let level = lists[lists.length - 1];
+      if (level && indent === level.indent && tag !== level.tag){
+        closeLevel();
+        level = lists[lists.length - 1];
+      }
+      if (!level || indent > level.indent){
+        const start = tag === 'ol' ? ` start="${Number(item[3])}"` : '';
+        html += `<${tag}${start}>`;
+        lists.push({tag, indent});
+      } else {
+        html += '</li>';
+      }
+      html += `<li>${inlineMd(item[4]!)}`;
+      continue;
     }
 
-    // ordered list
-    const olm = line.match(/^(\d+)\. (.+)/);
-    if (olm){
-      if (labelLineRe.test((lines[i + 1] || '').trim())){
-        closeList();
-        html += `<p class="md-number-line"><strong>${inlineMd(`${olm[1]}. ${olm[2]}`)}</strong></p>`;
-        continue;
-      }
-      if (listTag !== 'ol'){ closeList(); html += +olm[1]! === 1 ? '<ol>' : `<ol start="${+olm[1]!}">`; listTag = 'ol'; }
-      html += `<li>${inlineMd(olm[2]!)}</li>`; continue;
+    // Blank lines between items must not reset numbering or nesting.
+    if (!line.trim()){
+      let next = i + 1;
+      while (next < lines.length && !lines[next]!.trim()) next++;
+      const following = listMatch(lines[next] || '');
+      const level = lists[lists.length - 1];
+      const continuation = level && lines[next] && indentWidth((lines[next]!.match(/^[ \t]*/) || [''])[0]) > level.indent;
+      if (!following && !continuation) closeList();
+      continue;
+    }
+
+    // Wrapped item text stays aligned with its item's text, not its marker.
+    if (lists.length && indentWidth((line.match(/^[ \t]*/) || [''])[0]) > lists[lists.length - 1]!.indent){
+      html += `<p>${inlineMd(line.trimStart())}</p>`;
+      continue;
     }
 
     // compact field label line
@@ -327,6 +373,10 @@ export function renderMarkdown(text: unknown): string {
     html += `<p>${inlineMd(line)}</p>`;
   }
   closeList();
+  for (const { token, rendered, displayMode } of equations){
+    if (displayMode) html = html.replace(`<p>${token}</p>`, () => `<div class="md-math-block">${rendered}</div>`);
+    html = html.replaceAll(token, () => rendered);
+  }
   return html || '<p></p>';
 }
 

@@ -21,6 +21,10 @@
  */
 
 :root, [data-preview-theme="dark"]{
+  /* Freehand amber annotations, separate from selection and branch colours. */
+  --annotation-amber: #e99b16;
+  --annotation-opacity: .34;
+  --annotation-width: 18px;
   /* ---------- color tokens: default theme ("dark-mono") ---------- */
   /* Background surfaces, layered from base canvas (--bg) to raised
      surfaces (--surface, --surface-2) used for cards/panels/inputs. */

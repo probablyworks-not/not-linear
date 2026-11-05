@@ -102,8 +102,8 @@ export function ChatView({ threadId }: { threadId: string }) {
   const unavailable = !thread && threadId === MAIN_THREAD_ID;
   const empty = turns.length === 0 && !live;
   const makeRoom = openHere && width > DRAWER_MIN_WIDTH;
-  // The chat column gives up the width the note pane takes (and the branch drawer's, when both are open).
-  const pane = notePaneId ? paneLayout(notePaneWidth, width, sidebarOpen ? SIDEBAR_PX : 0) : null;
+  // With a branch open, the note overlays instead of subtracting a second drawer from the chat.
+  const pane = notePaneId ? paneLayout(notePaneWidth, width, sidebarOpen ? SIDEBAR_PX : 0, makeRoom) : null;
   const noteRoom = pane?.beside ? pane.width : 0;
   const drawerRoom = makeRoom ? 'var(--drawer-w) + var(--drawer-gap) * 2' : '0px';
 
@@ -257,7 +257,7 @@ export function ChatView({ threadId }: { threadId: string }) {
         />
       </div>
       {notePaneId && (
-        <Suspense fallback={null}><NotePane key={notePaneId} noteId={notePaneId} /></Suspense>
+        <Suspense fallback={null}><NotePane key={notePaneId} noteId={notePaneId} overlay={makeRoom} /></Suspense>
       )}
       <BranchStack threadId={threadId} fallbackTitle={crumbTitleOf(thread, fallbackTitle)} />
       <SelectionPopover threadId={threadId} threadTitle={crumbTitleOf(thread, fallbackTitle)} onAsk={text => { void askAbout(threadId, text); }} />

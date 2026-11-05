@@ -1,3 +1,5 @@
+import { useCanvasDoc } from '../canvas-doc-store';
+import { useUiStore } from '../../state/ui-store';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { highlightCodeIn, renderMarkdown, renderMermaidIn } from '../../lib/markdown';
 import type { CanvasPart } from '../types';
@@ -139,9 +141,9 @@ interface NlHtmlPartMessage {
 const isNlHtmlPartMessage = (data: unknown): data is NlHtmlPartMessage =>
   !!data && typeof data === 'object' && (data as { __nlHtmlPart?: unknown }).__nlHtmlPart === true;
 
-/** A stable preview or full-reader viewport. The HTML document scrolls inside its sandbox. */
-export function HtmlFrame({ part, messageId, fullPage, highlights, paginated = false, streamHtml }: {
-  part: Extract<CanvasPart, { kind: 'html' }>; messageId: string; fullPage?: boolean; highlights?: readonly TextHighlight[]; paginated?: boolean; streamHtml?: string;
+/** Bounded previews/readers or a continuous document measured inside its opaque sandbox. */
+export function HtmlFrame({ part, messageId, fullPage, highlights, paginated = false, streamHtml, onPreviewReady }: {
+  part: Extract<CanvasPart, { kind: 'html' }>; messageId: string; fullPage?: boolean; highlights?: readonly TextHighlight[]; paginated?: boolean; streamHtml?: string; onPreviewReady?: (ready: boolean) => void;
 }) {
   const ref = useRef<HTMLIFrameElement>(null);
   const srcDoc = withSelectionBridge(part.html, fullPage, paginated, streamHtml !== undefined);
@@ -174,7 +176,12 @@ export function HtmlFrame({ part, messageId, fullPage, highlights, paginated = f
 
   useEffect(() => {
     const onMessage = (ev: MessageEvent): void => {
-      if (ev.source !== ref.current?.contentWindow || !isNlHtmlPartMessage(ev.data)) return;
+      if (ev.source !== ref.current?.contentWindow) return;
+      if (ev.data?.__nlHtmlPart === true && ev.data.type === 'stream-ready') {
+        onPreviewReady?.(true);
+        return;
+      }
+      if (!isNlHtmlPartMessage(ev.data)) return;
       if (ev.data.type === 'pagination' && paginated) {
         const { height, pages, fallback, oversized } = ev.data;
         if (typeof height !== 'number' || !Number.isFinite(height) || height < 1 || height > 100000 || !Array.isArray(pages) || pages.length > 201 || pages.some(p => !Number.isFinite(p.top) || !Number.isFinite(p.height) || p.top < 0 || p.height < 1 || p.top + p.height > height + 1)) return;
@@ -235,7 +242,7 @@ export function HtmlFrame({ part, messageId, fullPage, highlights, paginated = f
       window.removeEventListener('nl-clear-html-selection', clear);
       if (frame) htmlAnchors.remove(frame);
     };
-  }, [messageId, part.id, paginated, requestLayout]);
+  }, [messageId, part.id, paginated, requestLayout, onPreviewReady]);
 
   const pages = paginated ? layout?.pages ?? [] : [];
   const mask = pages.length ? {
@@ -298,14 +305,9 @@ export function PartView({ part, messageId, highlightsByPart, onBlockPick, fullP
       // `allow-same-origin` is withheld, so the document still executes in an opaque, isolated
       // origin with no access to the app's cookies, storage, or DOM. Same boundary as
       // ArtifactDetail otherwise. The declared network policy lands with the HTML surface in C5.
-      return <HtmlFrame part={part} messageId={messageId} fullPage={fullPage} paginated={paginated} highlights={highlightsByPart?.[part.id]} />;
+      return <HtmlFrame part={part} messageId={messageId} fullPage={fullPage} paginated={paginated || !fullPage} highlights={highlightsByPart?.[part.id]} />;
     case 'attachment':
-      return (
-        <div data-part={part.id} className="flex items-center gap-2 rounded-lg border border-cv-edge bg-cv-card-inset px-2.5 py-1.5 text-xs text-text-2">
-          <span className="truncate">{part.name}</span>
-          <span className="font-mono text-text-3">{Math.round(part.bytes / 1024)}kB</span>
-        </div>
-      );
+      return <AttachmentView part={part} />;
     case 'image':
     case 'video':
       // C5. Declared so a media part can be stored now and shown then, rather than rendering
@@ -318,4 +320,21 @@ export function PartView({ part, messageId, highlightsByPart, onBlockPick, fullP
     default:
       return null;
   }
+}
+
+function AttachmentView({ part }: { part: Extract<CanvasPart, { kind: 'attachment' }> }) {
+  const asset = useCanvasDoc(s => s.doc?.assets.find(a => a.id === part.assetId));
+  const src = asset?.state === 'ready' && asset.mime.startsWith('image/') && asset.location.kind === 'inline'
+    ? `data:${asset.mime};base64,${asset.location.data}` : null;
+  if (src) return (
+    <button type="button" data-part={part.id} aria-label={`Preview ${part.name}`}
+      onClick={() => useUiStore.getState().setImagePreview({ src, name: part.name })}
+      className="nodrag my-2 block w-full cursor-zoom-in rounded-lg border border-cv-edge bg-cv-card-inset p-2 text-left">
+      <img src={src} alt={part.name} className="max-h-[360px] w-full rounded object-contain" />
+      <span className="mt-1 block truncate text-xs text-text-3">{part.name}</span>
+    </button>
+  );
+  return <div data-part={part.id} className="flex items-center gap-2 rounded-lg border border-cv-edge bg-cv-card-inset px-2.5 py-1.5 text-xs text-text-2">
+    <span className="truncate">{part.name}</span><span className="font-mono text-text-3">{Math.round(part.bytes / 1024)}kB</span>
+  </div>;
 }

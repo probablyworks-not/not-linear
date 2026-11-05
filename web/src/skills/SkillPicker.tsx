@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode, type RefObject } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode, type RefObject } from 'react';
+import { createPortal } from 'react-dom';
 import { Sparkles, X } from 'lucide-react';
 import { flags } from '../flags';
 import { resolvedSkills, useSkillsStore } from './skills-store';
@@ -16,7 +17,7 @@ export interface SkillPicker {
   picked: string[];
   /** Chips for the picked skills, to render above the textarea. */
   chips: ReactNode;
-  /** The dropdown, to render inside a `position: relative` parent. */
+  /** The dropdown: relative to its parent, or portalled when a menu anchor is supplied. */
   menu: ReactNode;
   /** Call first in the textarea's onKeyDown; true means the key was handled. */
   onKeyDown(e: KeyboardEvent<HTMLTextAreaElement>, text: string): boolean;
@@ -26,7 +27,8 @@ export interface SkillPicker {
   placeholder: string;
 }
 
-export function useSkillPicker(text: string, setText: (t: string) => void, input: RefObject<HTMLTextAreaElement | null>, basePlaceholder: string): SkillPicker {
+/** Supply a composer anchor to escape clipping/transform containers (Canvas). */
+export function useSkillPicker(text: string, setText: (t: string) => void, input: RefObject<HTMLTextAreaElement | null>, basePlaceholder: string, menuAnchor?: RefObject<HTMLElement | null>): SkillPicker {
   const [picked, setPicked] = useState<string[]>([]);
   const [active, setActive] = useState(0);
   const [dismissed, setDismissed] = useState(false);
@@ -59,6 +61,33 @@ export function useSkillPicker(text: string, setText: (t: string) => void, input
   useEffect(() => { listRef.current?.querySelector('[aria-selected="true"]')?.scrollIntoView({ block: 'nearest' }); }, [active, query]);
   const open = (query !== undefined || sticky) && !dismissed && matches.length > 0;
 
+  // Canvas scrolls its composer and transforms the idle bar. A body portal avoids both
+  // overflow clipping and transformed containing blocks; other composers keep their layout.
+  useLayoutEffect(() => {
+    const anchor = menuAnchor?.current;
+    const list = listRef.current;
+    if (!open || !anchor || !list) return;
+    const position = (): void => {
+      const r = anchor.getBoundingClientRect();
+      list.style.width = `${Math.min(r.width, window.innerWidth - 16)}px`;
+      list.style.left = `${Math.max(8, Math.min(r.left, window.innerWidth - list.offsetWidth - 8))}px`;
+      let top = r.top - list.offsetHeight - 6;
+      if (top < 8) top = r.bottom + 6;
+      list.style.top = `${Math.max(8, Math.min(top, window.innerHeight - list.offsetHeight - 8))}px`;
+    };
+    position();
+    const observer = new ResizeObserver(position);
+    observer.observe(anchor);
+    observer.observe(list);
+    window.addEventListener('resize', position);
+    window.addEventListener('scroll', position, true);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener('resize', position);
+      window.removeEventListener('scroll', position, true);
+    };
+  }, [open, menuAnchor]);
+
   const pick = (name: string): void => {
     setPicked(p => [...p, name]);
     // Drop only the trailing /token; whatever was typed before it stays.
@@ -82,7 +111,7 @@ export function useSkillPicker(text: string, setText: (t: string) => void, input
   );
 
   const menu = open && (
-    <div ref={listRef} role="listbox" aria-label="Skills" className="absolute bottom-full left-0 right-0 z-20 mb-1.5 max-h-[55vh] overflow-y-auto rounded-lg border border-rule-2 bg-surface-2 p-1 shadow-lg">
+    <div ref={listRef} role="listbox" aria-label="Skills" className={`${menuAnchor ? 'fixed z-[220]' : 'absolute bottom-full left-0 right-0 z-20 mb-1.5'} max-h-[55vh] overflow-y-auto rounded-lg border border-rule-2 bg-surface-2 p-1 shadow-lg`}>
       <div className="sticky top-0 bg-surface-2 px-2.5 pb-1 pt-1 text-xs text-text-3">{matches.length} skill{matches.length === 1 ? '' : 's'}{picked.length ? ` · ${picked.length} added` : ''} · ↑↓ to browse · Enter to add{picked.length ? ' another' : ''} · type to filter · Esc to close</div>
       {matches.map((s, i) => (
         <button
@@ -98,7 +127,7 @@ export function useSkillPicker(text: string, setText: (t: string) => void, input
   );
 
   return {
-    picked, chips, menu,
+    picked, chips, menu: menuAnchor && menu ? createPortal(menu, document.body) : menu,
     placeholder: flags.skills ? `${basePlaceholder.replace(/…$/, '')}… (type / for skills)` : basePlaceholder,
     // Any edit of the textarea itself ends sticky mode: from here the "/" token rules again.
     onTextChange() { setActive(0); setDismissed(false); setSticky(false); },

@@ -115,3 +115,22 @@ describe('openai / gemini', () => {
     }
   });
 });
+
+
+describe('image attachment requests', () => {
+  it.each([openaiProvider, geminiProvider])('sends native image bytes through $id', async provider => {
+    localStorage.setItem('nl_api_keys', JSON.stringify({ openai: SECRET, gemini: SECRET }));
+    const fn = vi.fn(async () => sse([JSON.stringify({ choices: [{ delta: { content: 'Visible' }, finish_reason: 'stop' }] })]));
+    vi.stubGlobal('fetch', fn);
+    const { userContentFor } = await import('../../src/chat/user-content');
+    const files = [{ kind: 'image' as const, name: 'one.png', type: 'image/png', size: 3, content: null, base64: 'YWJj' },
+      { kind: 'image' as const, name: 'two.png', type: 'image/png', size: 3, content: null, base64: 'ZGVm' }];
+    await collect(provider.stream(req({ messages: [{ role: 'user', content: userContentFor(provider.id, 'Compare these', files) }] })));
+    const body = JSON.parse((fn.mock.calls[0] as unknown as [string, RequestInit])[1].body as string);
+    expect(body.messages[1].content.filter((b: { type: string }) => b.type === 'image_url')).toEqual([
+      { type: 'image_url', image_url: { url: 'data:image/png;base64,YWJj' } },
+      { type: 'image_url', image_url: { url: 'data:image/png;base64,ZGVm' } },
+    ]);
+    expect(JSON.stringify(body.messages[1])).toContain('Compare these');
+  });
+});

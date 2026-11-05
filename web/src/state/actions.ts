@@ -9,6 +9,7 @@ import { pickFiles } from '../attachments/pick-files';
 import { readFiles } from '../attachments/read-files';
 import { LOCAL_HEADER } from '../lib/api';
 import { flags } from '../flags';
+import { deleteAnnotations } from '../db/annotations-repo';
 import { unassignCanvasesOfProject } from '../canvas/canvas-repo';
 
 // Shell-level operations that span both stores. These are what the legacy
@@ -40,6 +41,7 @@ export async function deleteChat(id: string): Promise<void> {
   const ui = useUiStore.getState();
   if (!(await ui.askConfirm(confirmDeleteChat(row?.title ?? 'this chat')))) return;
   if (!(await app.deleteThread(id))) return;
+  await deleteAnnotations(id).catch(() => toast('Could not remove saved annotations.'));
   useUiStore.getState().dropTabs([id]);
   const next = useUiStore.getState().activeTabId;
   if (next) await useAppStore.getState().openThread(next);

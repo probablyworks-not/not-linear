@@ -1,7 +1,7 @@
 /* global parent, document, window, Event, DOMParser, requestAnimationFrame, cancelAnimationFrame */
 /** Incremental inert preview: authored scripts execute only in the settled answer. */
 export function installHtmlStreaming() {
-  let pending = '', frame = 0, stopped = false;
+  let pending = '', frame = 0, stopped = false, ready = false;
   function reconcile(target, source) {
     const wanted = [...source.childNodes];
     for (let i = 0; i < wanted.length; i++) {
@@ -40,8 +40,19 @@ export function installHtmlStreaming() {
     reconcile(document.head, parsed.head);
     reconcile(document.body, parsed.body);
     window.dispatchEvent(new Event('nl-stream-update'));
+    const content = parsed.body.cloneNode(true);
+    content.querySelectorAll('style,template').forEach(el => el.remove());
+    if (content.textContent.trim() || content.querySelector('img,svg,canvas,video,hr')) {
+      ready = true;
+      parent.postMessage({ __nlHtmlPart: true, type: 'stream-ready' }, '*');
+    }
   }
-  function schedule() { if (!frame && !stopped) frame = requestAnimationFrame(apply); }
+  function schedule() {
+    if (stopped || frame) return;
+    // Hidden iframes may suspend animation frames. Deliver the first content/ready
+    // handshake immediately so the parent can reveal this preview.
+    if (!ready) apply(); else frame = requestAnimationFrame(apply);
+  }
   window.addEventListener('message', e => {
     if (e.source === parent && e.data?.__nlHtmlCommand === 'stream' && typeof e.data.html === 'string') { pending = e.data.html; schedule(); }
   });

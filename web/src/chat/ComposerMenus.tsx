@@ -7,6 +7,7 @@ import { useUiStore } from '../state/ui-store';
 import { toast } from '../ui/toast';
 import { ESC_PRIORITY, useEscLayer } from '../lib/keyboard';
 import { MODELS } from '../settings/options';
+import { subscriptionOperation } from '../providers/subscription';
 import { getMode, getModes } from '../settings/modes';
 import { ModeIcon } from '../settings/ModeIcon';
 import { useBranchStore } from '../branch/branch-store';
@@ -66,6 +67,8 @@ export function FloatingMenu({ anchor, label, onClose, escId, escPriority, child
 
 /** `branchId` null edits the main composer's model; a branch id edits that branch's. */
 export function ModelMenu({ anchor, branchId, onClose }: { anchor: HTMLElement; branchId: string | null; onClose(): void }) {
+  const [subscriptionModels,setSubscriptionModels] = useState<{id:string;label:string;blurb:string}[]>([]);
+  useEffect(() => { let active=true; void (async()=>{ try { const status=await subscriptionOperation('status'); const options=[]; for(const provider of ['claude','chatgpt'] as const) if(status[provider]) for(const m of await subscriptionOperation('models',provider)) options.push({id:`sub:${provider}:${m.id}`,label:m.label,blurb:`${provider} subscription`}); if(active)setSubscriptionModels(options); }catch{/* disconnected */} })(); return()=>{active=false;}; },[]);
   const prefs = useAppStore(s => s.prefs);
   const setPref = useAppStore(s => s.setPref);
   const branch = useBranchStore(s => (branchId ? s.open[branchId] : undefined));
@@ -87,7 +90,7 @@ export function ModelMenu({ anchor, branchId, onClose }: { anchor: HTMLElement; 
 
   return (
     <FloatingMenu anchor={anchor} label="Select model" onClose={onClose} escId="modelMenu" escPriority={ESC_PRIORITY.modelMenu}>
-      {MODELS.map(m => (
+      {[...subscriptionModels,...MODELS].map(m => (
         <button key={m.id} type="button" role="menuitem" data-model={m.id} className={clsx(MENU_ITEM, m.id === current && 'bg-accent-soft')} onClick={() => choose(m.id)}>
           <ModelIcon id={m.id} />
           <span className="flex-1">{m.label}<span className="block text-xs text-text-3">{m.blurb}</span></span>
@@ -143,7 +146,7 @@ export function ModelChip({ branchId, className }: { branchId: string | null; cl
   const prefs = useAppStore(s => s.prefs);
   const branch = useBranchStore(s => (branchId ? s.open[branchId] : undefined));
   const id = branchId ? branchModelPref(branch, prefs.model) : (prefs.model || 'sonnet');
-  const label = (MODELS.find(m => m.id === id) ?? MODELS.find(m => m.id === 'sonnet')!).label;
+  const label = id.startsWith('sub:') ? id.split(':').slice(2).join(':') + ' · subscription' : (MODELS.find(m => m.id === id) ?? MODELS.find(m => m.id === 'sonnet')!).label;
   return <ChipMenu className={className} title="Select model" icon={<Sparkles size={14} />} label={label} labelClass="model-label" menu={(anchor, close) => <ModelMenu anchor={anchor} branchId={branchId} onClose={close} />} />;
 }
 

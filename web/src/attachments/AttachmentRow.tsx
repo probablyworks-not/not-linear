@@ -23,10 +23,10 @@ export function AttachmentRow({ files, onRemove, onPreview }: {
           <span
             key={`${f.name}-${i}`} data-testid="file-chip"
             onClick={src && onPreview ? e => { if (!(e.target as HTMLElement).closest('button')) onPreview(src, f.name); } : undefined}
-            className={`inline-flex max-w-[160px] items-center gap-[5px] rounded-[5px] border border-rule-2 bg-bg-2 py-[3px] pl-[7px] pr-1.5 text-xs text-text-2${src ? ' cursor-pointer' : ''}`}
+            className={`inline-flex ${src ? 'w-[144px] flex-wrap' : 'max-w-[160px]'} items-center gap-[5px] rounded-[5px] border border-rule-2 bg-bg-2 py-[3px] pl-[7px] pr-1.5 text-xs text-text-2${src ? ' cursor-pointer' : ''}`}
           >
             {f.kind === 'branch' ? <GitBranch size={12} aria-hidden className="flex-none text-text-3" />
-              : src ? <img src={src} alt="" className="h-4 w-4 flex-none rounded-[2px] object-cover" />
+              : src ? <img src={src} alt={f.name} className="h-24 w-full flex-none rounded-[2px] object-contain" />
               : <Icon size={12} aria-hidden className="flex-none text-text-3" />}
             <span className="min-w-0 flex-1 truncate" title={f.kind === 'branch' ? (f.quote || f.name) : f.name}>{base}</span>
             <span className="ml-0.5 flex-none text-xs text-text-3">

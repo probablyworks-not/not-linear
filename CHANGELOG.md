@@ -129,3 +129,201 @@ Assistant and Canvas markdown use readable system-font body text, distinct headi
 - Behavior changes: Reading View now uses the same live renderer as cards, including progressive HTML and the diagonal pending shimmer before the first token. Inspector colors use the existing document palette. Existing source documents, saved schemas and database versions are unchanged.
 - Verification: Reading View missing-shimmer regression reproduced before the fix. Final automated and desktop results are recorded in feature-canvas/RELIABILITY.md. Refreshed the stale bundled changelog and updated the stress harness to the current authored-color policy.
 - Observed: Physical trackpad/pinch, microphone permission/capture and real-provider fallback cannot be certified by mocked browser tests. Agents remain excluded.
+
+
+## 2026-10-29 · Codex · Fix the Canvas slash skills list being clipped
+- Files changed: `web/src/skills/SkillPicker.tsx`, `web/src/canvas/view/InkComposer.tsx`, `web/tests/e2e/web-canvas.spec.ts`, `BUGS.md`, `FEATURES.md`, `docs/DESIGN.md`, `docs/project-notes/{TASKS,RUNS,CHANGES,DECISIONS}.md`.
+- Behavior changes: Canvas `/` and `/skills` show a clickable, scrollable skill list outside the composer, clamped to the window and repositioned on resize/scroll. Multi-selection and per-message skill injection retain their existing behavior.
+
+
+## 2026-10-29 · Codex · Restore Canvas header and navigation controls
+- Files changed: `web/src/canvas/view/CanvasWorkspace.tsx`, `web/src/shell/{AppShell,TabStrip}.tsx`, Canvas browser regression, generated changelog fallback; FEATURES, DESIGN, BUGS and project memory.
+- Behavior changes: click the Canvas title to rename (Enter/blur saves, Escape cancels, empty names retain the title); click its icon for the shared Mind Garden picker. Canvas breadcrumbs remain above the header and show workspace/project/Canvas rather than the last chat. Top-edge tabs can reveal above Canvas; loaded Canvas titles appear immediately after reload. Both spatial and Read headers share the controls. Existing persisted fields and database versions retained.
+- Verification: targeted automated results recorded in RUNS.md. Full native/provider smoke remains pending. Existing local composer/skill-picker/Vite/test edits preserved.
+
+## 2026-10-29 · Codex · Keep Canvas sidebar toggle reachable beneath revealed tabs
+- Files changed: AppShell.tsx, Canvas browser regression, bundled changelog and private project/design/feature records.
+- Behavior changes: revealing Canvas tabs expands an in-flow row, moving breadcrumbs, the left-panel button and Canvas header down together. Hiding tabs releases the space with a 150ms transition. Existing chat/Notes reveal behavior retained.
+- Verification: targeted browser regression checks breadcrumb/button bounds and clicks the sidebar toggle in Canvas and Read mode; results in RUNS.md.
+
+## 2026-10-29 · Codex · Keep chat readable when opening a generated note
+
+- Files changed: `web/src/chat/ChatView.tsx`, `web/src/notes/{NotePane.tsx,pane-width.ts}`, note width/browser tests, generated changelog fallback, `BUGS.md`, `FEATURES.md`, project memory.
+- Behavior changes: notes use an overlay while a chat branch is open, or when the sidebar leaves insufficient room for a 340px note plus a 360px chat. Otherwise the existing resizable side pane remains. Overlay controls stay above branch panels; closing returns to the existing chat and branch. Saved note widths and database shapes are unchanged.
+
+
+### 2026-10-30 · Codex · Pearl atmosphere for the desktop canvas
+- Files changed: `web/src/styles/canvas.css`, `web/src/canvas/view/CanvasWorkspace.tsx`, `web/src/assets/canvas-pearl.png`, `FEATURES.md`, `docs/DESIGN.md`, `docs/project-notes/{TASKS,CHANGES,RUNS}.md`.
+- Behavior changes: approved Pearl paper texture softly animates behind the canvas, matching the design preview (30% opacity, 8px blur, 40-second drift). Reduce Motion disables movement. Cards, graph layout, input targets and Read mode are unchanged.
+
+
+## 2026-10-30 · Codex · Canvas image paste, previews and visual questions
+- Files changed: canvas workspace/renderer/context/run, shared attachment row and user-content builder, OpenAI-compatible adapter, image regression tests, project records.
+- Behavior changes: pasted images show readable composer previews; the canvas stacks image previews in paste order with click-to-enlarge. Paste on the canvas attaches to the current question. Images persist through existing inline assets and remain available in follow-up/ancestor context. OpenAI and Gemini receive native image_url blocks; DeepSeek retains text-only handling.
+- Existing attachments without asset bytes still show their filename; they must be reattached for visual questions. No persistence schema or database version changes.
+- Verification: 851 unit tests, all 30 Canvas browser checks, 13 design captures, typecheck/lint and production build passed. Provider requests are mocked; live vision/native smoke remains pending.
+
+
+## 2026-10-30 · Codex · Start saved Canvas branches collapsed and remove card dimensions
+- Files changed: `web/src/canvas/view/{CanvasWorkspace,ThreadNode}.tsx`, Canvas browser regression, bundled changelog, feature/design records and project memory.
+- Behavior changes: reopening a canvas starts saved branches and synthesis cards collapsed. Click the card or plus control to expand it; newly created branches still open while other branches collapse. Card headers no longer show width × height. Root cards remain open. Saved messages, schema and expanded geometry are unchanged.
+- Verification: see `docs/project-notes/RUNS.md`; native/provider smoke remains pending.
+
+
+## 2026-10-31 · Codex · Independent Canvas questions while another response generates
+- Files changed: `web/src/canvas/{exec/live-runs.ts,view/CanvasWorkspace.tsx}`, Canvas unit/browser tests, bundled changelog and project/product records.
+- Behavior changes: sending a new question or branching from another selected source stays available during generation. Busy, status and Stop belong to the selected canvas/thread; completing or stopping one turn cannot clear or cancel another. Runtime ownership survives workspace remounts; saved document/database shapes are unchanged.
+- Verification: the held-request browser reproduction failed against the old production bundle and passed after rebuilding. Typecheck, lint and all 853 unit tests passed; broader Canvas browser results are recorded in RUNS.md. Provider traffic was mocked.
+- Context: the initial fix in an older legacy-frontend worktree did not affect the desktop app. This change targets the React Canvas actually served from the Downloads checkout.
+
+## 2026-10-31 · Codex · Canvas hierarchy in the desktop app
+- Files changed: `web/src/canvas/view/{CanvasWorkspace,CanvasHierarchy}.tsx`, `web/src/canvas/view/hierarchy.ts`, hierarchy unit and Canvas browser tests, generated changelog fallback, FEATURES, DESIGN and project memory.
+- Behavior changes: spatial Canvas shows a right-side hierarchy by default, with main threads, nested branches, message counts and synthesis source links. Collapse subtrees, locate/expand a card, read a thread, or hide/show the rail from the header. Hierarchy collapse is session-only and separate from card collapse. Existing saved content, schema and geometry remain unchanged.
+- Verification: 855 unit tests, typecheck and lint passed; production/browser results are recorded in RUNS.md. Live provider/native smoke remains pending.
+- Observed: the existing HTML-width browser check failed once (640px versus expected 880px), then passed isolated on both the hierarchy build and a temporary build with the hierarchy removed. No unrelated sizing change was made.
+
+
+## 2026-10-31 · Codex · Keep Canvas branches beside their highlighted passage
+- Files changed: web/src/canvas/domain/commands.ts, web/src/canvas/view/{CanvasWorkspace.tsx,section-layout.ts}, web/tests/canvas/{commands,section-layout}.test.ts, web/tests/e2e/web-canvas.spec.ts; generated changelog fallback and product/project records.
+- Behavior changes: new Canvas branches keep the selected passage's vertical position even when another card occupies the spot. Newer cards render in front; selecting an older card brings it forward. Expanding HTML reports no longer push source-anchored branches away. Unrelated root questions retain their existing below-all placement; synthesis collision behavior is unchanged.
+- Observed: desktop checkout already contains unrelated uncommitted changes; they were preserved. Full live-provider/native-dialog smoke is not claimed.
+
+## 2026-10-31 · Codex · Make Canvas branches easier to recognize
+- Files changed: `web/src/canvas/view/{CanvasHierarchy.tsx,hierarchy.ts}`, Canvas browser regression, generated changelog fallback, FEATURES, DESIGN and project memory.
+- Behavior changes: hierarchy width increases from 300px to 440px (capped at 55% of the workspace). Its transparent surface shares the Canvas Pearl background. Each row pairs the original source quote in its saved highlight color with the first question you wrote, shortened to twelve words and ellipsized to fit; hover reveals full text. Empty/missing source data falls back to the existing title. Synthesis shows all recorded source highlights.
+- Navigation, saved content, geometry and persistence shapes remain unchanged. Verification results in RUNS.md.
+
+
+## 2026-10-31 · Codex · Keep the Canvas source parent open when branching
+- Files changed: web/src/canvas/view/CanvasWorkspace.tsx, web/tests/e2e/web-canvas.spec.ts; generated changelog fallback and product/design/project records.
+- Behavior changes: new child branches keep their immediate parent expanded, with the main thread open and other branches collapsed. The camera frames the source parent with a preview of the child to its right and does not follow the child's growing reply. Saved collapse-on-reopen behavior and branch geometry/content remain unchanged.
+- Observed: existing desktop checkout edits preserved. Real-provider/native-dialog smoke remains pending.
+
+## 2026-10-31 · Codex · Keep Canvas hierarchy closed until requested
+- Files changed: `web/src/canvas/view/CanvasWorkspace.tsx`, Canvas browser regressions, bundled changelog, BUGS, FEATURES, DESIGN and project memory.
+- Behavior changes: Canvas hierarchy starts closed on opening/reopening a Canvas and after reload. Click Hierarchy to open it; the header button or X closes it. No stored preference or schema changes.
+- Verification: regression reproduced the auto-open before the fix; final checks recorded in RUNS.md.
+
+
+## 2026-10-31 · Codex · Keep HTML reports expanded during section selection
+- Files changed: `web/src/canvas/view/{html-pagination.js,html-bridge.ts}`, `web/tests/e2e/html-reading-stability.spec.ts`, generated changelog fallback, BUGS, FEATURES, DESIGN and project memory.
+- Fixed the viewer's fixed-position selection breadcrumb being mistaken for unsupported report content, which collapsed a complete report into a 640px scrolling fallback. Inspector controls and their descendants no longer contribute to report measurements.
+- Behavior changes: selecting HTML sections preserves full report height; vertically scrollable HTML retains ordinary vertical gestures at its boundaries instead of handing them to Canvas. Pinch zoom and navigation across fully expanded, non-scrolling reports remain available. Genuine unsupported layouts retain their existing bounded fallback. Saved source, highlights, branch state and schemas are unchanged.
+- Verification: both new Chromium regressions failed before the fix and passed afterward; broader checks recorded in RUNS.md. Live-provider/native-dialog smoke remains pending.
+- Observed (HTML reader verification): the existing branch-reopen browser test waits for a closed hierarchy and fails with both the fixed and original reader. An existing HTML-width timing check hit 640px versus 880px once, then passed isolated; the initial highlight/reload check also passed on isolated rerun and original-reader comparison. These unrelated paths were not changed.
+
+## 2026-10-31 · Codex · Canvas branch notifications and current architecture skill routing
+
+- Files changed: `web/src/canvas/notifications.ts`, `web/src/canvas/view/{CanvasNotifications,CanvasWorkspace}.tsx`, `web/src/styles/canvas.css`, Canvas notification unit/browser tests, `skills/` maintenance guidance; local agent routing and project memory updated.
+- Behavior changes: Canvas and reading-view headers now offer a notification bell with unread count, All/Unread history, and Mark all read. Completed and failed/unknown replies show a dismissible 6.5-second activity card. Notification clicks expand and frame the originating thread and close reader/detail/context overlays. Cancelled runs remain quiet. History is bounded to 100 session events across canvases, filtered to the current Canvas, and clears on reload; no saved schema changes.
+- Mind Garden glyphs and existing theme tokens style the notification surfaces. Raw provider errors and generated response bodies are excluded from activity records.
+- Maintenance skills now route current Canvas work to `skills/canvas-branch-system/SKILL.md`, distinguish React chat branches, and label old vanilla-JS guidance as historical.
+- Verification: typecheck, targeted lint, 63 unit tests, production build, notification Chromium test and visual inspection passed. Native desktop/provider checks were not run.
+
+## 2026-10-31 · Codex · Focus the branch linked to a clicked highlight
+- Files changed: `frontend/app.js`, `FEATURES.md`, `BUGS.md`, `CHANGELOG.md`, `docs/project-notes/{TASKS,RUNS,CHANGES}.md`.
+- Behavior changes: Clicking an existing branch highlight in the document or any nested branch opens/focuses its linked branch and closes all other panels, including ancestors. Closed panels retain their snapshots. Creating a new child branch still uses the existing stacked layout.
+
+
+
+## 2026-10-31 · Codex · Sketch on the desktop Canvas branch [SCHEMA]
+
+- Added independent X6 Sketch documents to the current React desktop app: Canvas header Sketch CTA, new-tab Sketch CTA, Sketches sidebar library, per-document tabs, structured flow editing and adjacent Ask/Edit chat.
+- Behavior changes: Ask is read-only and the default; Edit validates atomic revision-bound operations with undo, preserving human node positions. Text supports system dictation with explicit submission. Sketch uses existing model settings and runTurn provider/fallback infrastructure, without changing Canvas threads, geometry, reports or notifications. X6 2.18.1 is pinned and served locally.
+- Schema / migration: Adds the separate `notlinear-sketch` v1 database (`documents:'id'`) with versioned graph/layout/chat documents. Initial creation is the migration for existing users; no changes to existing chat, Notes or Canvas database schemas. Existing `nl_tabs_v1` shape gains `sketch:<id>` identifiers and a Sketches singleton. Future Sketch format versions require an explicit migration.
+- Files changed: `web/src/sketch/*`, `web/public/vendor/x6-2.18.1/*`, Sketch routing/labels in `web/src/{state/tabs,shell/{AppShell,TabStrip,Sidebar}}`, additive CTA in `web/src/canvas/view/CanvasWorkspace.tsx`, Sketch tests, generated changelog fallback, feature/design/license and project memory docs.
+- Verification: production build and typecheck passed; 867 unit tests passed; native Sketch Playwright test passed against the built app (Canvas CTA, real X6 connections/dragging/labels, Ask/Edit safety, invalid/stale/canceled changes, undo/redo, multiple documents and reload). Native dictation and live-provider smoke remain pending.
+- Observed: This desktop branch has advanced to React/TypeScript/Vite; the feature was ported to `web/` rather than copying the older worktree's vanilla frontend over it. All preexisting uncommitted work was preserved.
+
+
+## 2026-10-31 · Codex · Preserve whole HTML component questions
+- Summary: The blue-bordered HTML component remains the source when clicking Ask about this, including multi-column layouts.
+- Files changed: `web/src/canvas/view/html-bridge.ts`, `web/tests/e2e/{html-component-selection,web-canvas}.spec.ts`, generated changelog fallback, `FEATURES.md`, `BUGS.md`, project memory.
+- Behavior changes: Native double-click and focus-selection events no longer replace or clear an inspected component. Deliberately dragging text switches back to passage selection.
+- Verification: isolated Chromium regression failed before the fix and passed after; 11 selection/bridge unit checks passed. Desktop build and integration checks pending.
+
+- Verification update: 6 targeted Chromium checks passed (whole component through composer/branch/reload, intentional text-drag handoff, HTML drill-down, image selection, pagination and wheel ownership); 11 selection unit checks, TypeScript, targeted lint and production build passed. Full native/provider smoke is not claimed. Reopen the desktop window to load the rebuilt assets.
+
+
+## 2026-10-31 · Codex · Keep HTML layouts intact when branching
+- Summary: Branch highlights no longer insert elements into rendered HTML tables or charts; blue, pink and other source tints are subtler.
+- Files changed: `web/src/canvas/view/{html-bridge.ts,html-reading.js}`, `web/tests/e2e/html-highlight-layout.spec.ts`, generated changelog fallback, product/bug/project records.
+- Behavior changes: HTML source highlights paint DOM ranges through CSS Highlights at 35% of the existing theme tint, preserving authored foreground colors and layout. Anchor geometry still uses the same source IDs. Browsers without CSS Highlights retain source anchoring without a visual tint rather than mutate the report.
+- Verification: table/grid regression failed before the fix (changed column widths and grid height) and passed afterward; final desktop build/regression checks pending.
+
+- Verification update: 8 targeted Chromium checks passed, including unchanged table geometry after real branch creation/reload, exact table/grid DOM and authored colors across blue/pink/removal, plus prior selection/pagination/scroll regressions. 11 units, TypeScript, targeted lint, patch checks and production build passed. Open native windows must reload rebuilt assets; full native/provider smoke was not run.
+
+
+## 2026-10-31 · Codex · Correct Sketch to create inside Canvas (bug 087) [SCHEMA]
+
+- Summary: Canvas Sketch now creates an editable, draggable/resizable card on the same Canvas. Corrected the earlier interpretation of independent storage as separate navigation. Saved Sketches remain available; library documents can be added to the current Canvas.
+- Behavior changes: Empty/lone-Start flows default to Create/Edit; existing flows keep Ask read-only. Added reference-image upload, paste and drop with native vision payloads and saved previews. First generation uses graph-layer layout; right-angle connectors and outward retries avoid unrelated node bodies. Long diagrams start readable instead of shrinking to thumbnails; Fit provides the overview. Arrange is explicit for existing diagrams. AI edits retain manual positions and remain atomic, revision-bound, cancelable and undoable. Sketch events/geometry are isolated from Canvas thread, HTML and branch interactions.
+- Schema/migration: `notlinear-sketch` v1→v2 preserves all document rows, initializes message image lists, and adds `placements:'id,canvasId'`. No existing chat/Notes/Canvas database or snapshot changes. Card removal deletes only placement, keeping the independent document.
+- Files changed: `web/src/sketch/*`, additive Sketch node/CTA integration in `web/src/canvas/view/CanvasWorkspace.tsx`, Sketch units/browser regressions, generated changelog fallback, BUGS/FEATURES/README/design and project-memory Markdown.
+- Verification: 873 unit tests; 24 distinct Chromium scenarios across Sketch, Canvas, shell and HTML selection/layout; typecheck/lint/build passed. Real image-model comprehension, native dictation and full native-dialog smoke remain unverified.
+
+
+## 2026-10-31 · Codex · Fix nested answer lists in desktop app
+- Files changed: web/src/lib/markdown.ts, web/src/styles/chat.css, frontend/core/markdown.js, frontend/styles/chat.css, web/tests/lib/nested-lists.test.ts, web/tests/canvas/structure-reply.test.ts, and project memory docs.
+- Behavior changes: Mixed nested lists retain indentation; blank lines no longer reset numbering; numbered items before labels remain semantic list items. Wrapped item text stays attached. Both React and classic renderers updated. Canvas section-navigation badges are unchanged.
+
+
+## 2026-10-31 · Codex · Make HTML generation visibly progress
+
+- Summary: Replace the faint empty loading box with theme-aware skeleton lines and a visible sweep; reveal the live HTML frame only after its first completed content block.
+- Files changed: `web/src/canvas/view/{LiveReply.tsx,PartView.tsx,html-stream.js}`, `web/src/styles/canvas.css`, `web/tests/e2e/web-canvas.spec.ts`, changelog/fallback and project memory.
+- Behavior changes: No blank iframe strip before content. A compact skeleton says “Preparing your HTML document…” then “Writing the next section…”. Reduced Motion keeps static skeleton lines. Completed content stays still.
+
+
+## 2026-10-31 · Codex · Render Canvas HTML as one complete document
+- Files changed: `web/src/canvas/view/{html-pagination.js,PartView.tsx}`, HTML reading/browser regressions, generated changelog fallback, BUGS, FEATURES, DESIGN and project memory.
+- Behavior changes: Canvas HTML renders at its complete natural height instead of being split into artificial 640px pages. Sticky/fixed navigation, positioned annotations and external stylesheets no longer trigger a clipped 640px fallback. Expanding details, images, fonts and streamed content remeasure the same live document. Existing selection, authored tables/charts, nested widget scrollers and pinch behavior remain supported. The existing 100,000px safety limit remains explicit; saved HTML and database schemas are unchanged.
+- Why the previous fix was incomplete: bug 084 excluded the viewer inspector but retained pagination's rejection of authored positioned content. This report hit that different fallback path. The new sticky-navigation reproduction failed against the previous fix (640px) and passes with continuous measurement.
+- Verification: 20 Chromium HTML/reading/selection/branching checks pass, including real wheel access to the final section after selection. All 875 unit tests, typecheck, lint and production build pass. After unlocking/restarting the saved desktop session, the exact report loads without fallback and section selection stays expanded. Native scroll injection failed in the computer controller (noWindowsAvailable); real wheel checks pass in Chromium. No live-provider smoke claimed.
+
+
+## 2026-11-01 · Codex · Sketch inherits Canvas project knowledge (bug 091)
+- Summary: Sketch can now use files and repository context already attached to its project, with the same configured research and linked-folder tools as Canvas.
+- Behavior changes: Both Ask and Edit inherit owning-project rules/uploads, Canvas memory/files and linked-folder evidence. Actual read/list-file tools are available, scoped to the captured owning project. Project identity and retrieval/tool status appear in chat. Standalone library documents use a unique association; ambiguous associations require opening the intended Canvas instead of guessing from the active tab. Existing graph mutation/revision, vision and cancellation rules remain.
+- Files changed: Sketch context/AI/view/node/prompt modules, Sketch tests, generated changelog fallback, relevant product/design/project Markdown.
+- Verification: 881 unit tests and four Sketch browser scenarios passed, including actual tool dispatch against mocked project-file endpoints in Create and Ask. Lint/typecheck/build passed. No real paid model calls, storage migrations or endpoint changes.
+
+
+## 2026-11-02 · Codex · Fix equations in the active desktop Canvas renderer
+- Files changed: `web/src/lib/markdown.ts`, `web/src/styles/chat.css`, `web/tests/lib/math.test.ts`, `BUGS.md`, `FEATURES.md`, project memory docs.
+- Behavior changes: assistant `\[...\]`, `$$...$$` and `\(...\)` math now typesets using the already-installed KaTeX package. Code stays literal and wide equations scroll. Reload rerenders existing saved Canvas text; regeneration is unnecessary for Canvas replies.
+- Deployment: active desktop process serves `/Users/yash/Downloads/notlinear` (`canvas/tesing-codex`), not the detached `f7dc` worktree where the earlier legacy-only fix was made. Built production assets in the actual desktop checkout.
+- Verification: 38 targeted tests passed, TypeScript + Vite production build passed, isolated Chrome against the running desktop server at :8765 rendered the screenshot pricing equation and retained correct rendering after reload. Live provider and full desktop smoke pending.
+
+
+## 2026-11-04 · Codex · Amber annotations in the active desktop chat [SCHEMA]
+- Summary: Ported hold-H freehand annotations from the isolated legacy worktree into the React app served by Desktop on `canvas/tesing-codex`.
+- Files changed: `web/src/annotations/`, `web/src/db/annotations-repo.ts`, `web/src/styles/{annotations,tokens}.css`, `web/src/main.tsx`, chat/branch deletion actions, annotation tests, changelog fallback and project documentation.
+- Behavior changes: chat replies and branch bodies have an amber drawing toggle, Undo and confirmed Clear. Hold H outside editors and click-drag, then release; Escape, blur and navigation end drawing. The toolbar follows the chat column and stays below sidebar/drawer chrome. Notes and the spatial Canvas workspace are outside this version's scope.
+- Persistence: additive `annotations:v1:<encoded-chat>:<encoded-branch>` kv records; existing chats default to empty marks. Existing state rows, database versions and Notes storage are unchanged. Marks stay outside conversation HTML, snapshots and model input. Edited/missing text anchors hide marks; reflow scales strokes with their original block.
+- Verification: production build, TypeScript, focused lint, 10 persistence/schema tests and 29 annotation/branch browser checks passed. Initial branch tests exposed toolbar overlap (#093), corrected and reverified. Browser tests use isolated :8766 and mocked model calls; physical trackpad and full paid-provider smoke remain human checks.
+- Deployment: rebuilt `web/dist` in `/Users/yash/Downloads/notlinear`; the existing :8765 desktop server serves this build. Reload/reopen Notlinear to load it. Existing local changes were preserved; no commit, branch switch or merge was made.
+
+2026-11-04 · Codex · Keep older Canvas threads visible when located · Files: web/src/canvas/view/CanvasWorkspace.tsx, web/tests/e2e/web-canvas.spec.ts, BUGS.md, FEATURES.md, docs/DESIGN.md, docs/project-notes/{TASKS,CHANGES,RUNS}.md.
+Behavior changes: locate waits for expanded card layout, frames its heading and fits card width; Hierarchy stays open for list selections. Reading/search/notification jumps share framing. Stored content and card geometry are unchanged.
+
+## 2026-11-05 · Codex · Subscription test integration
+- Added optional subscription connections and dynamically loaded provider model catalogs, plus streaming subscription calls for chat, branches, Notes and canvas. Files: backend/app, backend/agent_runtime, backend/subscriptions.py, web/src/settings, web/src/providers, web/src/chat, web/src/branch, web/src/notes.
+- Behavior changes: Subscription model choices use account catalogs and subscription usage is labeled separately. This is an isolated test build; full feature verification remains pending.
+
+## 2026-11-05 · Codex · Explicit Claude connection
+- Connect Claude now launches Claude Code's official sign-in even when a Claude Code session already exists. Files: backend/agent_runtime/worker.py.
+- Behavior changes: Connecting Claude requests authentication rather than automatically adopting the existing login. Live sign-in verification pending.
+
+## 2026-11-05 · Codex · Simplify model settings and document subscription plan
+- Removed the Settings default-model grid and replaced provider initials with local brand marks or generic integration icons. Documented subscription setup, current verification and follow-up plan. Files: web/src/settings/tabs/ModelsTab.tsx, web/public/provider-logos/, README.md, FEATURES.md, plan.md.
+- Behavior changes: Model choice remains in the composer; Settings no longer offers the default-model grid. Existing saved model preferences are preserved.
+- Observed: Official marks for Serper are not included in the bundled Simple Icons set; generic icons are used pending licensed brand assets.
+
+## 2026-11-05 · Codex · Subscription provider cards
+- Display Claude and ChatGPT subscriptions as branded cards above the model and tool provider sections. Files: web/src/settings/tabs/SubscriptionConnections.tsx, web/public/provider-logos/claude-color.svg.
+- Behavior changes: Connection status and reconnect actions are shown per subscription provider.
+
+## 2026-11-05 · Codex · Align subscription actions
+- Moved Claude and ChatGPT connection actions to the right side of their cards. File: web/src/settings/tabs/SubscriptionConnections.tsx.
+- Behavior changes: Subscription card layout is more compact; connection behavior is unchanged.
