@@ -1135,6 +1135,7 @@ export function CanvasWorkspace({ canvasId }: { canvasId: string }) {
   }
   return (
     <main data-testid="canvas-workspace" data-canvas={canvasId} className="flex min-h-0 flex-1 flex-col bg-cv-ground">
+      <div data-testid="canvas-annotation-controls" className="flex-none border-b border-cv-divider px-3 py-1" />
       <ReactFlowProvider>
         <Workspace canvasId={canvasId} />
       </ReactFlowProvider>

@@ -327,3 +327,15 @@ Behavior changes: locate waits for expanded card layout, frames its heading and 
 ## 2026-11-05 · Codex · Align subscription actions
 - Moved Claude and ChatGPT connection actions to the right side of their cards. File: web/src/settings/tabs/SubscriptionConnections.tsx.
 - Behavior changes: Subscription card layout is more compact; connection behavior is unchanged.
+
+
+## 2026-11-06 · Codex · Amber annotations on the desktop Canvas [SCHEMA]
+- Summary: fixed #95: the annotation feature was gated to legacy-style chats and invisible on the Canvas workspace the user actually reads.
+- Files changed: `web/src/annotations/`, `web/src/db/annotations-repo.ts`, `web/src/canvas/canvas-repo.ts`, CanvasWorkspace/OutputDetailView, annotation styles, Canvas annotation tests, release/feature/design/project docs and changelog fallback.
+- Behavior changes: Canvas now has a visible Amber marker · H / Undo / Clear row. Hold H outside editors and click-drag, or toggle the marker. Freehand marks stay with their reply through card zoom/pan, Read mode, full-reply reading and reload. Full-reply readers have their own reachable control host; drawing does not pan or drag a card. Notes and generated-HTML iframe internals are outside this change.
+- Persistence: additive `canvas_annotations_v1:<encoded-canvas>:<encoded-thread>` rows in the existing `notlinear-canvas` kv store. Missing rows read as empty. Optional stroke width scales with its block; old strokes without width keep the existing CSS width. No database version, CanvasDoc shape, source snapshot, model context or layout migration/rewrite. Canvas/thread deletion removes marks; late saves cannot resurrect a deleted thread.
+- Verification: 30 unit/storage/schema tests, held-H Canvas/chat browser checks, seven existing Canvas selection/branch/reading/zoom/isolation/idle checks, TypeScript, focused ESLint and production build passed. Native trackpad/live providers are not claimed tested. Final desktop build served from the active Downloads checkout; reload/reopen to load it.
+
+## 2026-11-07 · Codex · Claude research limits and errors
+- Raised the Claude research turn limit from 6 to 20 and report recognized provider failure categories without exposing provider error text. Files: `backend/agent_runtime/worker.py`, `backend/agent_runtime/test_subscription.py`.
+- Behavior changes: Longer research tasks can use more steps; partial output remains visible if a request still fails.

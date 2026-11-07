@@ -9,3 +9,7 @@
 .annotation-surface{color:var(--text-3);padding:0 4px}
 
 body:has(.annotation-drawing) [data-chat-stream],body:has(.annotation-drawing) [data-chat-stream] > .chat-stream,body:has(.annotation-drawing) .branch-stack .branch-body{cursor:crosshair;user-select:none;-webkit-user-select:none}
+
+/* Canvas supplies a dedicated row: controls never cover the reading text or sidebar. */
+.annotation-toolbar.annotation-inline{position:static;width:fit-content;max-width:100%;flex-wrap:wrap;border:0;box-shadow:none;background:transparent;padding:3px 0}
+body:has(.annotation-drawing) [data-testid="canvas-workspace"] [data-message]{cursor:crosshair;user-select:none;-webkit-user-select:none}

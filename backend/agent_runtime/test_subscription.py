@@ -58,9 +58,18 @@ class SDKTests(unittest.IsolatedAsyncioTestCase):
             options = await worker.claude_options()
             self.assertEqual(options.tools, ['WebSearch', 'WebFetch'])
             self.assertEqual(options.setting_sources, [])
+            self.assertEqual(options.max_turns, 20)
             self.assertTrue(options.strict_mcp_config)
             denied = await options.can_use_tool('Bash', {'command':'whoami'}, None)
             self.assertEqual(denied.behavior, 'deny')
+
+    async def test_claude_terminal_errors_are_specific_and_safe(self):
+        self.assertIn('step limit', worker.claude_error_message(SimpleNamespace(subtype='error_max_turns')))
+        self.assertIn('usage limit', worker.claude_error_message(SimpleNamespace(subtype='success', api_error_status=429)))
+        self.assertIn('reconnect', worker.claude_error_message(SimpleNamespace(subtype='success', api_error_status=401)))
+        message = worker.claude_error_message(SimpleNamespace(subtype='error_during_execution', result='secret prompt'))
+        self.assertNotIn('secret prompt', message)
+        self.assertIn('partial answer', message)
 
     async def test_real_agents_runner_with_subscription_wire_contract(self):
         from openai.types.responses import Response, ResponseCompletedEvent, ResponseTextDeltaEvent

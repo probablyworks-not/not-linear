@@ -55,7 +55,7 @@ async def claude_options(system='', model=None, research=True):
         allowed_tools=['WebSearch', 'WebFetch'] if research else [],
         can_use_tool=deny_other_tools, permission_mode='default',
         setting_sources=[], strict_mcp_config=True, mcp_servers={}, plugins=[],
-        include_partial_messages=True, max_turns=6,
+        include_partial_messages=True, max_turns=20,
         extra_args={'no-session-persistence': None},
     )
 
@@ -179,6 +179,21 @@ def claude_input(messages):
     return blocks
 
 
+def claude_error_message(message):
+    # Only expose known status codes, never arbitrary provider error text or inputs.
+    subtype = getattr(message, 'subtype', '')
+    status = getattr(message, 'api_error_status', None)
+    if subtype == 'error_max_turns' or getattr(message, 'terminal_reason', None) == 'max_turns':
+        return 'Claude reached the research step limit before completing this request. Your partial answer is retained; try a narrower question.'
+    if status == 429:
+        return 'Claude reached a rate or usage limit. Your partial answer is retained; try again later.'
+    if status in (401, 403):
+        return 'Claude authorization was rejected. Your partial answer is retained; reconnect Claude in Settings.'
+    if status in (500, 502, 503, 504, 529):
+        return 'Claude is temporarily unavailable. Your partial answer is retained; try again later.'
+    return 'Claude could not complete this subscription request. Your partial answer is retained; check your connection and try again.'
+
+
 async def run_claude(payload):
     from claude_agent_sdk import ClaudeSDKClient, AssistantMessage, ResultMessage, TextBlock
     from claude_agent_sdk.types import StreamEvent
@@ -214,7 +229,7 @@ async def run_claude(payload):
                 elif isinstance(message, ResultMessage):
                     terminal = True
                     if message.is_error:
-                        raise ValueError('Claude could not complete this subscription request. Check your plan, connection, or usage limit; partial output is retained.')
+                        raise ValueError(claude_error_message(message))
                     usage = message.usage or {}
                     emit('done', text=full or message.result or '', usage=dict(
                         provider='subscription:claude', model=payload['model'], billing='subscription',

@@ -39,6 +39,7 @@ export function OutputDetailView({ doc, messageId, onClose, onSaveOutput, onBloc
           className="flex flex-none items-center gap-1.5 rounded-md border border-rule-2 px-2.5 py-1.5 text-xs text-text-2 hover:bg-bg-3">
           <ArrowLeft size={14} aria-hidden /> Back to canvas
         </button>
+        <div data-testid="canvas-annotation-controls" className="flex-none" />
         <h2 className="m-0 min-w-0 flex-1 truncate text-sm font-medium text-text">{thread?.title ?? 'Reply'}</h2>
         <button type="button" onClick={() => onSaveOutput(messageId)} data-testid="output-detail-save"
           className="flex flex-none items-center gap-1.5 rounded-md border border-rule-2 px-2.5 py-1.5 text-xs text-text-2 hover:bg-bg-3">

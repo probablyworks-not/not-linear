@@ -5,7 +5,7 @@ import { useUiStore } from '../state/ui-store';
 const confirmDeleteItem = request => useUiStore.getState().askConfirm(request);
 
 // Overlays are body children: never serialized as chat HTML or sent to a model.
-export function initAnnotations({ getThreadId, isChat }){
+export function initAnnotations({ getThreadId, isChat, getCanvasBranchId = () => '' }){
   const NS = 'http://www.w3.org/2000/svg';
   const selector = 'p,li,h1,h2,h3,h4,h5,h6,pre,blockquote,.bub,.msg.ai';
   const layers = new Map();
@@ -20,15 +20,25 @@ export function initAnnotations({ getThreadId, isChat }){
   document.body.append(toolbar);
   const key = (tid, bid) => JSON.stringify([tid, bid]);
   const editable = el => el instanceof Element && !!el.closest('input,textarea,select,[contenteditable]:not([contenteditable="false"])');
-  const enabled = () => isChat() && !document.querySelector('[role="dialog"],[role="alertdialog"]') && (held || toggled);
+  const blockingDialog = () => [...document.querySelectorAll('[role="dialog"],[role="alertdialog"]')].some(el => !el.matches('[data-testid="canvas-output-detail"]'));
+  const enabled = () => isChat() && !blockingDialog() && (held || toggled);
+  const scope = root => root.dataset.message ? `message:${root.dataset.message}` : root.matches('.branch-body') ? 'branch' : 'chat-stream';
+  function surfaceRoots(){
+    if (!thread.startsWith('canvas:')) return [...document.querySelectorAll('[data-chat-stream] > .chat-stream,.branch-stack .branch-body')];
+    const detail = document.querySelector('[data-testid="canvas-output-detail"]');
+    if (detail) return [...detail.querySelectorAll('[data-message]')];
+    const reading = document.querySelector('[data-testid="canvas-reading"]');
+    if (reading) return [...document.querySelectorAll('[data-testid="canvas-reading"] [data-message],[data-testid="reading-branch"] [data-message]')];
+    return [...document.querySelectorAll('[data-testid="canvas-workspace"] .react-flow [data-message]')];
+  }
   const blocks = root => [...root.querySelectorAll(selector)].filter(el => !el.closest('button,.msg-actions,.working'));
   const signature = el => `${el.tagName}:${el.textContent}`;
   function anchorFor(el, root){
     const text = signature(el);
-    return { scope:(root.matches('.branch-body') ? 'branch' : 'chat-stream'), text, occurrence:blocks(root).filter(b => signature(b) === text).indexOf(el) };
+    return { scope:scope(root), text, occurrence:blocks(root).filter(b => signature(b) === text).indexOf(el) };
   }
   function resolve(anchor, root){
-    if (anchor.scope !== (root.matches('.branch-body') ? 'branch' : 'chat-stream')) return null;
+    if (anchor.scope !== scope(root)) return null;
     return blocks(root).filter(b => signature(b) === anchor.text)[anchor.occurrence];
   }
   function load(tid, bid){
@@ -84,17 +94,21 @@ export function initAnnotations({ getThreadId, isChat }){
     }
     const visible = isChat() && !document.querySelector('[data-testid="branch-canvas"]');
     if (!visible && (held || toggled || drawing)) stop();
-    toolbar.hidden = !visible || !!document.querySelector('[role="dialog"],[role="alertdialog"]');
+    toolbar.hidden = !visible || blockingDialog();
+    const canvasMode = thread.startsWith('canvas:');
+    const host = canvasMode && (document.querySelector('[data-testid="canvas-output-detail"] [data-testid="canvas-annotation-controls"]') || document.querySelector('[data-testid="canvas-workspace"] [data-testid="canvas-annotation-controls"]'));
+    if (toolbar.parentElement !== (host || document.body)) (host || document.body).append(toolbar);
+    toolbar.classList.toggle('annotation-inline', !!host);
     // Follow the chat column as the sidebar and branch drawer change its margins.
     // A screen-fixed left offset would cover the sidebar's Recent branches list.
     const column = document.querySelector('[data-chat-stream]')?.getBoundingClientRect();
     if (column) toolbar.style.left = `${Math.max(16, Math.min(innerWidth-toolbar.offsetWidth-16,column.left+16))}px`;
-    const roots = visible ? [...document.querySelectorAll('[data-chat-stream] > .chat-stream,.branch-stack .branch-body')] : [];
+    const roots = visible ? surfaceRoots() : [];
     layers.forEach((l, root) => { if (!roots.includes(root)){ if (drawing?.layer === l) finish(); resize.unobserve(root); l.svg.remove(); layers.delete(root); if (active === l) active = null; } });
     for (const root of roots){
-      const bid = root.closest('.branch')?.dataset.bid || '';
+      const bid = root.dataset.message ? getCanvasBranchId(root.dataset.message) : root.closest('.branch')?.dataset.bid || '';
       const l = layers.get(root) || addLayer(root,bid);
-      l.svg.style.zIndex = bid ? String(70 + Number(root.closest('.branch').style.zIndex || 0)) : '39';
+      l.svg.style.zIndex = canvasMode ? (root.closest('[data-testid="canvas-output-detail"]') ? '151' : '42') : bid ? String(70 + Number(root.closest('.branch').style.zIndex || 0)) : '39';
       const r = root.getBoundingClientRect();
       if (!root.getClientRects().length){ l.svg.style.display = 'none'; continue; }
       l.svg.style.display = '';
@@ -106,7 +120,7 @@ export function initAnnotations({ getThreadId, isChat }){
           const pr = parent.getBoundingClientRect(); top = Math.max(top,pr.top); bottom = Math.min(bottom,pr.bottom); left = Math.max(left,pr.left); right = Math.min(right,pr.right);
         }
       }
-      if (!bid){
+      if (!canvasMode && !bid){
         const header = document.querySelector('[data-testid="topbar"]')?.getBoundingClientRect();
         if (header) top = Math.max(top,header.bottom);
         const composer = document.querySelector('.composer-wrap')?.getBoundingClientRect();
@@ -122,18 +136,19 @@ export function initAnnotations({ getThreadId, isChat }){
         if (!block) continue;
         const b = block.getBoundingClientRect();
         const path = document.createElementNS(NS,'path');
+        if (stroke.width) path.style.strokeWidth = `${stroke.width*b.width}px`;
         path.setAttribute('d',stroke.points.map(([x,y],i) => `${i?'L':'M'}${b.left-left+x*b.width},${b.top-top+y*b.height}`).join(' ') + (stroke.points.length === 1 ? ' l0.01,0' : ''));
         l.svg.append(path);
       }
     }
     if (!active) active = layers.get(document.querySelector('[data-chat-stream] > .chat-stream')) || layers.values().next().value;
     toolbar.querySelector('[data-action="draw"]').setAttribute('aria-pressed',String(enabled()));
-    toolbar.querySelector('.annotation-surface').textContent = active?.bid ? 'Branch' : 'Chat';
+    toolbar.querySelector('.annotation-surface').textContent = canvasMode ? 'Canvas' : active?.bid ? 'Branch' : 'Chat';
     for (const name of ['undo','clear']) toolbar.querySelector(`[data-action="${name}"]`).disabled = !active?.entry.ready || !active.entry.strokes.length;
   }
   function schedule(){ if (!frame) frame = requestAnimationFrame(render); }
   const resize = new ResizeObserver(schedule);
-  const observer = new MutationObserver(schedule);
+  const observer = new MutationObserver(records => { if (records.some(record => !toolbar.contains(record.target))) schedule(); });
   for (const el of document.querySelectorAll('#root')) observer.observe(el,{ childList:true,subtree:true,characterData:true,attributes:true });
   // View changes can occur without replacing the conversation DOM.
   const viewObserver = new MutationObserver(schedule);
@@ -141,7 +156,7 @@ export function initAnnotations({ getThreadId, isChat }){
 
   document.addEventListener('pointerdown', e => {
     if (toolbar.contains(e.target)) return;
-    const root = e.target.closest?.('[data-chat-stream] > .chat-stream,.branch-stack .branch-body');
+    const root = e.target.closest?.('[data-chat-stream] > .chat-stream,.branch-stack .branch-body,[data-message]');
     const layer = layers.get(root);
     if (!layer) return;
     active = layer; schedule();
@@ -149,7 +164,7 @@ export function initAnnotations({ getThreadId, isChat }){
     const block = e.target.closest(selector);
     if (!block || !root.contains(block) || e.target.closest('button,a,input,textarea')) return;
     e.preventDefault(); e.stopImmediatePropagation();
-    drawing = { layer, block, pointerId:e.pointerId, stroke:{ anchor:anchorFor(block,root), points:[] } };
+    drawing = { layer, block, pointerId:e.pointerId, stroke:{ anchor:anchorFor(block,root), width:thread.startsWith('canvas:') ? 18/Math.max(1,block.getBoundingClientRect().width) : undefined, points:[] } };
     drawing.stroke.points.push(point(e,drawing));
     layer.svg.setPointerCapture(e.pointerId);
     window.getSelection()?.removeAllRanges();
@@ -172,7 +187,7 @@ export function initAnnotations({ getThreadId, isChat }){
     if (action === 'undo'){ target.entry.strokes.pop(); save(target); }
     if (action === 'clear'){
       stop();
-      if (await confirmDeleteItem({ heading:'Clear annotations?',name:target.bid ? 'this branch' : 'this chat',before:'Remove all amber marks from',after:'?',actionLabel:'Clear annotations' })){
+      if (await confirmDeleteItem({ heading:'Clear annotations?',name:target.tid.startsWith('canvas:') ? 'this canvas thread' : target.bid ? 'this branch' : 'this chat',before:'Remove all amber marks from',after:'?',actionLabel:'Clear annotations' })){
         // Main chat has two rendering roots sharing one storage record.
         if (cache.get(key(target.tid,target.bid)) !== target.entry) return;
         target.entry.strokes = []; save(target);

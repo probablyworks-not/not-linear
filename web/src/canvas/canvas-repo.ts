@@ -1,3 +1,4 @@
+import type { AnnotationStroke } from '../db/annotations-repo';
 import {
   CANVAS_INDEX_KEY, CANVAS_OPS_KEY, canvasIdOfDocKey, docKey, draftKey, isDocKey, openCanvasDb, viewKey,
 } from '../db/canvas';
@@ -100,7 +101,10 @@ export async function updateCanvas<T>(
     if (opts.expectedRev !== undefined && opts.expectedRev !== doc.summary.rev) {
       throw new CanvasConflictError(canvasId, opts.expectedRev, doc);
     }
+    const previousThreads = new Set(doc.threads.map(thread => thread.id));
     const result = mutate(doc);
+    const retainedThreads = new Set(doc.threads.map(thread => thread.id));
+    await d.kv.bulkDelete([...previousThreads].filter(id => !retainedThreads.has(id)).map(id => annotationKey(canvasId, id)));
     doc.summary.rev += 1;
     doc.summary.updatedAt = opts.now ?? Date.now();
     doc.summary.counts = {
@@ -145,6 +149,7 @@ export async function deleteCanvas(canvasId: string): Promise<void> {
     await d.kv.delete(docKey(canvasId));
     await d.kv.delete(draftKey(canvasId));
     await d.kv.delete(viewKey(canvasId));
+    await d.kv.where('key').startsWith(annotationPrefix(canvasId)).delete();
     await d.kv.put({ key: CANVAS_INDEX_KEY, value: index.filter(c => c.id !== canvasId) });
   });
 }
@@ -241,4 +246,25 @@ export async function putDoc(doc: CanvasDoc): Promise<void> {
     await d.kv.put({ key: docKey(doc.summary.id), value: doc });
     await d.kv.put({ key: CANVAS_INDEX_KEY, value: next });
   });
+}
+
+
+// Freehand annotations are device-local v1 rows, never part of CanvasDoc or its revision.
+const annotationPrefix = (id: string): string => `canvas_annotations_v1:${encodeURIComponent(id)}:`;
+const annotationKey = (id: string, threadId: string): string => annotationPrefix(id) + encodeURIComponent(threadId);
+export async function readCanvasAnnotations(id: string, threadId: string): Promise<AnnotationStroke[]> {
+  const value = (await canvasDb().kv.get(annotationKey(id, threadId)))?.value as {version?: number; strokes?: AnnotationStroke[]} | undefined;
+  return value?.version === 1 && Array.isArray(value.strokes) ? value.strokes : [];
+}
+export async function writeCanvasAnnotations(id: string, threadId: string, strokes: AnnotationStroke[]): Promise<string> {
+  const d = canvasDb();
+  return d.transaction('rw', d.kv, async () => {
+    const doc = (await d.kv.get(docKey(id)))?.value as CanvasDoc | undefined;
+    if (!doc?.threads.some(thread => thread.id === threadId)) throw new Error('This canvas thread no longer exists.');
+    return d.kv.put({key:annotationKey(id, threadId), value:{version:1, strokes}});
+  });
+}
+export async function deleteCanvasAnnotations(id: string, threadIds?: ReadonlySet<string>): Promise<void> {
+  if (threadIds) await canvasDb().kv.bulkDelete([...threadIds].map(threadId => annotationKey(id, threadId)));
+  else await canvasDb().kv.where('key').startsWith(annotationPrefix(id)).delete();
 }
