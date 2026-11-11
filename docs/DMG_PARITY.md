@@ -53,3 +53,5 @@ are read, copied, cleared or migrated. Automated browser storage and server file
 - Local DMG: `dist/release-v0.3.0/Notlinear-0.3.0-arm64.dmg`.
 - Source comparison: 307 active React files match desktop baseline except generated merged changelog fallback; no feature code omitted.
 - Public publication and website changes are not part of this correction.
+
+Review links: [draft release](https://github.com/probablyworks-not/not-linear/releases/tag/untagged-9836cf87427ce14cd201), [draft PR #3](https://github.com/probablyworks-not/not-linear/pull/3). All three uploaded asset digests match local files.

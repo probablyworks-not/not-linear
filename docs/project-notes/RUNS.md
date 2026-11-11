@@ -593,3 +593,11 @@ Each entry: **date/time · task or bug ID · command category · result · impor
 - **Limitations:** Real provider calls/account login, actual native dialogs, microphone/Screen Recording grants, populated native upgrade and clean-Mac first launch remain unverified. Tests use isolated state and mocked provider responses; no user credentials/databases copied or changed.
 
 - **Final snapshot:** Screenshot audit rerun 1/1 passed after awaiting loaded release cards; all seven images visually inspected. Staging helper syntax and git diff whitespace checks pass. DMG SHA-256 bcaea3dfb0b855c4c1f4d1a19b2019452a50c0ba109b6c08575c9e969d1f3b0c. Remote release listing now shows v0.2.1 public and v0.2.0 draft; no public release/website state is changed by this task.
+
+
+## 2026-11-11 · TASK-MAC-008 · draft upload and remote verification
+- **Category/result:** deploy (draft only), PASS. Pushed codex/desktop-dmg-parity; created and attached draft PR #3 against canvas/tesing-codex. Created v0.3.0 draft at exact runtime commit 29b645e410ff150c016f584f1dcd541fdf184bf1.
+- **Assets:** DMG 230593426 bytes, latest.json and SHA256SUMS.txt uploaded; API digests match local SHA-256 for all three. Release isDraft=true and targetCommitish verified.
+- **Links:** https://github.com/probablyworks-not/not-linear/pull/3 and https://github.com/probablyworks-not/not-linear/releases/tag/untagged-9836cf87427ce14cd201.
+- **Existing state:** v0.2.0 remains draft, labeled obsolete with corrected-candidate link. Public v0.2.1, website and public feed untouched. Downloads desktop checkout remains clean; local release branch diff whitespace check passes.
+- **Follow-up:** Hands-on native/provider/clean-Mac review before publication. No remaining packaging test failure.

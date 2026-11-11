@@ -851,3 +851,5 @@ Each entry: **date · summary · files touched · why changed · risks · tests 
 - **Why:** Previous DMG shipped the retired app; new 0.3.0/build 5 contains the active desktop source and dependencies.
 - **Tests/risks:** Six mounted-image checks, 18 targeted browser checks and earlier broad329/unit891/backend/build/lint/license checks pass. Real provider/native/upgrade/clean-Mac smoke remains pending. Free unnotarized distribution continues.
 - **Next:** Review corrected draft; do not publish obsolete 0.2.x drafts or treat mocked checks as live-provider verification.
+
+- **Review delivery:** Corrected v0.3.0 draft uploaded and all remote digests verified; draft PR #3 attached. RELEASE.md now leads with corrected candidate/source/checksum and pending manual checks. Public v0.2.1 is unchanged; obsolete unpublished v0.2.0 labeled accordingly. Primary Downloads checkout stays clean.

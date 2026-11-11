@@ -3,14 +3,27 @@
 ## Desktop parity correction — 2026-11-11
 
 The active desktop source is React/FastAPI on `canvas/tesing-codex`, baseline
-`3529b689eeb18cc9e021850a829c5cd9f5942e49`, loading `/web/`. The 0.2.x drafts used the
-retired `/frontend/` app and are obsolete. Do not publish them. Candidate 0.3.0/build 5 must
+`3529b689eeb18cc9e021850a829c5cd9f5942e49`, loading `/web/`. The 0.2.x packages used the
+retired `/frontend/` app and are obsolete. GitHub now shows v0.2.1 as public; it is unchanged by this correction. Do not publish the remaining obsolete v0.2.0 draft. Candidate 0.3.0/build 5 must
 build `web/dist` and include the current backend, Python/SDK dependencies, tools and notices.
 Settings/Canvas/Notes/project/provider/voice and backup browser tests must run against the packaged
 service, not a separate source checkout or Vite. Use `NOTLINEAR_TEST_APP=/absolute/Notlinear.app`
 with `python3 -m unittest discover -s tests -p test_release_package.py` and, from web/,
 `pnpm exec playwright test -c playwright.package.config.ts`. The manifest records source and payload
 hashes; compare against the current desktop source. Old candidate records below are historical.
+
+
+### Current corrected review candidate
+
+- **Version:** 0.3.0 / build 5, Apple Silicon, ad-hoc signed/unnotarized.
+- **Review download:** [v0.3.0 draft](https://github.com/probablyworks-not/not-linear/releases/tag/untagged-9836cf87427ce14cd201).
+- **Source review:** [draft PR #3](https://github.com/probablyworks-not/not-linear/pull/3), based on the active desktop branch.
+- **Runtime commit:** `29b645e410ff150c016f584f1dcd541fdf184bf1`. Later review docs/tests do not alter the payload.
+- **DMG:** `dist/release-v0.3.0/Notlinear-0.3.0-arm64.dmg`; SHA-256 `bcaea3dfb0b855c4c1f4d1a19b2019452a50c0ba109b6c08575c9e969d1f3b0c`.
+- **Verified:** current source hashes; unit891/backend/build/lint/license checks; broad packaged browser329 plus targeted Settings18; six mounted-image runtime/manifest/security/companion tests; seven Settings screenshots; image checksum and post-use signature; all three uploaded digests.
+- **Pending:** live provider/account login, native dialogs/permissions, populated native upgrade and clean-Mac installation. See [parity audit](docs/DMG_PARITY.md).
+
+The candidate remains a draft. Public release, update feed and website are unchanged. Historical records below describe the earlier, superseded packages.
 
 
 This is the operator runbook for building, reviewing, publishing and updating Notlinear.
