@@ -571,3 +571,9 @@ Each entry: **date/time · task or bug ID · command category · result · impor
 - **Commands:** Read-only desktop/native/source comparison, isolated branch merge, locked pnpm installation, React build/typecheck, current 891 unit tests, backend contracts/proxy/server tests. No actual user keys/data read or changed.
 - **Output:** Current build succeeds; 891 unit tests pass after generator refreshed merged changelog. Backend tests pass with socket access (sandbox first run failed). Offline pnpm store lacked a tarball; approved locked registry installation succeeded. Two edit commands initially ran from web/ instead of root and were corrected; one accidentally generated nested Info.plist was removed, with no source/user data loss.
 - **Follow-up:** Finish integration commit, build current payload/runtime, run packaged HTTP/browser tests and mounted image checks before claiming parity fixed.
+
+
+## 2026-11-11 · TASK-MAC-008 · initial current-package audit
+- **Result:** Current React/FastAPI package built with all server/subscription dependencies and bundled Claude CLI (version command succeeds). All 5 initial package HTTP tests pass; broad packaged browser suite is running and has passed current attachments/chat/Canvas/Notes cases so far.
+- **New failure:** Post-use codesign verification reports added Python __pycache__ files. Companion start spawned Python without -B. Fixed child arguments/native environment and added status→signature regression test; corrected package will be rebuilt into a fresh attempt directory.
+- **Scope:** No app feature or database logic changed. Initial build is not a releasable artifact. Network package installation was required for existing desktop dependencies; no credentials were copied.

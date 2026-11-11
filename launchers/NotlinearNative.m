@@ -254,6 +254,7 @@ static const long long kMaxTextBytes =  2 * 1024 * 1024;
     NSMutableDictionary *env = [NSProcessInfo.processInfo.environment mutableCopy];
     env[@"NOTLINEAR_DATA_DIR"] = data;
     env[@"NOTLINEAR_PACKAGED"] = @"1";
+    env[@"PYTHONDONTWRITEBYTECODE"] = @"1";
     env[@"NOTLINEAR_DEV_PROXY"] = @"0";
     env[@"NOTLINEAR_AGENT_PYTHON"] = python;
     env[@"NOTLINEAR_AGENT_HOME"] = [data stringByAppendingPathComponent:@"agents"];

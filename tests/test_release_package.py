@@ -26,7 +26,9 @@ class ReleasePackageTests(unittest.TestCase):
             sock.bind(('127.0.0.1',0)); cls.port=sock.getsockname()[1]
         env=os.environ.copy()
         env.update(NOTLINEAR_DATA_DIR=cls.temp.name,NOTLINEAR_DEV_PROXY='0',NOTLINEAR_FAKE_NATIVE='1',
-                   NOTLINEAR_AGENT_PYTHON=str(cls.runtime),NOTLINEAR_AGENT_HOME=cls.temp.name)
+                   NOTLINEAR_AGENT_PYTHON=str(cls.runtime),NOTLINEAR_AGENT_HOME=cls.temp.name,
+                   NOTLINEAR_CLAUDE_CLI=str(APP.resolve()/'Contents/Resources/python/agent-claude'),
+                   CLAUDE_CONFIG_DIR=str(Path(cls.temp.name)/'claude'))
         cls.proc=subprocess.Popen([str(cls.runtime),'-I','-B',str(cls.payload/'backend/server.py'),
                                    '--port',str(cls.port)],env=env,stdout=cls.log,stderr=cls.log)
         cls.base=f'http://127.0.0.1:{cls.port}'
@@ -48,9 +50,9 @@ class ReleasePackageTests(unittest.TestCase):
         with urlopen(cls.base+path,timeout=5) as response:return response.read()
 
     @classmethod
-    def post(cls,path,body):
+    def post(cls,path,body,extra=None):
         request=Request(cls.base+path,data=json.dumps(body).encode(),headers={
-            'Content-Type':'application/json','Origin':cls.base,'X-Notlinear-Local':'1','X-Notlinear-Agent':'1'})
+            'Content-Type':'application/json','Origin':cls.base,'X-Notlinear-Local':'1','X-Notlinear-Agent':'1', **(extra or {})})
         with urlopen(request,timeout=5) as response:return json.load(response)
 
     def test_health_owns_backend_and_current_entrypoint(self):
@@ -85,6 +87,19 @@ class ReleasePackageTests(unittest.TestCase):
         self.assertTrue(session['installed'])
         result=self.post('/__notlinear_open_files',{})
         self.assertTrue(result.get('cancelled'))
+
+    def test_companion_does_not_mutate_signed_bundle(self):
+        session=self.post('/__notlinear_agents/session',{})
+        headers={'X-Notlinear-Session':session['token']}
+        job=self.post('/__notlinear_agents/start',{'action':'status'},headers)
+        for _ in range(200):
+            result=self.post('/__notlinear_agents/poll',{'id':job['id'],'cursor':0},headers)
+            if result['finished']:break
+            time.sleep(.1)
+        self.assertTrue(result['finished'])
+        self.assertFalse(any(event['type']=='error' for event in result['events']))
+        check=subprocess.run(['codesign','--verify','--deep','--strict',str(APP.resolve())],capture_output=True,text=True)
+        self.assertEqual(check.returncode,0,check.stderr)
 
     def test_foreign_origin_cannot_open_native_dialog(self):
         request=Request(self.base+'/__notlinear_open_files',data=b'{}',headers={

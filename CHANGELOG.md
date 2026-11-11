@@ -393,3 +393,5 @@ Behavior changes: locate waits for expanded card layout, frames its heading and 
 - Files changed: release builder, native shell, backend runtime configuration/health/companion selection, packaged test/configuration and release docs.
 - Behavior changes: Packaged app opens /web/ and bundles required Python/SDK dependencies. Source app features, data and schemas match the current desktop; local identity/origin preserved. Candidate 0.3.0/build 5 replaces obsolete 0.2.x review drafts.
 - Verification: Current source and actual packaged browser/runtime/image checks are recorded in RUNS.md. Live-provider/native-dialog checks remain explicit.
+
+- Packaging follow-up: subscription child Python now suppresses bytecode writes so opening provider controls cannot alter the signed runtime. Regression check exercises isolated status and re-verifies the app seal (#056).
