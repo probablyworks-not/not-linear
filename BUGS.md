@@ -866,3 +866,14 @@ None currently tracked.
 - **Manual case:** Verify fresh package signature; open subscription controls; verify signature again. It must remain valid. No actual account login/model use needed.
 - **Prevention:** Post-use signature check, not just post-build check. Keep read-only package code separate from user data.
 - **Related:** #055; feature logic/authentication unchanged.
+
+
+### #057 — Packaged companion imported conflicting user-site Python packages
+- **Status:** Fix in progress; **discovered/fixed:** 2026-11-11; **agent:** Codex.
+- **Symptom:** Subscription status returned ImportError despite bundled SDK import checks passing in isolated mode.
+- **Root cause:** Child worker used ordinary Python startup, which preferred an older user-site typing_extensions over the bundled version required by anyio/MCP. Primary venv did not have this user-site precedence.
+- **Fix:** Start the packaged companion with -I -B and add only its trusted sibling directory for the auth module. No provider credentials or user packages are copied/changed.
+- **Files:** backend/subscriptions.py, backend/agent_runtime/worker.py, existing package companion regression test.
+- **Manual case:** Open Models & keys with an unrelated older user Python package installed; companion readiness succeeds and signed bundle remains valid.
+- **Prevention:** Test actual child status, not only isolated direct imports. Preserve isolated mode for all bundled Python entrypoints.
+- **Related:** #055/#056.

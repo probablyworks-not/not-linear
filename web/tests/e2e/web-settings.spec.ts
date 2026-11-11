@@ -105,17 +105,17 @@ test.describe('General', () => {
 });
 
 test.describe('Models & keys', () => {
-  test('starts with nothing connected; default model and context ranking persist', async ({ page }) => {
+  test('starts with nothing connected; context ranking persists without changing the composer model', async ({ page }) => {
     await openSettings(page, 'Models');
     const d = page_(page);
     for (const id of ['anthropic', 'openai', 'deepseek', 'gemini', 'serper', 'firecrawl', 'searxng', 'github']) {
       await expect(card(page, id)).toContainText('Not set');
     }
-    await expect(d.getByRole('radio', { name: /Sonnet 5/ })).toHaveAttribute('aria-checked', 'true');
-    await d.getByRole('radio', { name: /Haiku 4\.5/ }).click();
+    // Current desktop selects models in the composer, not a duplicate Settings radio group.
+    await expect(d.getByRole('radio', { name: /Sonnet 5/ })).toHaveCount(0);
     await d.getByLabel('Context ranking').selectOption('deepseek');
     await expect.poll(async () => (await prefsOf(page)).rankingLlm).toBe('deepseek');
-    expect(await prefsOf(page)).toMatchObject({ model: 'haiku' });
+    expect(await prefsOf(page)).toMatchObject({ model: 'sonnet' });
   });
 
   test('only one card is open at a time', async ({ page }) => {

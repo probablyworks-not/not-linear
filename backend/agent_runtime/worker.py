@@ -8,6 +8,8 @@ import sys
 import tempfile
 from pathlib import Path
 
+# The packaged worker runs in isolated mode; only its trusted sibling module is added.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 from auth import ROOT, RESOURCE, access_token, load, login, request_json, save
 
 

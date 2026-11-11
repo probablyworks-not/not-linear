@@ -395,3 +395,5 @@ Behavior changes: locate waits for expanded card layout, frames its heading and 
 - Verification: Current source and actual packaged browser/runtime/image checks are recorded in RUNS.md. Live-provider/native-dialog checks remain explicit.
 
 - Packaging follow-up: subscription child Python now suppresses bytecode writes so opening provider controls cannot alter the signed runtime. Regression check exercises isolated status and re-verifies the app seal (#056).
+
+- Packaging follow-up: isolate the subscription child from user-site Python packages; load its sibling auth module explicitly. This prevents host-package ImportError without changing provider or account behavior (#057).

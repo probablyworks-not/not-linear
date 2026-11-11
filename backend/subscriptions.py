@@ -65,7 +65,7 @@ def start(payload):
                 raise ValueError('Stop active requests for this provider before changing its connection.')
         env = os.environ.copy()
         env['PATH'] = env.get('PATH', '') + ':/opt/homebrew/bin:/usr/local/bin'
-        proc = subprocess.Popen([str(interpreter()), "-B", str(WORKER)], stdin=subprocess.PIPE,
+        proc = subprocess.Popen([str(interpreter()), "-I", "-B", str(WORKER)], stdin=subprocess.PIPE,
                                 stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
                                 text=True, start_new_session=True, env=env)
         job_id = secrets.token_urlsafe(24)
