@@ -1,7 +1,18 @@
 ---
 name: persistence
-description: Use this skill before modifying any code that reads or writes persisted state in notlinear. Triggers include any task touching persistAll, loadPersistedState, the Dexie database, the nl_state_v2 constant, localStorage, prefs serialization, the deletedThreadIds set, the threadState save shape, branch snapshots that flow through to disk, or the one-time localStorage→IndexedDB migration. Also load this skill when adding any new field that should survive a page reload, when changing the shape of a persisted object, or when fixing a bug where data is unexpectedly missing or stale after reload. Persistence bugs are silent and lose user data; treat this area with extreme caution.
+description: Maintain legacy vanilla-JS Dexie state in frontend/. For the current React application, inspect web/src/db and the owning feature repository; Canvas uses skills/canvas-branch-system/SKILL.md.
 ---
+
+# Scope and routing
+
+The active application is React/TypeScript under `web/`, built with Vite. The historical vanilla-JS app is not the current Canvas implementation. Do not infer that Canvas uses `threadState`, `persistAll`, `openBranch`, legacy DOM panels, or the old no-build workflow.
+
+For Canvas work, read [Canvas branch system](../canvas-branch-system/SKILL.md) and inspect current callers and types. For chat branches in React, inspect `web/src/branch/` and `web/src/db/branch-ops.ts`; do not apply legacy function contracts to them. For other React features, inspect their own store/repository and tests.
+
+The material below is historical guidance for `frontend/` only. Preserve it for legacy maintenance; do not apply it to `web/`.
+
+---
+
 
 # Persistence
 

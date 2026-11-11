@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
-"""Build an isolated development .app from a python.org framework (stdlib only)."""
+"""Build the current React/FastAPI desktop app with its bundled runtime."""
 import argparse
+import hashlib
+import json
 import os
 from pathlib import Path
 import plistlib
@@ -13,8 +15,8 @@ ROOT = Path(__file__).resolve().parents[1]
 MACHO = {b'\xcf\xfa\xed\xfe', b'\xce\xfa\xed\xfe', b'\xca\xfe\xba\xbe', b'\xca\xfe\xba\xbf'}
 
 
-def run(*args):
-    subprocess.run([str(a) for a in args], check=True)
+def run(*args, **kwargs):
+    subprocess.run([str(a) for a in args], check=True, **kwargs)
 
 
 def macho(path):
@@ -54,6 +56,15 @@ def bundle_python(source, destination, arch):
     if not license_file.is_file():
         raise ValueError('Python license missing from framework')
     shutil.copy2(license_file, destination / 'Python-LICENSE.txt')
+    sign_runtime(source, destination, arch)
+    # Do not trust a successful copy: actually run the relocated interpreter.
+    run(destination / 'bin/python3', '-I', '-B', '-c',
+        'import ssl, sqlite3, ctypes, http.server, subprocess, sys, pathlib; '
+        'assert pathlib.Path(sys.prefix).resolve() == pathlib.Path(sys.argv[1]).resolve(); '
+        'print("Bundled Python:", sys.prefix)', destination)
+
+
+def sign_runtime(source, destination, arch):
     binaries = [p for p in destination.rglob('*') if macho(p)]
     for binary in binaries:
         architectures = subprocess.check_output(['lipo', '-archs', str(binary)], text=True).split()
@@ -76,12 +87,25 @@ def bundle_python(source, destination, arch):
                 raise ValueError(f'External dependency must be bundled: {dep}')
         if binary.name == 'Python' or binary.suffix == '.dylib':
             run('install_name_tool', '-id', '@loader_path/' + binary.name, binary)
-        run('codesign', '--force', '--sign', '-', binary)
-    # Do not trust a successful copy: actually run the relocated interpreter.
-    run(destination / 'bin/python3', '-I', '-B', '-c',
-        'import ssl, sqlite3, ctypes, http.server, subprocess, sys, pathlib; '
-        'assert pathlib.Path(sys.prefix).resolve() == pathlib.Path(sys.argv[1]).resolve(); '
-        'print("Bundled Python:", sys.prefix)', destination)
+        run('codesign', '--force', '--sign', '-', '--preserve-metadata=entitlements', binary)
+
+
+def install_runtime_dependencies(source, runtime, arch):
+    python = runtime / 'bin/python3'
+    run(python, '-I', '-B', '-m', 'ensurepip', '--upgrade')
+    run(python, '-I', '-B', '-m', 'pip', 'install', '--disable-pip-version-check',
+        '--no-compile', '--only-binary=:all:', '-r', ROOT / 'requirements.txt',
+        '-r', ROOT / 'backend/agent_runtime/requirements.txt')
+    packages = runtime / 'lib' / f'python{source.name}' / 'site-packages'
+    cli = packages / 'claude_agent_sdk/_bundled/claude'
+    if not cli.is_file():
+        raise ValueError('Subscription companion CLI was not installed')
+    (runtime / 'agent-claude').symlink_to(os.path.relpath(cli, runtime))
+    sign_runtime(source, runtime, arch)
+    run(python, '-I', '-B', '-c',
+        'import fastapi, uvicorn, httpx, pypdf, agents, claude_agent_sdk, jwt; '
+        'import importlib.metadata as m,json; print(json.dumps({d.metadata["Name"]:d.version for d in m.distributions()}))')
+    run(runtime / 'agent-claude', '--version')
 
 
 def create_dmg(app, version, arch):
@@ -107,8 +131,8 @@ def main():
     parser.add_argument('--bundle-id', default='local.notlinear.app',
                         help='Keep stable for releases; use a distinct ID for isolated QA')
     parser.add_argument('--qa-port', type=int, help='Isolated QA only; requires a different bundle ID')
-    parser.add_argument('--version', default='0.2.0')
-    parser.add_argument('--build', type=int, default=2)
+    parser.add_argument('--version', default='0.3.0')
+    parser.add_argument('--build', type=int, default=5)
     parser.add_argument('--dmg', action='store_true', help='Create an unsigned development DMG')
     parser.add_argument('--dmg-only', action='store_true', help='Package an existing --output app')
     args = parser.parse_args()
@@ -136,13 +160,28 @@ def main():
     (contents / 'MacOS').mkdir(parents=True)
     payload = resources / 'app'
     payload.mkdir(parents=True)
-    # Explicit allowlist: never distribute the repo, personal feedback, logs or uploads.
-    for directory in ['frontend', 'backend']:
+    # Build the active desktop UI. Never fall back to the retired frontend/ tree.
+    run('node', ROOT / 'web/scripts/gen-changelog-assets.mjs')
+    run('pnpm', 'run', 'build', cwd=ROOT / 'web')
+    for directory in ['backend', 'tools']:
         shutil.copytree(ROOT / directory, payload / directory,
-                        ignore=shutil.ignore_patterns('__pycache__', '*.pyc', '.DS_Store',
-                                                     'debug-keys.html', 'index-design.html'))
-    shutil.copy2(ROOT / 'CHANGELOG.md', payload / 'CHANGELOG.md')
-    bundle_python(args.python_framework.expanduser().resolve(), resources / 'python', args.arch)
+                        ignore=shutil.ignore_patterns('__pycache__', '*.pyc', '.DS_Store'))
+    (payload / 'web').mkdir()
+    shutil.copytree(ROOT / 'web/dist', payload / 'web/dist')
+    for filename in ['CHANGELOG.md', 'logo.svg', 'LICENSE', 'THIRD_PARTY_NOTICES.md',
+                     'SUBSCRIPTIONS.md', 'requirements.txt']:
+        shutil.copy2(ROOT / filename, payload / filename)
+    framework = args.python_framework.expanduser().resolve()
+    bundle_python(framework, resources / 'python', args.arch)
+    install_runtime_dependencies(framework, resources / 'python', args.arch)
+    manifest = {'entrypoint': '/web/', 'version': args.version, 'build': args.build,
+                'source_commit': subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip(),
+                'desktop_baseline': '3529b689eeb18cc9e021850a829c5cd9f5942e49',
+                'source_files': {str(p.relative_to(ROOT)): hashlib.sha256(p.read_bytes()).hexdigest()
+                                 for p in (ROOT / 'web/src').rglob('*') if p.is_file()},
+                'files': {str(p.relative_to(payload)): hashlib.sha256(p.read_bytes()).hexdigest()
+                          for p in payload.rglob('*') if p.is_file()}}
+    (payload / 'release-manifest.json').write_text(json.dumps(manifest, indent=2) + '\n')
     info = plistlib.loads((ROOT / 'launchers/Notlinear.app/Contents/Info.plist').read_bytes())
     info.update(CFBundleIdentifier=args.bundle_id,
                 CFBundleShortVersionString=args.version, CFBundleVersion=str(args.build),

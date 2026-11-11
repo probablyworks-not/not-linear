@@ -1,7 +1,18 @@
 ---
 name: system-prompt
-description: Use this skill before modifying any code that constructs strings the model will see at inference time. Triggers include any task touching buildSystemPrompt, buildBranchContext, buildTools, buildDeepSeekTools, the tone presets, the date string, the formatting guidance, or any tool description. Also load when adding a new piece of model guidance, removing an existing guidance string, changing how branch context is assembled, or debugging "the model is doing X when I want it to do Y" — most of those fixes belong here, not in the model-call code. Prompt regressions are silent: the model doesn't crash, it just gets subtly worse and you only notice weeks later. Treat every string here as load-bearing.
+description: Maintain legacy frontend/ prompt construction only. For current Canvas model context, use skills/canvas-branch-system/SKILL.md and inspect web/src/canvas/context and exec.
 ---
+
+# Scope and routing
+
+The active application is React/TypeScript under `web/`, built with Vite. The historical vanilla-JS app is not the current Canvas implementation. Do not infer that Canvas uses `threadState`, `persistAll`, `openBranch`, legacy DOM panels, or the old no-build workflow.
+
+For Canvas work, read [Canvas branch system](../canvas-branch-system/SKILL.md) and inspect current callers and types. For chat branches in React, inspect `web/src/branch/` and `web/src/db/branch-ops.ts`; do not apply legacy function contracts to them. For other React features, inspect their own store/repository and tests.
+
+The material below is historical guidance for `frontend/` only. Preserve it for legacy maintenance; do not apply it to `web/`.
+
+---
+
 
 # System prompt and model context
 

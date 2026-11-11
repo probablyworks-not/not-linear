@@ -1,0 +1,7 @@
+# Runtime dependencies for the local FastAPI server (backend/server.py).
+fastapi>=0.115,<1.0
+uvicorn[standard]>=0.34,<1.0
+# Only used by the dev proxy (NOTLINEAR_DEV_PROXY=1), never in normal use.
+httpx>=0.28,<1.0
+# Text from PDFs in a project's linked folder (project_scan.py); pure Python, optional at runtime.
+pypdf>=5.0,<7.0

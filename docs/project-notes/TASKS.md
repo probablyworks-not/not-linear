@@ -512,3 +512,12 @@ Each entry: **ID · Status · Goal · Context · Files likely involved · Accept
 - **Files likely involved:** Release/changelog and project memory, generated dist artifacts; existing build/release tools unchanged.
 - **Acceptance criteria:** New version/build and preserved production identity, clean committed source, build/runtime/signature/image tests, staged asset/feed validation, uploaded-digest verification, review notes with exact source SHA and limitations.
 - **Verification:** Targeted tests and mounted-image metadata/runtime checks; full GUI/provider/clean-Mac/upgrade tests remain separately pending.
+
+
+## TASK-MAC-008 — Desktop/DMG parity
+- **Status:** In progress.
+- **Goal:** Replace outdated DMG Settings/UI and verify all current desktop features in the package.
+- **Context:** Desktop runs current React/FastAPI /web/; old release incorrectly shipped retired frontend/.
+- **Files:** Native shell, backend runtime/config, builder, package manifest and tests/docs.
+- **Acceptance:** Baseline 3529b68 current UI/features/dependencies included, no user-data/schema changes, actual-package browser and mounted-image tests, corrected review candidate.
+- **Verification:** Typecheck/lint/unit/backend tests, packaged HTTP/browser flows and source/runtime/image comparisons; live providers/native dialogs explicitly reported.

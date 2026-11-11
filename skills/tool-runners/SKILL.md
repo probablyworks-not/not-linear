@@ -1,7 +1,18 @@
 ---
 name: tool-runners
-description: Use this skill before modifying any tool runner code in notlinear. Triggers include any task touching executeTool, the run* tool functions (runWikipediaSearch, runFetchUrl, runWebSearch, runSerperSearch, runFirecrawlScrape), buildTools, buildDeepSeekTools, loggedFetch, signalWithTimeout, or any of the timeout constants (TOOL_TIMEOUT_MS, SEARCH_TIMEOUT_MS, PAGE_READ_TIMEOUT_MS, SCRAPE_TIMEOUT_MS, MODEL_CONNECT_TIMEOUT_MS). Also load when adding a new external research tool, changing how tool results are formatted for the model, adjusting tool timeouts, or debugging "the model is using the wrong tool" or "the tool is timing out" issues. The runners share a strict request/timeout/logging contract that must not be broken.
+description: Maintain legacy frontend/providers/tools.js runners only. Current React tool execution lives under web/src; Canvas execution is documented in skills/canvas-branch-system/SKILL.md.
 ---
+
+# Scope and routing
+
+The active application is React/TypeScript under `web/`, built with Vite. The historical vanilla-JS app is not the current Canvas implementation. Do not infer that Canvas uses `threadState`, `persistAll`, `openBranch`, legacy DOM panels, or the old no-build workflow.
+
+For Canvas work, read [Canvas branch system](../canvas-branch-system/SKILL.md) and inspect current callers and types. For chat branches in React, inspect `web/src/branch/` and `web/src/db/branch-ops.ts`; do not apply legacy function contracts to them. For other React features, inspect their own store/repository and tests.
+
+The material below is historical guidance for `frontend/` only. Preserve it for legacy maintenance; do not apply it to `web/`.
+
+---
+
 
 # Tool runners
 

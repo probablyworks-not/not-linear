@@ -1,3 +1,5 @@
+> Historical reference for legacy frontend/ chat branches only. For current Canvas use ../../canvas-branch-system/SKILL.md.
+
 # Branch system: snapshot protocol
 
 Read this when modifying any code that touches snapshots, persistence of branch state, the chat-switch path, or branch reopen flows. Two of the worst bugs in `BUGS.md` (#008, #009) came from violating the rules in this file.

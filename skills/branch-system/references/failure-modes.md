@@ -1,3 +1,5 @@
+> Historical reference for legacy frontend/ chat branches only. For current Canvas use ../../canvas-branch-system/SKILL.md.
+
 # Branch system: failure modes
 
 Read this when investigating a bug in the branch system, or when changing code in an area that has previously broken. Each entry walks through *why* a bug happened, not just what was fixed — the goal is to teach the next agent the failure mode so they don't reintroduce it under a different surface.

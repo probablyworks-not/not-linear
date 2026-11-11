@@ -1,5 +1,18 @@
 # Release steps — Notlinear for Mac
 
+## Desktop parity correction — 2026-11-11
+
+The active desktop source is React/FastAPI on `canvas/tesing-codex`, baseline
+`3529b689eeb18cc9e021850a829c5cd9f5942e49`, loading `/web/`. The 0.2.x drafts used the
+retired `/frontend/` app and are obsolete. Do not publish them. Candidate 0.3.0/build 5 must
+build `web/dist` and include the current backend, Python/SDK dependencies, tools and notices.
+Settings/Canvas/Notes/project/provider/voice and backup browser tests must run against the packaged
+service, not a separate source checkout or Vite. Use `NOTLINEAR_TEST_APP=/absolute/Notlinear.app`
+with `python3 -m unittest discover -s tests -p test_release_package.py` and, from web/,
+`pnpm exec playwright test -c playwright.package.config.ts`. The manifest records source and payload
+hashes; compare against the current desktop source. Old candidate records below are historical.
+
+
 This is the operator runbook for building, reviewing, publishing and updating Notlinear.
 Use the free **ad-hoc-signed, unnotarized DMG** route. No paid Apple membership is assumed.
 For runtime/data/security details, see [the Mac packaging reference](docs/MACOS_RELEASE.md).

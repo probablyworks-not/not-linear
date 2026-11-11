@@ -564,3 +564,10 @@ Each entry: **date/time · task or bug ID · command category · result · impor
 - **Review:** https://github.com/probablyworks-not/not-linear/releases/tag/untagged-a7f846b6e3a674155801; target `83bc2ad4ef82ed4fb57f3e641a72c757a069fdfe`. v0.2.0 retained unchanged as draft. PR #2 remains draft; main and public website unchanged.
 - **Manual smoke:** Not claimed; no native app GUI, real provider request, clean-Mac install, populated upgrade or license audit performed. Candidate request is for review only. Temporary image detached; test data/servers cleaned by the harness.
 - **Follow-up:** Maintainer review and existing publication checks.
+
+
+## 2026-11-11 · TASK-MAC-008 / #055 · source investigation and prebuild checks
+- **Result:** Root cause reproduced: Desktop executable points to Downloads checkout /web/; 0.2.x bundle opens legacy frontend/. Clean active desktop baseline 3529b68 includes 329 React source additions plus FastAPI/agent runtime not included in old builder.
+- **Commands:** Read-only desktop/native/source comparison, isolated branch merge, locked pnpm installation, React build/typecheck, current 891 unit tests, backend contracts/proxy/server tests. No actual user keys/data read or changed.
+- **Output:** Current build succeeds; 891 unit tests pass after generator refreshed merged changelog. Backend tests pass with socket access (sandbox first run failed). Offline pnpm store lacked a tarball; approved locked registry installation succeeded. Two edit commands initially ran from web/ instead of root and were corrected; one accidentally generated nested Info.plist was removed, with no source/user data loss.
+- **Follow-up:** Finish integration commit, build current payload/runtime, run packaged HTTP/browser tests and mounted image checks before claiming parity fixed.

@@ -14,6 +14,7 @@ from urllib.request import Request, urlopen
 SOURCE = Path(__file__).resolve().parents[1] / 'backend/server.py'
 
 
+@unittest.skipUnless("class NotlinearHandler" in SOURCE.read_text(), "Historical stdlib packaging; current FastAPI contracts live in tests/contract")
 class PackagedServerTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()

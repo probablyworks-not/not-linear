@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.0.0/dist/tabler-icons.min.css">
+<style>
+*{box-sizing:border-box}
+html,body{margin:0;padding:0;-webkit-font-smoothing:antialiased;background:#F8F8F8}
+a{color:#3E7BD6}a:hover{color:#2D6CDF}
+button{font-family:inherit}
+</style>
+</helmet>
+<div style="min-height:100vh;background:#F8F8F8;color:#1A1A1A;font-family:'Space Grotesk',-apple-system,system-ui,sans-serif;font-size:14px;line-height:1.5">
+  <div style="display:flex;align-items:center;gap:14px;padding:0 24px;height:52px;border-bottom:1px solid #E8E8E8;color:#555">
+    <i class="ti ti-arrow-left" style="font-size:18px"></i>
+    <span style="display:flex;align-items:center;gap:8px;white-space:nowrap"><span style="color:oklch(48% 0.08 195)">{{ iCompass }}</span>{{ title }}</span>
+  </div>
+
+  <div style="max-width:1040px;margin:0 auto;padding:32px 32px 80px">
+    <!-- header -->
+    <sc-if value="{{ isOverview }}" hint-placeholder-val="{{ true }}"><div style="display:flex;align-items:center;gap:16px;margin-bottom:22px;flex-wrap:wrap">
+      <span style="width:52px;height:52px;border-radius:13px;background:#fff;border:1px solid #E2E2E2;display:grid;place-items:center;color:oklch(48% 0.08 195);font-size:21px;flex:0 0 auto">{{ iCompass }}</span>
+      <div style="flex:1;min-width:220px"><div style="font-family:'Space Mono',monospace;font-size:10px;letter-spacing:0.14em;text-transform:uppercase;color:#AAA">{{ meta }}</div><h2 style="margin:0;font-size:28px;font-weight:600;letter-spacing:-0.025em;line-height:1.2">{{ title }}</h2></div>
+      <button style="display:flex;align-items:center;gap:8px;height:40px;padding:0 16px;border-radius:10px;background:#1A1A1A;color:#fff;border:none;font-size:14px;cursor:pointer;white-space:nowrap"><i class="ti ti-pencil"></i>New chat<span style="font-family:'Space Mono',monospace;font-size:9.5px;color:rgba(255,255,255,0.5);background:rgba(255,255,255,0.12);padding:2px 6px;border-radius:5px">⌘N</span></button>
+      <button style="height:40px;width:40px;border-radius:10px;background:#fff;border:1px solid #DADADA;cursor:pointer;color:#555"><i class="ti ti-plus"></i></button>
+      <button style="height:40px;width:40px;border-radius:10px;background:#fff;border:1px solid #DADADA;cursor:pointer;color:#555"><i class="ti ti-dots"></i></button>
+    </div>
+
+    </sc-if>
+<sc-if value="{{ isOverview }}" hint-placeholder-val="{{ true }}"><div style="display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:12px">
+
+      <!-- CHATS -->
+      <div style="grid-column:span 6;background:#fff;border:1px solid #E2E2E2;border-radius:14px;padding:16px">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;color:#555;font-size:16px"><span style="display:grid;place-items:center;width:24px;height:24px;border-radius:7px;background:#F1F1EF">{{ iTree }}</span><span style="font-family:'Space Mono',monospace;font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:#999">Chats · {{ chatCount }}</span><span style="flex:1"></span><sc-if value="{{ hasChats }}" hint-placeholder-val="{{ true }}"><span style="font-size:12px;color:#3E7BD6;cursor:pointer;white-space:nowrap">View all {{ chatCount }}</span></sc-if></div>
+        <sc-if value="{{ hasChats }}" hint-placeholder-val="{{ true }}">
+          <div>
+            <sc-for list="{{ chats }}" as="c" hint-placeholder-count="5">
+              <div style="display:flex;align-items:center;gap:12px;padding:10px 6px;border-top:1px solid #F2F2F0;cursor:pointer" style-hover="background:#FAFAF8">
+                <span style="color:#555;font-size:15px;width:24px;flex:0 0 auto">{{ iTree }}</span>
+                <div style="flex:1;min-width:0"><div style="font-size:14px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ c.title }}</div><div style="font-size:12px;color:#999;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ c.sub }}</div></div>
+                <span style="display:{{ c.chipDisplay }};align-items:center;gap:4px;font-size:11.5px;color:#3E7BD6;background:rgba(62,123,214,0.1);padding:2px 8px 2px 6px;border-radius:999px;white-space:nowrap;flex:0 0 auto"><span style="font-size:13px">{{ iBranch }}</span>{{ c.branches }}</span>
+                <span style="font-family:'Space Mono',monospace;font-size:10.5px;color:#BBB;width:52px;text-align:right;white-space:nowrap;flex:0 0 auto">{{ c.when }}</span>
+              </div>
+            </sc-for>
+          </div>
+        </sc-if>
+        <sc-if value="{{ noChats }}" hint-placeholder-val="{{ false }}">
+          <div style="border:1px dashed #D5D5D0;border-radius:11px;padding:34px 24px;display:flex;flex-direction:column;align-items:center;text-align:center;gap:6px;margin-top:4px">
+            <span style="width:56px;height:56px;border-radius:16px;background:#F1F1EF;color:#555;display:grid;place-items:center;font-size:34px;margin-bottom:6px">{{ iSapling }}</span>
+            <div style="font-size:17px;font-weight:600;letter-spacing:-0.01em">Plant the first chat</div>
+            <div style="font-size:13px;color:#888;max-width:340px;line-height:1.55">Chats are the trunk of this project. Notes, branches and artifacts will grow around them.</div>
+            <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;justify-content:center">
+              <button style="display:flex;align-items:center;gap:8px;height:38px;padding:0 16px;border-radius:10px;background:#1A1A1A;color:#fff;border:none;font-size:13.5px;cursor:pointer;white-space:nowrap"><i class="ti ti-pencil"></i>New chat</button>
+              <button style="height:38px;padding:0 14px;border-radius:10px;background:#fff;border:1px solid #DADADA;font-size:13.5px;cursor:pointer;white-space:nowrap;color:#333">Add existing chat</button>
+            </div>
+          </div>
+        </sc-if>
+      </div>
+
+      <!-- NOTES -->
+      <div style="grid-column:span 3;background:{{ notesBg }};border:1px {{ notesBorder }} #E2E2E2;border-radius:14px;padding:16px">
+        <div onClick="{{ goNotes }}" style="cursor:pointer;display:flex;align-items:center;gap:8px;margin-bottom:10px;color:#B8862E;font-size:16px"><span style="display:grid;place-items:center">{{ iJournal }}</span><span style="font-family:'Space Mono',monospace;font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:#999">Notes · {{ noteCount }}</span><span style="flex:1"></span><sc-if value="{{ hasNotes }}" hint-placeholder-val="{{ true }}"><i class="ti ti-plus" style="color:#999;cursor:pointer;font-size:14px"></i></sc-if></div>
+        <sc-if value="{{ hasNotes }}" hint-placeholder-val="{{ true }}">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+            <sc-for list="{{ notes }}" as="n" hint-placeholder-count="4">
+              <div style="background:#FBF6EC;border:1px solid #F0E4C8;border-radius:10px;padding:10px 12px;min-height:92px;cursor:pointer">
+                <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px"><span style="color:#B8862E;font-size:15px;display:grid;place-items:center;flex:0 0 auto">{{ n.icon }}</span><span style="font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ n.title }}</span></div>
+                <div style="font-size:12px;color:#7A6A44;line-height:1.45">{{ n.body }}</div>
+              </div>
+            </sc-for>
+          </div>
+        </sc-if>
+        <sc-if value="{{ noNotes }}" hint-placeholder-val="{{ false }}">
+          <div style="display:flex;flex-direction:column;align-items:center;text-align:center;gap:4px;padding:14px 8px 6px">
+            <span style="width:44px;height:44px;border-radius:12px;background:rgba(184,134,46,0.1);color:#B8862E;display:grid;place-items:center;font-size:26px;margin-bottom:4px">{{ iJournal }}</span>
+            <div style="font-size:14px;font-weight:600">No notes yet</div>
+            <div style="font-size:12.5px;color:#888;max-width:240px">Capture decisions, research and loose thoughts next to your chats.</div>
+            <div style="display:flex;gap:6px;margin-top:10px"><button style="height:32px;padding:0 12px;border-radius:8px;background:#fff;border:1px solid #DADADA;font-size:12.5px;cursor:pointer;color:#333;white-space:nowrap">New note</button><button style="height:32px;padding:0 12px;border-radius:8px;background:transparent;border:none;font-size:12.5px;cursor:pointer;color:#3E7BD6;white-space:nowrap">Add existing</button></div>
+          </div>
+        </sc-if>
+      </div>
+
+      <!-- ARTIFACTS -->
+      <div style="grid-column:span 3;background:{{ artBg }};border:1px {{ artBorder }} #E2E2E2;border-radius:14px;padding:16px">
+        <div onClick="{{ goArts }}" style="cursor:pointer;display:flex;align-items:center;gap:8px;margin-bottom:10px;color:#8161C9;font-size:16px"><span style="display:grid;place-items:center">{{ iLantern }}</span><span style="font-family:'Space Mono',monospace;font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:#999">AI artifacts · {{ artCount }}</span></div>
+        <sc-if value="{{ hasArts }}" hint-placeholder-val="{{ true }}">
+          <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px">
+            <sc-for list="{{ arts }}" as="a" hint-placeholder-count="3">
+              <div style="cursor:pointer">
+                <div style="height:78px;border-radius:9px;background:repeating-linear-gradient(135deg,#F4F1FA 0 6px,#EDE8F7 6px 12px);border:1px solid #E4DDF3;display:grid;place-items:center;font-family:'Space Mono',monospace;font-size:10px;color:#6B4FB0">{{ a.type }}</div>
+                <div style="font-size:12px;margin-top:5px;line-height:1.3">{{ a.title }}</div>
+              </div>
+            </sc-for>
+          </div>
+        </sc-if>
+        <sc-if value="{{ noArts }}" hint-placeholder-val="{{ false }}">
+          <div style="display:flex;flex-direction:column;align-items:center;text-align:center;gap:4px;padding:14px 8px 6px">
+            <span style="width:44px;height:44px;border-radius:12px;background:rgba(129,97,201,0.1);color:#8161C9;display:grid;place-items:center;font-size:26px;margin-bottom:4px">{{ iLantern }}</span>
+            <div style="font-size:14px;font-weight:600">Nothing generated yet</div>
+            <div style="font-size:12.5px;color:#888;max-width:250px">Documents, diagrams and code the AI creates in your chats will be collected here.</div>
+          </div>
+        </sc-if>
+      </div>
+
+      <!-- RULES -->
+      <div style="grid-column:span 2;background:{{ rulesBg }};border:1px {{ rulesBorder }} #E2E2E2;border-radius:14px;padding:16px;display:flex;flex-direction:column">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;color:#555;font-size:16px"><span style="display:grid;place-items:center">{{ iSign }}</span><span style="font-family:'Space Mono',monospace;font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:#999">Rules</span><span style="flex:1"></span><sc-if value="{{ hasRules }}" hint-placeholder-val="{{ true }}"><span style="font-size:12px;color:#3E7BD6;cursor:pointer">Edit</span></sc-if></div>
+        <sc-if value="{{ hasRules }}" hint-placeholder-val="{{ true }}"><div style="font-size:12.5px;color:#444;line-height:1.55">Answer in British English. Always cite sources. Prefer TypeScript examples.</div></sc-if>
+        <sc-if value="{{ noRules }}" hint-placeholder-val="{{ false }}"><div style="font-size:12.5px;color:#888;line-height:1.5">Instructions the AI follows in every chat here, e.g. “Always cite sources.”</div><span style="font-size:12.5px;color:#3E7BD6;margin-top:8px;cursor:pointer">+ Add rules</span></sc-if>
+      </div>
+
+      <!-- FILES -->
+      <div style="grid-column:span 2;background:{{ filesBg }};border:1px {{ filesBorder }} #E2E2E2;border-radius:14px;padding:16px;display:flex;flex-direction:column">
+        <div onClick="{{ goFiles }}" style="cursor:pointer;display:flex;align-items:center;gap:8px;margin-bottom:8px;color:#3E8E6A;font-size:16px"><span style="display:grid;place-items:center">{{ iBasket }}</span><span style="font-family:'Space Mono',monospace;font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:#999">Files · {{ fileCount }}</span></div>
+        <sc-if value="{{ hasFiles }}" hint-placeholder-val="{{ true }}">
+          <div style="display:flex;align-items:center;gap:8px;font-size:12.5px;color:#444;margin-bottom:4px"><span style="color:#3E8E6A;font-size:15px;display:grid;place-items:center">{{ iGate }}</span>~/work/atlas<span style="width:6px;height:6px;border-radius:50%;background:oklch(60% 0.14 145)"></span></div>
+          <div style="font-size:12px;color:#999">+ research-synthesis.pdf, brand-guidelines.md, 12 more</div>
+        </sc-if>
+        <sc-if value="{{ noFiles }}" hint-placeholder-val="{{ false }}">
+          <div style="font-size:12.5px;color:#888;line-height:1.5">Shared knowledge for every chat — upload files or link a folder.</div>
+          <div style="display:flex;gap:10px;margin-top:8px;font-size:12.5px;color:#3E7BD6"><span style="cursor:pointer;white-space:nowrap">+ Add files</span><span style="cursor:pointer;white-space:nowrap">Link folder</span></div>
+        </sc-if>
+      </div>
+
+      <!-- MEMORY -->
+      <div style="grid-column:span 2;background:#F7F6FB;border:1px dashed #C9C4DD;border-radius:14px;padding:16px">
+        <div style="display:flex;align-items:center;gap:6px;color:#8161C9;font-size:16px;margin-bottom:8px"><span style="display:grid;place-items:center">{{ iRoots }}</span><span style="font-family:'Space Mono',monospace;font-size:10px;letter-spacing:0.1em;text-transform:uppercase">Memory</span><span style="flex:1"></span><span style="font-family:'Space Mono',monospace;font-size:9px;letter-spacing:0.08em;text-transform:uppercase;background:rgba(129,97,201,0.14);padding:2px 7px;border-radius:999px">Soon</span></div>
+        <div style="font-size:12.5px;color:#555;line-height:1.5">Decisions and preferences the AI keeps across chats and branches.</div>
+      </div>
+    </div>
+
+    
+</sc-if>
+<sc-if value="{{ isFiles }}" hint-placeholder-val="{{ false }}"><div>
+<div style="display:flex;align-items:center;gap:6px;margin-bottom:18px;color:#888;font-size:13px;cursor:pointer;width:fit-content" onClick="{{ goOverview }}"><i class="ti ti-arrow-left"></i>{{ title }}</div>
+<div style="display:flex;align-items:center;gap:14px;margin-bottom:20px;flex-wrap:wrap"><span style="width:48px;height:48px;border-radius:13px;background:#fff;border:1px solid #E2E2E2;color:#3E8E6A;display:grid;place-items:center;font-size:22px">{{ iBasket }}</span><div style="flex:1;min-width:200px"><h2 style="margin:0;font-size:26px;font-weight:600;letter-spacing:-0.02em;line-height:1.2">Files <span style="color:#BBB;font-weight:500">14</span></h2><div style="font-size:13px;color:#888">Shared knowledge available to every chat in this project</div></div><button style="height:38px;padding:0 14px;border-radius:10px;border:1px solid #DADADA;background:#fff;color:#333;font-size:13.5px;cursor:pointer;white-space:nowrap">Link folder</button><button style="height:38px;padding:0 14px;border-radius:10px;border:1px solid #1A1A1A;background:#1A1A1A;color:#fff;font-size:13.5px;cursor:pointer;white-space:nowrap">+ Add files</button></div>
+<div style="display:flex;align-items:center;gap:14px;padding:14px 16px;border-radius:12px;background:rgba(62,142,106,0.08);border:1px solid rgba(62,142,106,0.25);margin-bottom:16px;flex-wrap:wrap"><span style="color:#3E8E6A;font-size:20px;display:grid;place-items:center">{{ iGate }}</span><div style="flex:1;min-width:200px"><div style="font-size:14px;font-weight:500">~/work/atlas</div><div style="font-size:12.5px;color:#666">Linked folder · matching files sync automatically · last synced 4 min ago</div></div><span style="display:flex;align-items:center;gap:6px;font-size:12.5px;color:#3E8E6A;white-space:nowrap"><span style="width:7px;height:7px;border-radius:50%;background:oklch(60% 0.14 145)"></span>9 synced</span><span style="font-size:12.5px;color:#888;cursor:pointer">Unlink</span></div>
+<div style="display:flex;gap:6px;margin-bottom:16px;flex-wrap:wrap"><sc-for list="{{ fileFilters }}" as="f" hint-placeholder-count="4"><span style="height:30px;padding:0 12px;border-radius:999px;border:1px solid {{ f.border }};background:{{ f.bg }};color:{{ f.fg }};font-size:12.5px;display:flex;align-items:center;white-space:nowrap">{{ f.label }}</span></sc-for></div>
+<div style="background:#fff;border:1px solid #E2E2E2;border-radius:14px;overflow:hidden">
+<sc-for list="{{ fileRows }}" as="f" hint-placeholder-count="8"><div style="display:flex;align-items:center;gap:14px;padding:12px 16px;border-top:{{ f.top }};cursor:pointer" style-hover="background:#FAFAF8"><span style="width:34px;height:34px;border-radius:9px;background:{{ f.tint }};color:{{ f.hex }};display:grid;place-items:center;font-size:18px;flex:0 0 auto"><i class="ti {{ f.icon }}"></i></span><div style="flex:1;min-width:0"><div style="font-size:14px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ f.name }}</div><div style="font-size:12px;color:#999;white-space:nowrap">{{ f.used }}</div></div><span style="font-family:'Space Mono',monospace;font-size:9px;letter-spacing:0.08em;text-transform:uppercase;color:#3E8E6A;background:{{ f.srcBg }};padding:3px 8px;border-radius:999px;white-space:nowrap">{{ f.src }}</span><span style="font-family:'Space Mono',monospace;font-size:11px;color:#AAA;width:56px;text-align:right">{{ f.size }}</span><span style="font-family:'Space Mono',monospace;font-size:10.5px;color:#BBB;width:64px;text-align:right;white-space:nowrap">{{ f.when }}</span></div></sc-for>
+</div><div style="text-align:center;margin-top:14px;font-family:'Space Mono',monospace;font-size:10.5px;letter-spacing:0.08em;text-transform:uppercase;color:#AAA">Showing 8 of 14</div>
+</div></sc-if>
+<sc-if value="{{ isNotes }}" hint-placeholder-val="{{ false }}"><div>
+<div style="display:flex;align-items:center;gap:6px;margin-bottom:18px;color:#888;font-size:13px;cursor:pointer;width:fit-content" onClick="{{ goOverview }}"><i class="ti ti-arrow-left"></i>{{ title }}</div>
+<div style="display:flex;align-items:center;gap:14px;margin-bottom:20px;flex-wrap:wrap"><span style="width:48px;height:48px;border-radius:13px;background:#fff;border:1px solid #E2E2E2;color:#B8862E;display:grid;place-items:center;font-size:22px">{{ iJournal }}</span><div style="flex:1;min-width:200px"><h2 style="margin:0;font-size:26px;font-weight:600;letter-spacing:-0.02em;line-height:1.2">Notes <span style="color:#BBB;font-weight:500">14</span></h2><div style="font-size:13px;color:#888">Write alongside your chats — notes can be attached to any conversation</div></div><button style="height:38px;padding:0 14px;border-radius:10px;border:1px solid #DADADA;background:#fff;color:#333;font-size:13.5px;cursor:pointer;white-space:nowrap">Add existing</button><button style="height:38px;padding:0 14px;border-radius:10px;border:1px solid #1A1A1A;background:#1A1A1A;color:#fff;font-size:13.5px;cursor:pointer;white-space:nowrap">New note</button></div>
+<div style="display:flex;gap:6px;margin-bottom:16px;flex-wrap:wrap"><sc-for list="{{ noteFilters }}" as="f" hint-placeholder-count="4"><span style="height:30px;padding:0 12px;border-radius:999px;border:1px solid {{ f.border }};background:{{ f.bg }};color:{{ f.fg }};font-size:12.5px;display:flex;align-items:center;white-space:nowrap">{{ f.label }}</span></sc-for></div>
+<div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px">
+<sc-for list="{{ noteCards }}" as="n" hint-placeholder-count="6"><div style="background:#FBF6EC;border:1px solid #F0E4C8;border-radius:14px;padding:16px;display:flex;flex-direction:column;gap:8px;min-height:170px;cursor:pointer;grid-column:span {{ n.span }}"><div style="display:flex;align-items:center;gap:10px"><span style="width:34px;height:34px;border-radius:9px;background:rgba(184,134,46,0.14);color:#B8862E;display:grid;place-items:center;font-size:18px;flex:0 0 auto">{{ n.icon }}</span><span style="flex:1;font-size:15px;font-weight:600;line-height:1.3">{{ n.title }}</span><span style="display:{{ n.pinD }};color:#B8862E;font-size:13px"><i class="ti ti-pin"></i></span></div><div style="font-size:13px;color:#6E5F3E;line-height:1.55;flex:1">{{ n.body }}</div><div style="display:flex;align-items:center;gap:8px;font-size:11.5px;color:#A8975F;white-space:nowrap"><span>{{ n.when }}</span><span style="flex:1"></span><span style="display:flex;align-items:center;gap:4px"><span style="font-size:13px;display:grid;place-items:center">{{ iTree }}</span>{{ n.chats }}</span></div></div></sc-for>
+</div></div></sc-if>
+<sc-if value="{{ isArts }}" hint-placeholder-val="{{ false }}"><div>
+<div style="display:flex;align-items:center;gap:6px;margin-bottom:18px;color:#888;font-size:13px;cursor:pointer;width:fit-content" onClick="{{ goOverview }}"><i class="ti ti-arrow-left"></i>{{ title }}</div>
+<div style="display:flex;align-items:center;gap:14px;margin-bottom:20px;flex-wrap:wrap"><span style="width:48px;height:48px;border-radius:13px;background:#fff;border:1px solid #E2E2E2;color:#8161C9;display:grid;place-items:center;font-size:22px">{{ iLantern }}</span><div style="flex:1;min-width:200px"><h2 style="margin:0;font-size:26px;font-weight:600;letter-spacing:-0.02em;line-height:1.2">AI artifacts <span style="color:#BBB;font-weight:500">9</span></h2><div style="font-size:13px;color:#888">Everything the AI generated in this project, versioned and linked to its chat</div></div><button style="height:38px;padding:0 14px;border-radius:10px;border:1px solid #DADADA;background:#fff;color:#333;font-size:13.5px;cursor:pointer;white-space:nowrap">Export all</button></div>
+<div style="display:flex;gap:6px;margin-bottom:16px;flex-wrap:wrap"><sc-for list="{{ artFilters }}" as="f" hint-placeholder-count="4"><span style="height:30px;padding:0 12px;border-radius:999px;border:1px solid {{ f.border }};background:{{ f.bg }};color:{{ f.fg }};font-size:12.5px;display:flex;align-items:center;white-space:nowrap">{{ f.label }}</span></sc-for></div>
+<div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px">
+<sc-for list="{{ artCards }}" as="a" hint-placeholder-count="6"><div style="background:#fff;border:1px solid #E2E2E2;border-radius:14px;overflow:hidden;cursor:pointer" style-hover="border-color:#BDBDBD"><div style="height:130px;background:repeating-linear-gradient(135deg,#F4F1FA 0 8px,#EDE8F7 8px 16px);border-bottom:1px solid #E4DDF3;display:grid;place-items:center;position:relative"><span style="font-family:'Space Mono',monospace;font-size:11px;color:#6B4FB0;text-align:center;white-space:nowrap">{{ a.hint }}</span><span style="position:absolute;top:10px;left:10px;font-family:'Space Mono',monospace;font-size:9px;letter-spacing:0.08em;color:#6B4FB0;background:#fff;border:1px solid #E4DDF3;padding:2px 7px;border-radius:999px">{{ a.type }}</span><span style="position:absolute;top:10px;right:10px;font-family:'Space Mono',monospace;font-size:9px;color:#6B4FB0">{{ a.ver }}</span></div><div style="padding:12px 14px"><div style="font-size:14px;font-weight:500;margin-bottom:6px">{{ a.title }}</div><div style="display:flex;align-items:center;gap:6px;font-size:12px;color:#888;white-space:nowrap"><span style="font-size:13px;display:grid;place-items:center;color:#555">{{ iTree }}</span><span style="flex:1;overflow:hidden;text-overflow:ellipsis">{{ a.from }}</span><span style="font-family:'Space Mono',monospace;font-size:10.5px;color:#BBB">{{ a.when }}</span></div></div></div></sc-for>
+</div></div></sc-if>
+<sc-if value="{{ hasChats }}" hint-placeholder-val="{{ true }}"><div></div></sc-if>
+    <sc-if value="{{ noChats }}" hint-placeholder-val="{{ false }}"><div style="display:flex;justify-content:center;margin-top:28px"><span style="font-size:12.5px;color:#D14B4B;display:flex;align-items:center;gap:6px;cursor:pointer"><i class="ti ti-trash"></i>Delete project</span></div></sc-if>
+  </div>
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  MG = {"compass":"<circle cx=\"32\" cy=\"32\" r=\"18\"></circle> <path d=\"M32 18 L 36 32 L 32 46 L 28 32 Z\"></path> <path d=\"M32 18 L 36 32 L 32 30 Z\" fill=\"currentColor\"></path> <circle cx=\"32\" cy=\"32\" r=\"1.5\" fill=\"currentColor\"></circle> <path d=\"M32 12 L 32 16 M 32 48 L 32 52 M 12 32 L 16 32 M 48 32 L 52 32\"></path>","tree":"<path d=\"M20 30 C 18 22 24 14 32 15 C 40 14 46 22 44 30 C 48 32 48 40 42 42 C 38 44 26 44 22 42 C 16 40 16 32 20 30 Z\"></path> <path d=\"M30 42 L 30 56 L 34 56 L 34 42\"></path> <path d=\"M26 56 L 38 56\"></path> <path d=\"M28 30 C 29 28 31 27 32 28\"></path>","branch":"<path d=\"M12 50 C 24 42 32 32 40 22 C 44 16 50 14 54 14\"></path> <path d=\"M24 38 C 26 32 24 26 22 22\"></path> <path d=\"M34 28 C 36 22 34 16 32 12\"></path> <path d=\"M42 20 C 46 20 50 18 52 14\"></path> <path d=\"M20 44 C 16 44 14 46 14 50\"></path>","journal":"<path d=\"M12 18 C 18 16 26 16 32 20 C 38 16 46 16 52 18 L 52 48 C 46 46 38 46 32 50 C 26 46 18 46 12 48 Z\"></path> <path d=\"M32 20 L 32 50\"></path> <path d=\"M16 24 C 22 22 26 22 30 24 M 16 30 C 22 28 26 28 30 30 M 16 36 C 22 34 26 34 30 36\"></path> <path d=\"M34 24 C 38 22 42 22 48 24 M 34 30 C 38 28 42 28 48 30 M 34 36 C 38 34 42 34 48 36\"></path>","lantern":"<path d=\"M32 12 L 32 18\"></path> <path d=\"M24 18 L 40 18\"></path> <path d=\"M22 22 L 42 22 L 42 42 L 22 42 Z\"></path> <path d=\"M22 22 L 18 26 L 18 46 L 22 42\"></path> <path d=\"M42 22 L 46 26 L 46 46 L 42 42\"></path> <path d=\"M22 42 L 42 42 L 42 46 L 22 46 Z\"></path> <path d=\"M28 30 C 28 26 32 24 32 28 C 32 30 30 32 28 30 Z\"></path> <path d=\"M32 46 L 32 54 M 28 54 L 36 54\"></path>","basket":"<path d=\"M14 30 L 50 30 L 46 52 L 18 52 Z\"></path> <path d=\"M20 30 C 20 22 26 16 32 16 C 38 16 44 22 44 30\"></path> <path d=\"M14 30 L 50 30\"></path> <path d=\"M22 30 L 22 50 M 28 30 L 28 50 M 34 30 L 34 50 M 40 30 L 40 50\"></path> <path d=\"M16 40 L 48 40\"></path>","sign":"<path d=\"M32 50 L 32 30\"></path> <path d=\"M14 20 L 44 20 L 50 26 L 44 32 L 14 32 Z\"></path> <path d=\"M28 24 L 36 24 M 22 28 L 40 28\"></path> <path d=\"M28 50 L 36 50\"></path>","gate":"<path d=\"M10 20 C 18 16 28 16 32 16 C 36 16 46 16 54 20\"></path> <path d=\"M14 24 L 14 52 L 32 52 L 32 24\"></path> <path d=\"M32 24 L 32 52 L 50 52 L 50 24\"></path> <path d=\"M14 24 L 32 16 L 50 24\"></path> <path d=\"M14 36 L 32 28 L 50 36\"></path> <path d=\"M14 44 L 32 36 L 50 44\"></path> <circle cx=\"28\" cy=\"40\" r=\"1\" fill=\"currentColor\"></circle> <circle cx=\"36\" cy=\"40\" r=\"1\" fill=\"currentColor\"></circle>","roots":"<path d=\"M32 14 C 32 22 32 28 32 32\"></path> <path d=\"M32 32 C 28 36 24 40 20 50\"></path> <path d=\"M32 32 C 36 36 40 40 44 50\"></path> <path d=\"M32 32 C 30 38 28 44 26 54\"></path> <path d=\"M32 32 C 34 38 36 44 38 54\"></path> <path d=\"M32 32 C 32 40 32 48 32 56\"></path> <path d=\"M24 14 C 28 14 36 14 40 14\"></path> <path d=\"M28 18 L 36 18\"></path>","sapling":"<path d=\"M32 34 C 32 44 31 52 33 58\"></path> <path d=\"M32 38 C 26 36 22 38 20 42\"></path> <path d=\"M22 38 C 23 34 27 32 31 34\"></path> <path d=\"M32 30 C 38 28 42 30 44 34\"></path> <path d=\"M42 30 C 41 26 37 24 33 26\"></path> <path d=\"M32 22 C 28 19 28 14 32 13 C 36 14 36 19 32 22 Z\"></path>","thought":"<path d=\"M16 28 C 14 22 18 16 24 16 C 26 12 32 12 34 16 C 40 14 46 18 46 24 C 50 26 50 32 46 34 C 46 38 42 40 38 38 C 34 42 26 42 22 38 C 18 40 14 36 14 32 C 14 30 14 28 16 28 Z\"></path> <circle cx=\"22\" cy=\"48\" r=\"3\"></circle> <circle cx=\"16\" cy=\"54\" r=\"1.5\"></circle>","candle":"<path d=\"M24 28 L 24 52 L 40 52 L 40 28 Z\"></path> <path d=\"M24 28 L 40 28\"></path> <path d=\"M32 28 L 32 18 C 32 14 36 14 34 12 C 32 14 30 16 30 20 C 30 24 32 24 32 26\"></path>","seed":"<path d=\"M24 26 C 24 20 28 16 32 16 C 36 16 40 20 40 26 C 40 36 36 46 32 50 C 28 46 24 36 24 26 Z\"></path> <path d=\"M32 16 C 32 26 32 38 32 50\"></path> <path d=\"M32 30 C 28 28 26 24 26 22\"></path> <path d=\"M32 30 C 36 28 38 24 38 22\"></path>","leaf":"<path d=\"M14 50 C 16 30 30 16 50 14 C 52 30 38 50 14 50 Z\"></path> <path d=\"M14 50 C 24 40 38 28 50 14\"></path> <path d=\"M22 42 C 26 42 30 40 32 38\"></path> <path d=\"M30 34 C 34 34 38 32 40 30\"></path>"};
+  state = { s: 'full', v: 'overview' };
+  ic = (n, em) => React.createElement('svg', { viewBox: '0 0 64 64', fill: 'none', stroke: 'currentColor', strokeWidth: 3.6, strokeLinecap: 'round', strokeLinejoin: 'round', style: { width: (em || 1.5) + 'em', height: (em || 1.5) + 'em', display: 'block' }, dangerouslySetInnerHTML: { __html: this.MG[n] } });
+  renderVals() {
+    const s = this.state.s;
+    const set = k => () => this.setState({ s: k });
+    const states = [['full', 'Active project'], ['chats', 'Chats only'], ['new', 'Brand new']].map(([k, label]) => ({ label, pick: set(k), bg: s === k ? '#fff' : 'transparent', fg: s === k ? '#1A1A1A' : '#ccc', border: s === k ? '#fff' : '#555' }));
+    const goV = k => () => full0 && this.setState({ v: k }); const full0 = s === 'full'; const vw = full0 ? this.state.v : 'overview';
+    const full = s === 'full', chatsOnly = s === 'chats', fresh = s === 'new';
+    const allChats = [
+      ['Navigation model — first pass', 'Compared sidebar vs. top-tab patterns for the 4 core areas', 3, '2h'],
+      ['Empty states audit', 'Walked through 9 screens and flagged copy issues', 2, 'Mon'],
+      ['Pricing page teardown', 'Three competitors, side-by-side', 0, 'Oct 14'],
+      ['Onboarding copy review', 'Tone, length and first-run prompts', 4, 'Oct 11'],
+      ['Settings IA', 'Grouping and naming of 23 settings', 2, 'Oct 6'],
+    ];
+    const chatSrc = fresh ? [] : chatsOnly ? allChats.slice(0, 3).map(c => [c[0], c[1], 0, c[3]]) : allChats;
+    const chats = chatSrc.map(([title, sub, b, when]) => ({ title, sub, when, branches: b, chipDisplay: b ? 'inline-flex' : 'none' }));
+    const notes = full ? [
+      ['thought', 'Interview takeaways', '12 insights grouped into 4 themes from week 2.'],
+      ['candle', 'Open questions', '7 items for design review, 3 unresolved.'],
+      ['seed', 'Naming ideas', 'Atlas, Meridian, Waypoint — shortlist and why.'],
+      ['leaf', 'Launch checklist', 'Docs, changelog, onboarding emails, support macros.'],
+    ].map(([i, title, body]) => ({ icon: this.ic(i), title, body })) : [];
+    const arts = full ? [['SVG', 'IA diagram v3'], ['MD', 'Onboarding copy deck'], ['TSX', 'Rail component']].map(([type, title]) => ({ type, title })) : [];
+    const dash = on => on ? '#fff' : 'transparent', bd = on => on ? 'solid' : 'dashed';
+    const fl = (arr, on) => arr.map((l, i) => ({ label: l, bg: i === on ? '#1A1A1A' : '#fff', fg: i === on ? '#fff' : '#555', border: i === on ? '#1A1A1A' : '#E2E2E2' }));
+    const ft = { pdf: ['ti-file-type-pdf', '#C43A3A', 'rgba(196,58,58,0.1)'], md: ['ti-markdown', '#555555', '#F1F1EF'], img: ['ti-photo', '#3E7BD6', 'rgba(62,123,214,0.1)'], csv: ['ti-file-spreadsheet', '#3E8E6A', 'rgba(62,142,106,0.1)'], code: ['ti-file-code', '#8161C9', 'rgba(129,97,201,0.1)'], doc: ['ti-file-text', '#B8862E', 'rgba(184,134,46,0.12)'] };
+    const fileRows = [['research-synthesis.pdf', 'pdf', 'Used in 3 chats', 'Uploaded', '2.4 MB', 'Yesterday'], ['brand-guidelines.md', 'md', 'Used in 5 chats', 'Linked', '18 KB', '2d ago'], ['nav-sketches.png', 'img', 'Used in 1 chat', 'Uploaded', '640 KB', '3d ago'], ['interview-export.csv', 'csv', 'Used in 2 chats', 'Uploaded', '212 KB', '5d ago'], ['src/components/Rail.tsx', 'code', 'Used in 4 chats', 'Linked', '6 KB', '1w ago'], ['src/tokens.css', 'code', 'Used in 2 chats', 'Linked', '3 KB', '1w ago'], ['onboarding-spec.docx', 'doc', 'Not used yet', 'Uploaded', '84 KB', '2w ago'], ['README.md', 'md', 'Used in 1 chat', 'Linked', '4 KB', '3w ago']].map(([name, k, used, src, size, when], i) => ({ name, used, src, size, when, icon: ft[k][0], hex: ft[k][1], tint: ft[k][2], srcBg: src === 'Linked' ? 'rgba(62,142,106,0.12)' : '#F1F1EF', top: i ? '1px solid #F0F0EE' : 'none' }));
+    fileRows.forEach(r => { if (r.src === 'Uploaded') r.srcBg = '#F1F1EF'; });
+    const nIc = ['thought', 'candle', 'seed', 'leaf', 'roots', 'sapling', 'journal', 'compass'];
+    const noteCards = [['Interview takeaways', '12 insights grouped into 4 themes from week 2. The rail is loved, but nobody could find branches.', 'Pinned', 'Yesterday', 3, 2], ['Open questions', '7 items for design review, 3 unresolved.', '', '2d ago', 1, 1], ['Naming ideas', 'Atlas, Meridian, Waypoint — shortlist and why.', '', '4d ago', 1, 1], ['Launch checklist', 'Docs, changelog, onboarding emails, support macros.', '', '1w ago', 2, 1], ['Competitor notes', 'What three tools do well with project-level context, and where they fall flat.', '', '1w ago', 3, 1], ['Tone of voice', 'Calm, literal, a little dry. Never exclamation marks.', '', '2w ago', 1, 1]].map(([title, body, pin, when, chats, span], i) => ({ title, body, when, span, icon: this.ic(nIc[i]), pinD: pin ? 'block' : 'none', chats: chats + (chats > 1 ? ' chats' : ' chat') }));
+    const artCards = [['IA diagram', 'SVG · diagram', 'v3', 'Navigation model — first pass', '3h'], ['Onboarding copy deck', 'MD · document', 'v2', 'Onboarding copy review', 'Sun'], ['Rail component', 'TSX · code', 'v5', 'Navigation model — first pass', 'Sat'], ['Pricing comparison', 'HTML · page', 'v1', 'Pricing page teardown', 'Oct 14'], ['Settings map', 'SVG · diagram', 'v2', 'Settings IA', 'Oct 6'], ['Empty-state copy', 'MD · document', 'v4', 'Empty states audit', 'Oct 3']].map(([title, t, ver, from, when]) => ({ title, type: t.split(' · ')[0], hint: t.split(' · ')[1] + ' preview', ver, from, when }));
+    const v = {
+      isOverview: vw === 'overview', isFiles: vw === 'files', isNotes: vw === 'notes', isArts: vw === 'arts',
+      goOverview: goV('overview'), goFiles: goV('files'), goNotes: goV('notes'), goArts: goV('arts'),
+      fileRows, noteCards, artCards,
+      fileFilters: fl(['All 14', 'Uploaded 5', 'Linked folder 9', 'Unused 2'], 0), noteFilters: fl(['All 14', 'Pinned 1', 'Linked to chats 11'], 0), artFilters: fl(['All 9', 'Documents 4', 'Diagrams 3', 'Code 2'], 0),
+      states, chats, notes, arts,
+      title: fresh ? 'New project 24' : 'Atlas redesign',
+      meta: fresh ? 'Just created · nothing here yet' : full ? '61 items · active 2h ago' : '3 items · active 1d ago',
+      hasChats: !fresh, noChats: fresh, chatCount: fresh ? 0 : full ? 18 : 3,
+      hasBranches: full, noBranches: !full, branchCount: 11, branchedChats: 6,
+      hasNotes: full, noNotes: !full, noteCount: full ? 14 : 0, notesBg: dash(full), notesBorder: bd(full),
+      hasArts: full, noArts: !full, artCount: full ? 9 : 0, artBg: dash(full), artBorder: bd(full),
+      hasRules: full, noRules: !full, rulesBg: dash(full), rulesBorder: bd(full),
+      hasFiles: full, noFiles: !full, fileCount: full ? 14 : 0, filesBg: dash(full), filesBorder: bd(full),
+    };
+    ['compass', 'tree', 'branch', 'journal', 'lantern', 'basket', 'sign', 'gate', 'roots', 'sapling'].forEach(n => { v['i' + n[0].toUpperCase() + n.slice(1)] = this.ic(n); });
+    return v;
+  }
+}
+
+</script>
+<template id="__bundler_thumbnail"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect width="100" height="100" fill="#1A1A1A"/><rect x="30" y="34" width="40" height="8" rx="3" fill="#fff"/><rect x="30" y="48" width="18" height="18" rx="3" fill="#B8862E"/><rect x="52" y="48" width="18" height="18" rx="3" fill="#8161C9"/></svg></template>
+</body>
+</html>

@@ -1,7 +1,18 @@
 ---
 name: bug-fixing
-description: Use this skill whenever the task involves fixing a bug, regression, or unexpected behavior in the notlinear codebase. Triggers include any user request phrased as "fix", "broken", "doesn't work", "regression", "the X stopped working", "this used to work", or any task that references an entry in BUGS.md. Required before any bug-fix change set, even one-line ones — every fix must check BUGS.md fragile areas first, write a manual reproduction, find the root cause (not the symptom), and append a numbered BUGS.md entry with a test case. Do not skip this skill on the assumption that small fixes don't need it; small fixes are how repeat regressions enter the codebase.
+description: Investigate regressions in the current web/ application, selecting the feature-specific skill first. The historical checklist below applies only to the legacy frontend/ application.
 ---
+
+# Scope and routing
+
+The active application is React/TypeScript under `web/`, built with Vite. The historical vanilla-JS app is not the current Canvas implementation. Do not infer that Canvas uses `threadState`, `persistAll`, `openBranch`, legacy DOM panels, or the old no-build workflow.
+
+For Canvas work, read [Canvas branch system](../canvas-branch-system/SKILL.md) and inspect current callers and types. For chat branches in React, inspect `web/src/branch/` and `web/src/db/branch-ops.ts`; do not apply legacy function contracts to them. For other React features, inspect their own store/repository and tests.
+
+The material below is historical guidance for `frontend/` only. Preserve it for legacy maintenance; do not apply it to `web/`.
+
+---
+
 
 # Bug fixing procedure
 

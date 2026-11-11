@@ -478,3 +478,11 @@ Worth tracking separately since these look clickable but currently do nothing (o
 *Last compiled 2026-08-02 by direct codebase inspection (`frontend/app.js`, `frontend/views/notes.js`, `frontend/core/*.js`, `frontend/providers/*.js`, `backend/server.py`, `index.html`, `redesign_product.md`, `BUGS.md`, `AGENTS.md`). If you land a feature and don't see it here, add it in the same session — see the update rule at the top of this file.*
 
 Last compiled update: 2026-11-01 — Codex; free macOS packaging, manual-download update checks, release tooling and packaged-mode boundaries.
+
+
+## Active desktop packaging (2026-11-11)
+The active UI is React/TypeScript under web/, served at /web/ by FastAPI. A portable DMG must
+build web/dist and include the current backend, backup tools, Python dependencies and subscription
+SDK companion. Settings includes General, Models & keys/Subscriptions, Skills, Integrations,
+Modes, Product updates and Runtime logs. Canvas/annotations, Notes, chat/branches, projects and voice
+use the same source as the current desktop. The retired frontend/ must not be used as release UI.

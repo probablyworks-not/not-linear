@@ -844,3 +844,14 @@ None currently tracked.
 - **Manual test case:** On a packaged QA server, submit runtime-log POST with a foreign Origin; expect 403 and no log write. Same-origin POST succeeds; foreign Host GET fails. In native UI verify main-page file/folder attach and both chat/Notes exports, then open an external link and verify it uses the browser. Automated server cases pass; native interaction cases remain pending.
 - **Prevention:** Packaged-mode origin/rebinding tests, explicit native navigationDelegate and message-origin checks; public release gate requires attachment/export smoke.
 - **Related:** #053 (packaging), #021 (native file pickers).
+
+
+### #055 — DMG shipped the retired UI, omitting current Settings and desktop features
+- **Status:** Fix in progress; **discovered:** 2026-11-11; **agent:** Codex.
+- **Symptom:** DMG shows old Settings instead of current desktop Settings.
+- **Root cause:** Builder copied frontend/ and old stdlib backend from a stale release worktree; desktop opens React/FastAPI /web/ from baseline 3529b689eeb18cc9e021850a829c5cd9f5942e49. Previous parity tests compared the wrong source.
+- **Fix:** Integrate current desktop source, build web/dist, bundle current backend/SDK dependencies/tools and switch native route to /web/. Add payload/source manifests and actual-package browser/HTTP tests.
+- **Files:** scripts/build_macos.py, native shell, backend config/health/worker selection, release tests and docs.
+- **Manual case:** Open corrected DMG, verify seven Settings tabs and Subscriptions; compare Canvas/annotations, Notes, projects, chat/branches, voice and backups; reload preserves data.
+- **Prevention:** Fresh frontend build, desktop source hash baseline, manifest checks and packaged UI tests. Old candidates must be labeled obsolete.
+- **Related:** #053/#054. No source state/schema/Canvas behavior changed.

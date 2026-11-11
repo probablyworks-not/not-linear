@@ -1,0 +1,13 @@
+{
+  "_note": "Key names only; values are secrets.",
+  "keys": [
+    "nl_api_keys",
+    "nl_cp_comments_v1",
+    "nl_cp_projects_v1",
+    "nl_cp_side_collapsed_v1",
+    "nl_cp_status_cache_v1",
+    "nl_side_collapsed_v1",
+    "nl_tabs_v1",
+    "nl_theme"
+  ]
+}

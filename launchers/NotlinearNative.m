@@ -254,6 +254,10 @@ static const long long kMaxTextBytes =  2 * 1024 * 1024;
     NSMutableDictionary *env = [NSProcessInfo.processInfo.environment mutableCopy];
     env[@"NOTLINEAR_DATA_DIR"] = data;
     env[@"NOTLINEAR_PACKAGED"] = @"1";
+    env[@"NOTLINEAR_DEV_PROXY"] = @"0";
+    env[@"NOTLINEAR_AGENT_PYTHON"] = python;
+    env[@"NOTLINEAR_AGENT_HOME"] = [data stringByAppendingPathComponent:@"agents"];
+    env[@"NOTLINEAR_CLAUDE_CLI"] = [resources stringByAppendingPathComponent:@"python/agent-claude"];
     env[@"SSL_CERT_FILE"] = [resources stringByAppendingPathComponent:@"python/etc/openssl/cert.pem"];
     task.environment = env;
     task.standardOutput = log ?: NSFileHandle.fileHandleWithNullDevice;
@@ -425,7 +429,7 @@ createWebViewWithConfiguration:(WKWebViewConfiguration *)configuration
 }
 
 - (void)loadNotlinear {
-    NSURL *url = [NSURL URLWithString:[NSString stringWithFormat:@"http://127.0.0.1:%d/frontend/index.html", NOTLINEAR_PORT]];
+    NSURL *url = [NSURL URLWithString:[NSString stringWithFormat:@"http://127.0.0.1:%d/web/", NOTLINEAR_PORT]];
     NSURLRequest *request = [NSURLRequest requestWithURL:url
                                              cachePolicy:NSURLRequestReloadIgnoringLocalCacheData
                                          timeoutInterval:30.0];

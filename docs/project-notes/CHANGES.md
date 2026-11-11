@@ -835,3 +835,11 @@ Each entry: **date · summary · files touched · why changed · risks · tests 
 - **Why:** User explicitly requested an updated build for review. App payload features remain unchanged; only bundled changelog and version/build metadata differ from v0.2.0.
 - **Risks/tests:** Fresh runtime/native/image checks and read-only mounted-source comparison pass. Eight tests target actual packaged backend/runtime; native feed and page behavior cases pass. Remote asset digests/provenance verified. Full GUI/provider/upgrade/clean-Mac/license review still pending; no new claim of app readiness or public publication.
 - **Next steps:** Review PR #2 and the new draft; publication is a separate future action.
+
+
+## 2026-11-11 — Desktop DMG parity correction in progress
+- **Why/root cause:** Previous packages built the historical worktree's frontend/ rather than the current desktop's React /web/ source. Correct packaging now integrates baseline 3529b68 in an isolated branch; Downloads checkout and personal data untouched.
+- **Changes:** Current React/FastAPI source integrated; builder compiles web/dist, bundles tools/notices/server/SDK dependencies, signs runtime and records manifests; native shell uses /web/ and packaged companion paths; health endpoint and writable data routing retained.
+- **Callers checked:** Desktop/native loadNotlinear→/web/; builder→pnpm build and dependency installation; backend server→create_app→config/runtime logs; subscriptions.start→interpreter→worker.claude_binary. Source Settings/Canvas/Notes/DB/provider functions are retained unchanged, not rewritten. Backup/consent overrides are for isolated QA; production defaults unchanged.
+- **Tests:** Current production build and typecheck pass; 891 unit tests pass after regenerating merged changelog fallback; backend contract/proxy/server tests pass with approved localhost access. First sandbox run lacked socket permission. Full package/browser verification pending.
+- **Risks:** Retired 0.2.x candidates must not be presented as current. Preserve database identities and existing provider credentials; actual provider/native permissions still require explicit validation.

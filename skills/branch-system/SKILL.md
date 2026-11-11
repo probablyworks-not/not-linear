@@ -1,7 +1,18 @@
 ---
 name: branch-system
-description: Use this skill before modifying any code related to branches in notlinear — branch panels, the Recent branches sidebar, branch persistence, branch resize, branch deletion, branch context construction for the model, or any function whose name contains "branch" or "Branch". Triggers include any task mentioning branches, branch panels, the right-side drawer, child branches, nested branches, branch reopening, branch snapshots, or the Recent branches list. This is the most bug-prone area in the codebase, accounting for most entries in BUGS.md (#001–#006, #008–#010). Load this skill even for changes that look small — single-instance, snapshot, and reopen rules are subtle and have caused multiple regressions.
+description: Maintain legacy chat side-panel branches only. For Canvas threads, cards, notifications, source snapshots, or camera navigation, use skills/canvas-branch-system/SKILL.md instead.
 ---
+
+# Scope and routing
+
+The active application is React/TypeScript under `web/`, built with Vite. The historical vanilla-JS app is not the current Canvas implementation. Do not infer that Canvas uses `threadState`, `persistAll`, `openBranch`, legacy DOM panels, or the old no-build workflow.
+
+For Canvas work, read [Canvas branch system](../canvas-branch-system/SKILL.md) and inspect current callers and types. For chat branches in React, inspect `web/src/branch/` and `web/src/db/branch-ops.ts`; do not apply legacy function contracts to them. For other React features, inspect their own store/repository and tests.
+
+The material below is historical guidance for `frontend/` only. Preserve it for legacy maintenance; do not apply it to `web/`.
+
+---
+
 
 # Branch system
 

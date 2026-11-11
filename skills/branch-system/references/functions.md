@@ -1,3 +1,5 @@
+> Historical reference for legacy frontend/ chat branches only. For current Canvas use ../../canvas-branch-system/SKILL.md.
+
 # Branch system: function reference
 
 Read this when modifying any function in the branch system. Function names are stable across refactors and greppable.

@@ -1,80 +1,115 @@
-# not-linear
+# notlinear
 
-A non-linear, chat-based system for research. Chat with Claude (or DeepSeek), highlight any phrase in a response, and branch off a follow-up that keeps the full context of where it came from.
+A local-first, non-linear chat workspace. A conversation is a document you can branch from any highlighted
+passage into a side thread, and every branch keeps the full context of where it came from.
 
-## Ways to run it
+> notlinear is not affiliated with or endorsed by Linear, Anthropic, OpenAI, Google or DeepSeek.
+> Product and company names belong to their owners and are used only to name the integrations.
 
-| Mode | Platforms | Best for |
-|---|---|---|
-| **Browser** (recommended default) | macOS, Windows, Linux | Everyday use, any machine with Python 3 |
-| **macOS desktop app** (`Notlinear.app`) | macOS only | Same app in its own window, double-click launch |
+## What it does
 
-Both run the same code. The desktop app is just a window around the local server that the browser mode starts by hand.
+- **Branch from a highlight.** Select a phrase in a reply, press **Cmd/Ctrl+Shift+B**, ask a follow-up in a side
+  panel. Branches nest, reopen after a reload, and show up on a zoomable thread map.
+- **Projects.** Group chats and notes with their own rules, knowledge files and an optional linked folder
+  (text and PDFs become context).
+- **Bring your own model.** Claude, DeepSeek, OpenAI and Gemini. Switch the model per message.
+- **Research tools.** Web search (Serper, Firecrawl or SearXNG), Wikipedia, and a fetch-URL tool.
+- **Notes.** A block editor (headings, lists, to-dos, callouts, code, equations, tables, columns, bookmarks,
+  page links). Branch from a note selection, or let a chat file a long answer as a note.
+- **Modes and skills.** Response modes plus a bundled library of reasoning skills (`notlinear-skills/`).
+- **Clarify first.** The model can ask a few multiple-choice questions before answering (optional).
 
-## Quick start (browser)
+Your chats and notes live in your browser's IndexedDB. There is no account and no hosted backend.
 
-**Requirements:** Python 3 (3.9 or newer) and a modern browser (Chrome, Edge, Firefox or Safari). Nothing else: no `pip install`, no Node, no build step.
+## Quick start
 
-1. Open a terminal in the repo folder.
-2. Start the server:
-   ```bash
-   python3 backend/server.py        # macOS / Linux
-   python backend/server.py         # Windows (or: py backend/server.py)
-   ```
-3. Open **http://127.0.0.1:8765/frontend/index.html** in your browser.
-4. Click the gear (⚙) → **API Keys** and paste your Anthropic key (and optionally DeepSeek, Serper, Firecrawl, OpenAI or Google keys).
-5. Start chatting. Highlight text in a response to branch from it.
-
-Keep the terminal open while you use the app. Press `Ctrl+C` to stop the server.
-
-### Options
+Requirements: Python 3.12+ (CI runs 3.12), Node 22+, [pnpm](https://pnpm.io) 10, and a modern browser.
 
 ```bash
-python3 backend/server.py --port 9000          # use a different port
-python3 backend/server.py --host 127.0.0.1     # default; local-only
+# 1. Server dependencies
+python3 -m venv .venv
+.venv/bin/pip install -r requirements.txt
+
+# 2. Build the web app
+cd web && pnpm install && pnpm build && cd ..
+
+# 3. Run
+python3 backend/server.py          # then open http://127.0.0.1:8765/web/
 ```
 
-If you change the port, use it in the URL too. Keep the host at `127.0.0.1` unless you understand the risk: the server has no authentication, so binding to `0.0.0.0` exposes it to your network.
+Open **Settings → API keys** and paste at least one provider key (e.g. Anthropic). Keys are stored in your
+browser's localStorage and sent only to that provider (and, for the local helpers below, to your own machine).
 
-### Port already in use
+Options: `--port 9000`, `--host 127.0.0.1` (default). **Keep the host on `127.0.0.1`.** The server has no
+authentication; binding it to `0.0.0.0` exposes your files and keys to your network.
 
-Another copy is probably running (or something else holds port 8765). Either open the URL above directly, or start on a different port with `--port`.
+### Development
 
-## macOS desktop app
+```bash
+NOTLINEAR_DEV_PROXY=1 python3 backend/server.py   # serves the API and proxies /web/ to Vite
+cd web && pnpm dev                                 # Vite on 127.0.0.1:5173, open http://127.0.0.1:8765/web/
+```
 
-Double-click `Notlinear.app` (built from `launchers/`). It starts the same local server and opens Notlinear in its own window, so you never need to open the URL yourself. A lighter alternative is `launchers/Notlinear.command`, which starts the server and opens your default browser.
+Use the `8765` URL, not `5173`: IndexedDB is per origin, so a different port is an empty database.
 
-Build a self-contained development app with `launchers/build-macos-app.command` after setting `NOTLINEAR_PYTHON_FRAMEWORK` to a python.org framework version directory. The new builder bundles the runtime and app resources; the checked-in legacy app binary is not rebuilt in place. See [RELEASE.md](RELEASE.md) for the build → review → publish → update checklist, and the [Mac packaging reference](docs/MACOS_RELEASE.md) for runtime/data details. The free beta is not notarized by Apple and still needs internet for CDN assets. If macOS blocks the first launch, follow [Apple’s per-app approval instructions](https://support.apple.com/102445). The app checks for newer published GitHub releases and offers a manual DMG download; it does not install updates automatically.
+```bash
+pytest tests                                      # server: endpoint contract, static allowlist, proxy
+cd web && pnpm typecheck && pnpm lint && pnpm test
+cd web && pnpm e2e                                # builds, then Playwright against the built app
+```
 
-## Platform differences
+## What the local server is for
 
-The core app (chat, branching, notes, providers, search, persistence) works the same in every browser and OS. A few conveniences depend on macOS, because the server uses `osascript` and `screencapture`:
+A small FastAPI server (`backend/`) does the few things a browser can't: serve the built app, scan a linked
+project folder, fetch pages for the fetch tool without CORS, write runtime logs, and (on macOS) show native
+file and folder pickers.
 
-| Feature | macOS | Windows / Linux |
-|---|---|---|
-| Chat, branches, highlights, Notes | ✅ | ✅ |
-| Native file / folder picker (`+` menu), native save dialog | ✅ | ⚠️ not available through the server; use the browser's own file handling where offered |
-| Feedback screenshots / screen recording | ✅ | ❌ |
+- **macOS-only:** the native file/folder pickers use `osascript`. On Linux and Windows they report
+  "cancelled", so attachments fall back to the browser's file input; the linked-folder picker is unavailable.
+  A cross-platform picker is a welcome contribution.
+- **Network use:** besides your chosen provider, the page loads Google Fonts and the Tabler icon font from CDNs,
+  and pdf.js from jsDelivr when you attach a PDF. Self-hosting these is on the to-do list.
 
-Windows and Linux support for the core app comes from the server using only the Python standard library. It hasn't been smoke-tested on those systems, so report anything that breaks.
+## Layout
 
-## Where your data lives
+```
+web/             React + TypeScript app (Vite, Zustand, Dexie, BlockNote)
+backend/         local FastAPI server
+notlinear-skills/ bundled skills library (Markdown)
+tools/           standalone backup/restore pages for the two IndexedDB databases
+tests/           server tests (pytest)
+```
 
-- **Chats, branches, projects, notes** are stored in your browser's IndexedDB for the address `http://127.0.0.1:8765`. Use the same browser profile and the same host and port each time. Clearing site data, switching browsers or changing the port will make chats appear missing.
-- **API keys** are stored in the browser's `localStorage` and sent only to their own provider's API.
-- Nothing is sent to any server other than the AI providers you configure.
+## Contributing, security, licence
 
-## Updating
+See [CONTRIBUTING.md](CONTRIBUTING.md) and [SECURITY.md](SECURITY.md). Licensed under the terms in
+[LICENSE](LICENSE); third-party notices are in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
-**Installed Mac app:** checks GitHub for newer published builds on launch, every six hours, or through **Check for Updates…**. Choose Download Update, finish your work, quit, and replace the app using the new DMG. Installation is manual; keep the same app identity and local address so local data stays accessible.
 
-**Development:** edit files and the running app notices; a **New update, refresh** button appears in the bottom-right corner. Click it to reload. This is separate from downloadable releases.
+### Sketch inside Canvas
 
-For maintainers, [RELEASE.md](RELEASE.md) documents version/build numbers, verification, draft uploads, publication, website activation and recovery.
+Open a Canvas and click **Sketch** in its toolbar. The flow editor opens as a card in that Canvas. Describe a flow or attach/paste/drop a reference image, then choose **Create Sketch**. Use **Ask** for questions and **Edit** for graph changes. Drag the grip header to move the card; resize, collapse or remove it without deleting the saved Sketch. Pan/zoom inside the flow; **Fit** gives an overview and **Arrange** cleans up an existing layout.
 
-## Repo map
+The **Sketches** library retains existing independent documents; **Add to current Canvas** places one on the Canvas last opened. Image input requires a vision-capable model (Claude, OpenAI or Gemini); text-only providers report that limitation rather than ignoring the image. System dictation uses the standard text field; native transcription and workflow execution are not included.
 
-- `frontend/` is the app (`index.html`, `app.js`, `core/`, `providers/`, `views/`, `styles/`).
-- `backend/server.py` is the local server (static files, runtime log sync, native pickers on macOS).
-- `launchers/` holds the macOS app and launcher scripts.
-- `AGENTS.md`, `FEATURES.md`, `CHANGELOG.md`, `BUGS.md` and `docs/project-notes/` hold contributor and agent documentation.
+Sketch inherits its Canvas's project knowledge: project rules and uploaded files, Canvas memory/files, linked-folder context and the same configured research/repository tools. Use Ask to inspect the project without changing the graph, or Edit to build the flow from that evidence. The chat shows the project name. A Sketch reused across projects uses the Canvas where you opened it; library-only ambiguous associations must be opened from the intended Canvas.
+
+### Subscription agents (test build)
+
+The isolated desktop test build supports connecting Claude and ChatGPT subscriptions in **Settings → Models & keys → Subscriptions**. Choose a subscription model from the composer; the list is refreshed from connected accounts. First install the optional companion with `python3 backend/agent_runtime/setup.py` and restart the server. Claude uses its own official sign-in; ChatGPT uses the official browser authorization flow. Existing API-key connections remain available.
+
+This integration is a prototype: full verification of Notes, branches, canvas, attachments and cancellation is pending. The subscription request path does not silently switch to paid API usage. See [SUBSCRIPTIONS.md](SUBSCRIPTIONS.md) for the verification and performance plan.
+
+
+## Portable macOS DMG (current desktop UI)
+
+The active desktop interface is the built React application at `/web/`. Do not package the retired
+`frontend/` UI. Install locked dependencies in `web/` with `pnpm install --frozen-lockfile`, then use
+`scripts/build_macos.py` with a python.org framework, explicit version/build and a fresh output directory.
+The builder runs the frontend build and bundles FastAPI, subscription SDKs, backup tools and notices.
+See [RELEASE.md](RELEASE.md) for the release procedure. The obsolete 0.2.x drafts used the wrong UI.
+
+For package checks, set `NOTLINEAR_TEST_APP` to the actual `.app` and run
+`python3 -m unittest discover -s tests -p test_release_package.py`, then from `web/` run
+`pnpm exec playwright test -c playwright.package.config.ts`. These use isolated data and test ports;
+they do not overwrite the desktop checkout or user databases. Current packages remain unnotarized.
