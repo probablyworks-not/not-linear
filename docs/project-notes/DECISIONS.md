@@ -424,3 +424,12 @@ Built-in modes stay in code (`core/modes.js`); user edits are stored as per-fiel
 - **Alternatives rejected:** Paid Developer ID/notarization now; global Gatekeeper disabling; claiming Homebrew or a ZIP avoids Gatekeeper; automatic unsigned app replacement; migrating the existing domain to new hosting without its source/configuration.
 - **Consequences/tradeoffs:** First launch may require Privacy & Security approval and may be restricted on managed Macs. No automatic install or restart. HTTPS/GitHub metadata and strict download URL validation are used; checksums are available for manual verification, not a claim of Apple notarization. `/latest` requires a regular published release, even while product copy calls it an early beta. Full GUI/clean-Mac/upgrade QA remains a release gate.
 - **Related files:** `docs/MACOS_RELEASE.md`, `launchers/NotlinearUpdates.{h,m}`, release scripts, `release-site/`.
+
+
+## ADR-033 — Package the active React desktop baseline and isolated companion
+- **Status:** accepted for the user-requested desktop parity correction; supersedes ADR-031's historical frontend/backend selection.
+- **Context:** Earlier release worktree retained retired vanilla source while the user's Desktop app actually ran current React/FastAPI /web/.
+- **Decision:** Use desktop baseline 3529b68, compile web/dist, bundle existing backend and SDK dependencies, load /web/, and record source/payload hashes. Run packaged Python workers with -I -B and explicit trusted sibling imports. Keep bundle ID, local origin and databases unchanged.
+- **Alternatives rejected:** Ship the stale frontend; depend on host Python packages; copy the complete developer checkout or user data.
+- **Consequences:** Build needs Node/pnpm and dependency downloads, but the installed app needs neither developer checkout nor system Python. Binary dependencies increase the DMG size. Real account/provider and clean-Mac checks remain necessary.
+- **Related:** scripts/build_macos.py, launchers/NotlinearNative.m, backend/subscriptions.py, docs/DMG_PARITY.md, #055–#057.

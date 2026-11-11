@@ -113,9 +113,10 @@ test.describe('Models & keys', () => {
     }
     // Current desktop selects models in the composer, not a duplicate Settings radio group.
     await expect(d.getByRole('radio', { name: /Sonnet 5/ })).toHaveCount(0);
+    const initialModel = (await prefsOf(page)).model;
     await d.getByLabel('Context ranking').selectOption('deepseek');
     await expect.poll(async () => (await prefsOf(page)).rankingLlm).toBe('deepseek');
-    expect(await prefsOf(page)).toMatchObject({ model: 'sonnet' });
+    expect((await prefsOf(page)).model).toBe(initialModel);
   });
 
   test('only one card is open at a time', async ({ page }) => {

@@ -515,7 +515,7 @@ Each entry: **ID · Status · Goal · Context · Files likely involved · Accept
 
 
 ## TASK-MAC-008 — Desktop/DMG parity
-- **Status:** In progress.
+- **Status:** Done for corrected review candidate; public release and native/provider/clean-Mac checks remain TASK-MAC-005.
 - **Goal:** Replace outdated DMG Settings/UI and verify all current desktop features in the package.
 - **Context:** Desktop runs current React/FastAPI /web/; old release incorrectly shipped retired frontend/.
 - **Files:** Native shell, backend runtime/config, builder, package manifest and tests/docs.

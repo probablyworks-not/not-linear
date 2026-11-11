@@ -53,12 +53,14 @@ Apple's instructions: https://support.apple.com/102445
 
 Enter your own model-provider API key in Settings. Your chats and Notes are
 stored locally; configured AI/research services receive relevant requests.
-The app still loads some libraries/fonts from CDNs and needs internet access.
+The current React interface, Python server and subscription companion are bundled.
+AI/research services and account sign-in require internet access.
 API keys currently use local browser storage; Keychain storage is not implemented.
 
 To update: finish your current work, quit Notlinear, open the new DMG, and replace
 the app in Applications. Do not clear website data or change the local address.
-Keep a backup of important work; a complete in-app workspace backup is not yet available.
+Back up important work using the included export/import tools before upgrading.
+Account credentials and provider access should be checked separately after installation.
 Only run one copy/local server at a time (port 8765).
 
 Release review: native/provider smoke, data-preserving upgrade and clean-Mac

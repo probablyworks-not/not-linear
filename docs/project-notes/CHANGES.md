@@ -843,3 +843,11 @@ Each entry: **date · summary · files touched · why changed · risks · tests 
 - **Callers checked:** Desktop/native loadNotlinear→/web/; builder→pnpm build and dependency installation; backend server→create_app→config/runtime logs; subscriptions.start→interpreter→worker.claude_binary. Source Settings/Canvas/Notes/DB/provider functions are retained unchanged, not rewritten. Backup/consent overrides are for isolated QA; production defaults unchanged.
 - **Tests:** Current production build and typecheck pass; 891 unit tests pass after regenerating merged changelog fallback; backend contract/proxy/server tests pass with approved localhost access. First sandbox run lacked socket permission. Full package/browser verification pending.
 - **Risks:** Retired 0.2.x candidates must not be presented as current. Preserve database identities and existing provider credentials; actual provider/native permissions still require explicit validation.
+
+
+## 2026-11-11 — Corrected desktop review image verified
+- **Summary:** Completed current desktop parity packaging, isolated companion fixes (#055–#057), actual-package/browser/image validation and seven-tab Settings review.
+- **Files:** Release builder/staging notes, backend companion/native runtime changes, tests, parity/release documentation and memory. Review runtime source remains 29b645e; final documentation and test assertion changes do not alter payload.
+- **Why:** Previous DMG shipped the retired app; new 0.3.0/build 5 contains the active desktop source and dependencies.
+- **Tests/risks:** Six mounted-image checks, 18 targeted browser checks and earlier broad329/unit891/backend/build/lint/license checks pass. Real provider/native/upgrade/clean-Mac smoke remains pending. Free unnotarized distribution continues.
+- **Next:** Review corrected draft; do not publish obsolete 0.2.x drafts or treat mocked checks as live-provider verification.

@@ -6,8 +6,8 @@ The real desktop app is `/Users/yash/Downloads/notlinear`, branch `canvas/tesing
 commit `3529b689eeb18cc9e021850a829c5cd9f5942e49`. The Desktop launcher loads `/web/`.
 Its active frontend is React/TypeScript/Vite, with FastAPI and an optional subscription companion.
 
-**The 0.2.0 and 0.2.1 drafts are obsolete.** They packaged the retired vanilla frontend and stdlib
-backend. Their prior byte comparisons proved only that they matched the wrong release worktree.
+**The 0.2.0 and 0.2.1 packages contain the obsolete UI.** They packaged the retired vanilla frontend and stdlib
+backend. Their prior byte comparisons proved only that they matched the wrong release worktree. On the final GitHub check, v0.2.1 is already public; this correction leaves it unchanged and prepares v0.3.0 as a separate review draft.
 
 ## Corrected candidate
 
@@ -37,11 +37,19 @@ The release manifest records compiled/source file hashes and the exact source co
 - Current unit suite: 891 passed.
 - Backend contract/proxy/server checks: passed (native/network dependencies mocked by fixtures).
 - Lint: passed after regenerating the merged changelog fallback.
-- Actual package HTTP/manifest/runtime/security checks: 5 passed.
-- Full browser suite against packaged assets/backend: running; final result in RUNS.md.
-- Settings screenshots: captured by the packaged audit spec after browser verification.
-- Mounted final image / uploaded asset hashes: pending final candidate packaging.
+- Actual package HTTP/manifest/runtime/security checks: 6 passed, repeated successfully from the read-only mounted DMG.
+- Broad packaged browser suite: 329/330 passed; the sole stale Settings expectation was corrected. All 18 targeted Settings/audit checks then passed.
+- All seven Settings screenshots captured and visually reviewed; Product updates audit waits for actual release cards.
+- Mounted final image: metadata, Applications shortcut, all payload hashes, bundled SDK imports/certificates, Claude CLI and post-use deep signature passed. Remote review asset hashes recorded in RUNS.md.
 
 No real provider request, account login, macOS microphone/Screen Recording grant, or actual native
 file/save dialog is claimed as verified by browser mocks. No user IndexedDB state or credentials
 are read, copied, cleared or migrated. Automated browser storage and server files are isolated.
+
+## Review artifact
+
+- Version 0.3.0 / build 5, Apple Silicon, ad-hoc signed and unnotarized.
+- Runtime source commit: `29b645e410ff150c016f584f1dcd541fdf184bf1`. Later review documentation/test-only commits do not alter the artifact.
+- Local DMG: `dist/release-v0.3.0/Notlinear-0.3.0-arm64.dmg`.
+- Source comparison: 307 active React files match desktop baseline except generated merged changelog fallback; no feature code omitted.
+- Public publication and website changes are not part of this correction.

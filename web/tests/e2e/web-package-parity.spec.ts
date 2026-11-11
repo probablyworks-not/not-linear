@@ -17,6 +17,10 @@ test('packaged current Settings exposes every section and subscription controls'
       await expect(page.getByRole('button', { name: 'Connect Claude', exact: true })).toBeVisible();
       await expect(page.getByRole('button', { name: 'Continue with ChatGPT', exact: true })).toBeVisible();
     }
+    if (id === 'updates') {
+      await expect(page.getByText('Loading changelog...', { exact: true })).toHaveCount(0);
+      await expect(page.getByTestId('release-card').first()).toBeVisible();
+    }
     await page.screenshot({ path: `../dist/parity-review/settings-${id}.png`, fullPage: true });
   }
   await page.getByRole('button', { name: 'Close settings' }).click();

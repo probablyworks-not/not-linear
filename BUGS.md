@@ -847,7 +847,7 @@ None currently tracked.
 
 
 ### #055 — DMG shipped the retired UI, omitting current Settings and desktop features
-- **Status:** Fix in progress; **discovered:** 2026-11-11; **agent:** Codex.
+- **Status:** Fixed in 0.3.0/build 5 review candidate; actual-package regression checks pass; native/provider manual review pending; **discovered:** 2026-11-11; **agent:** Codex.
 - **Symptom:** DMG shows old Settings instead of current desktop Settings.
 - **Root cause:** Builder copied frontend/ and old stdlib backend from a stale release worktree; desktop opens React/FastAPI /web/ from baseline 3529b689eeb18cc9e021850a829c5cd9f5942e49. Previous parity tests compared the wrong source.
 - **Fix:** Integrate current desktop source, build web/dist, bundle current backend/SDK dependencies/tools and switch native route to /web/. Add payload/source manifests and actual-package browser/HTTP tests.
@@ -858,7 +858,7 @@ None currently tracked.
 
 
 ### #056 — Subscription child interpreter added bytecode inside the signed bundle
-- **Status:** Fix in progress; **discovered/fixed:** 2026-11-11; **agent:** Codex.
+- **Status:** Fixed in 0.3.0/build 5 review candidate; actual-package regression checks pass; native/provider manual review pending; **discovered/fixed:** 2026-11-11; **agent:** Codex.
 - **Symptom:** Package signature verified after build but failed after browser/companion checks, with new __pycache__ files listed by codesign.
 - **Root cause:** The primary server used -B, but subscriptions.start spawned its separate interpreter without that flag. The child's imports wrote caches inside the bundled runtime.
 - **Fix:** Spawn companion Python with -B and set the native launcher's no-bytecode environment. Add a package regression test that performs an isolated companion status operation and rechecks the signature.
@@ -869,7 +869,7 @@ None currently tracked.
 
 
 ### #057 — Packaged companion imported conflicting user-site Python packages
-- **Status:** Fix in progress; **discovered/fixed:** 2026-11-11; **agent:** Codex.
+- **Status:** Fixed in 0.3.0/build 5 review candidate; actual-package regression checks pass; native/provider manual review pending; **discovered/fixed:** 2026-11-11; **agent:** Codex.
 - **Symptom:** Subscription status returned ImportError despite bundled SDK import checks passing in isolated mode.
 - **Root cause:** Child worker used ordinary Python startup, which preferred an older user-site typing_extensions over the bundled version required by anyio/MCP. Primary venv did not have this user-site precedence.
 - **Fix:** Start the packaged companion with -I -B and add only its trusted sibling directory for the auth module. No provider credentials or user packages are copied/changed.
