@@ -79,3 +79,6 @@ feedback/
 # Local-only legacy parity tests (need frontend/)
 web/tests/legacy-oracle/
 web/vitest.oracle.config.ts
+
+# Portable desktop release artifacts
+/dist/

@@ -99,3 +99,17 @@ Sketch inherits its Canvas's project knowledge: project rules and uploaded files
 The isolated desktop test build supports connecting Claude and ChatGPT subscriptions in **Settings → Models & keys → Subscriptions**. Choose a subscription model from the composer; the list is refreshed from connected accounts. First install the optional companion with `python3 backend/agent_runtime/setup.py` and restart the server. Claude uses its own official sign-in; ChatGPT uses the official browser authorization flow. Existing API-key connections remain available.
 
 This integration is a prototype: full verification of Notes, branches, canvas, attachments and cancellation is pending. The subscription request path does not silently switch to paid API usage. See [SUBSCRIPTIONS.md](SUBSCRIPTIONS.md) for the verification and performance plan.
+
+
+## Portable macOS DMG (current desktop UI)
+
+The active desktop interface is the built React application at `/web/`. Do not package the retired
+`frontend/` UI. Install locked dependencies in `web/` with `pnpm install --frozen-lockfile`, then use
+`scripts/build_macos.py` with a python.org framework, explicit version/build and a fresh output directory.
+The builder runs the frontend build and bundles FastAPI, subscription SDKs, backup tools and notices.
+See [RELEASE.md](RELEASE.md) for the release procedure. The obsolete 0.2.x drafts used the wrong UI.
+
+For package checks, set `NOTLINEAR_TEST_APP` to the actual `.app` and run
+`python3 -m unittest discover -s tests -p test_release_package.py`, then from `web/` run
+`pnpm exec playwright test -c playwright.package.config.ts`. These use isolated data and test ports;
+they do not overwrite the desktop checkout or user databases. Current packages remain unnotarized.

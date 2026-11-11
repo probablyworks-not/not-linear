@@ -9,6 +9,8 @@ needs no static route at all.
 
 from __future__ import annotations
 
+import os
+
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
@@ -34,6 +36,10 @@ def create_app(port: int = config.DEFAULT_PORT) -> FastAPI:
     app.include_router(notes_router)
     app.include_router(voice_router)
     app.include_router(subscriptions_router)
+
+    @app.get("/__notlinear_health")
+    async def health() -> dict:
+        return {"ok": True, "app": "notlinear", "pid": os.getpid(), "entrypoint": "/web/"}
 
     @app.get("/CHANGELOG.md")
     async def changelog() -> FileResponse:

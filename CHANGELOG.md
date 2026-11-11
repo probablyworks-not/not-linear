@@ -336,6 +336,64 @@ Behavior changes: locate waits for expanded card layout, frames its heading and 
 - Persistence: additive `canvas_annotations_v1:<encoded-canvas>:<encoded-thread>` rows in the existing `notlinear-canvas` kv store. Missing rows read as empty. Optional stroke width scales with its block; old strokes without width keep the existing CSS width. No database version, CanvasDoc shape, source snapshot, model context or layout migration/rewrite. Canvas/thread deletion removes marks; late saves cannot resurrect a deleted thread.
 - Verification: 30 unit/storage/schema tests, held-H Canvas/chat browser checks, seven existing Canvas selection/branch/reading/zoom/isolation/idle checks, TypeScript, focused ESLint and production build passed. Native trackpad/live providers are not claimed tested. Final desktop build served from the active Downloads checkout; reload/reopen to load it.
 
+- Agent: Kimi (k2.6)
+- Summary: Removed the topbar settings, share, and edge-toggle buttons, leaving only Context & files and Highlights.
+- Files changed: `notlinear.html`, `CHANGELOG.md`
+
+
+## 2026-11-01 · Codex · Portable macOS development bundle and DMG foundation
+
+- Summary: Added a self-contained development app builder with a bundled, relocated Python runtime, architecture/version controls, runtime dependency audit, local ad-hoc signing, and optional DMG creation. Fixed repository-specific native launch paths (bug #053).
+- Files changed: `backend/server.py`, `launchers/{NotlinearNative.m,build-macos-app.command}`, `scripts/build_macos.py`, `tests/test_packaged_server.py`, `.gitignore`, `README.md`, `FEATURES.md`, `docs/MACOS_RELEASE.md`, project-memory files, `BUGS.md`, `CHANGELOG.md`.
+- Behavior changes: Newly built native apps load `/frontend/index.html`, require the bundled runtime, poll their own backend readiness, report port conflicts without killing other processes, and write runtime logs/feedback under `~/Library/Application Support/Notlinear/`. Development server defaults, frontend file-watch, local origin, bundle identity, and both IndexedDB schemas are unchanged. A new GET `/__notlinear_health` identifies the backend process. The build command now requires a python.org framework and creates a separate output instead of modifying the tracked legacy app.
+- Verification: Relocated arm64 runtime imports succeeded; six isolated backend integration tests passed with system and bundled Python; native compilation, deep signature verification, shell/Python syntax, and development DMG checksum passed. Full GUI/provider smoke and clean-Mac/upgrade testing remain pending.
+- Observed: CDN assets still require internet; Sparkle, Keychain migration, complete backup/restore, Developer ID signing/notarization, hosting, and public-release QA remain pending. No code-signing identity is configured on this Mac.
+
+
+## 2026-11-01 · Codex · Free Mac DMG distribution and release notifications
+
+- Summary: Adopted the user-selected free, unnotarized DMG route through probablyworks-not/not-linear GitHub Releases and the existing notlinear.lol website. Added native release checks, manual update download prompts, release staging/draft-upload tooling, and a standalone download page ready for the existing Vercel project.
+- Files changed: `launchers/Notlinear{Native,Updates}.{m,h}`, `backend/server.py`, `scripts/{build_macos,prepare_macos_release}.py`, `tests/`, `release-site/`, `README.md`, `FEATURES.md`, release guide and project memory.
+- Behavior changes: Newly built Mac apps check public release metadata on launch/every six hours and expose Check for Updates…; newer builds offer Download Update/Later, with no automatic installation or restart. Packaged servers restrict Host/Origin and omit permissive CORS; the native bridge requires the main app origin and opens external pages in the browser (bug #054). A separate QA identity/port is available only for test builds. Development server defaults, local file-watch and both database schemas are unchanged.
+- Verification: Eight isolated server tests, native feed validation, download-page success/404/offline/unsafe-link cases, native compilation and relocated runtime check passed. Isolated QA served frontend modules and file-watch HEAD requests; native GUI/provider/clean-Mac and populated upgrade smoke remain unverified.
+- Observed: The website is on Vercel and links to another GitHub repository; its source project has not been identified, so no website deployment was attempted. CDN assets, local-browser-storage API keys and incomplete workspace backup remain disclosed beta limitations. Paid signing/notarization and Sparkle are deferred by user preference.
+
+
+## 2026-11-01 · Codex · Website waitlist replaced with Mac downloads
+
+- Summary: Integrated the download path into the existing probablyworks-not/notlinear-website homepage and Vercel deployment; corrected this repository's release documentation/status.
+- Files changed here: `docs/MACOS_RELEASE.md`, `FEATURES.md`, `docs/project-notes/{TASKS,RUNS,CHANGES}.md`, `CHANGELOG.md`. Website changes are commit `fb01127d461c3afbe0e6e6019ac082d1cf8e60ec` in the separate website repository.
+- Behavior changes: Website navigation, hero and closing CTAs offer Download for Mac; signup modal/submission script removed. The existing design/animation assets remain unchanged. Download links discover the public arm64 GitHub asset, with an honest preparation message while the Mac release remains a draft. App code/data unchanged in this follow-up.
+- Verification: Website syntax checks, four behavior tests, static build and localhost HTTP checks pass. Vercel reports success for the exact commit. Live HTML verification checks all three download CTAs, no signup form, and the release-check script.
+
+
+## 2026-11-03 · Codex · Document the complete Mac release and update procedure
+
+- Summary: Added root `RELEASE.md` as the operator checklist for source/version selection, building, verification, staging/uploading drafts, approved publication, anonymous download/feed/website checks, manual updates and recovery. Linked it from README and the Mac technical reference.
+- Files changed: `RELEASE.md`, `README.md`, `docs/MACOS_RELEASE.md`, `docs/project-notes/{TASKS,RUNS,CHANGES}.md`, `CHANGELOG.md`.
+- Verification: Release/PR state and root/www DNS checked on 2026-11-03; shell examples parsed with bash, local Markdown file links checked, GitHub publish flags checked against installed CLI help; whitespace check passed. Documentation only; app code and release assets unchanged.
+- Observed: v0.2.0/build 3 remains a draft; full native/provider/clean-Mac/upgrade and dependency-license checks remain pending. `www` still returns DNS NXDOMAIN. User's requested publication target is awaiting clarification because the message ended at “release the”.
+
+
+## 2026-11-03 · Codex · Prepare v0.2.1 / build 4 for review
+
+- Summary: Rebuild the current Mac release source with the latest release runbook and bundled changelog as a distinct Apple Silicon review candidate; retain v0.2.0 as a previous draft.
+- Files changed: `RELEASE.md`, `docs/MACOS_RELEASE.md`, `CHANGELOG.md`, `docs/project-notes/{TASKS,RUNS,CHANGES}.md`; generated app/DMG/feed/checksums under ignored `dist/`.
+- Behavior changes: Candidate app version/build becomes 0.2.1/4. Product features, manual-update behavior, bundle identity, local origin and database schemas are unchanged. The candidate remains ad-hoc signed and unnotarized; no public release is authorized by this preparation request.
+- Verification: Build/runtime/signature/image/feed/server/page checks will be recorded in RUNS.md. Full native/provider/clean-Mac/upgrade and dependency-license checks remain publication gates; preparation does not claim those pass.
+
+- Review verification follow-up: v0.2.1/build 4 prepared from `83bc2ad4ef82ed4fb57f3e641a72c757a069fdfe`, with fresh build/signature/image/mounted-runtime checks, eight packaged-backend tests, native feed and page cases passed. Uploaded DMG/feed/checksum digests match local files. Review draft: https://github.com/probablyworks-not/not-linear/releases/tag/untagged-a7f846b6e3a674155801. Existing v0.2.0 remains a draft; full manual release gates remain pending.
 ## 2026-11-07 · Codex · Claude research limits and errors
 - Raised the Claude research turn limit from 6 to 20 and report recognized provider failure categories without exposing provider error text. Files: `backend/agent_runtime/worker.py`, `backend/agent_runtime/test_subscription.py`.
 - Behavior changes: Longer research tasks can use more steps; partial output remains visible if a request still fails.
+
+
+## 2026-11-11 · Codex · Correct the DMG to match the active desktop
+- Summary: Integrate current desktop baseline 3529b689eeb18cc9e021850a829c5cd9f5942e49 and replace obsolete frontend packaging with the built React/FastAPI app, current Settings/Canvas/Notes, backup tools and subscription runtime.
+- Files changed: release builder, native shell, backend runtime configuration/health/companion selection, packaged test/configuration and release docs.
+- Behavior changes: Packaged app opens /web/ and bundles required Python/SDK dependencies. Source app features, data and schemas match the current desktop; local identity/origin preserved. Candidate 0.3.0/build 5 replaces obsolete 0.2.x review drafts.
+- Verification: Current source and actual packaged browser/runtime/image checks are recorded in RUNS.md. Live-provider/native-dialog checks remain explicit.
+
+- Packaging follow-up: subscription child Python now suppresses bytecode writes so opening provider controls cannot alter the signed runtime. Regression check exercises isolated status and re-verifies the app seal (#056).
+
+- Packaging follow-up: isolate the subscription child from user-site Python packages; load its sibling auth module explicitly. This prevents host-package ImportError without changing provider or account behavior (#057).

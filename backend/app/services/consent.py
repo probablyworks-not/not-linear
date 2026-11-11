@@ -20,7 +20,7 @@ import json
 import os
 from pathlib import Path
 
-LEDGER_DIR = Path.home() / ".notlinear"
+LEDGER_DIR = Path(os.environ.get("NOTLINEAR_CONSENT_DIR", str(Path.home() / ".notlinear"))).expanduser().resolve()
 LEDGER_PATH = LEDGER_DIR / "allowed_roots.json"
 
 

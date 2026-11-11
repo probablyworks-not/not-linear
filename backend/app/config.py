@@ -19,7 +19,9 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 WEB_DIST_DIR = REPO_ROOT / "web" / "dist"
 TOOLS_DIR = REPO_ROOT / "tools"
 
-LOGS_PATH = REPO_ROOT / "logs.md"
+DATA_ROOT = Path(os.environ.get("NOTLINEAR_DATA_DIR", str(REPO_ROOT))).expanduser().resolve()
+DATA_ROOT.mkdir(parents=True, exist_ok=True)
+LOGS_PATH = DATA_ROOT / "logs.md"
 CHANGELOG_PATH = REPO_ROOT / "CHANGELOG.md"
 LOGO_PATH = REPO_ROOT / "logo.svg"
 

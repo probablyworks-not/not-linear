@@ -18,7 +18,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-BACKUP_DIR = Path.home() / ".notlinear" / "backups"
+BACKUP_DIR = Path(os.environ.get("NOTLINEAR_BACKUP_DIR", str(Path.home() / ".notlinear" / "backups"))).expanduser().resolve()
 BACKUP_FORMAT = "notlinear-backup/v1"
 NOTES_DB = "notlinear-notes"
 MAX_BYTES = 256 * 1024 * 1024  # notes embed images as data URLs, so this can be large

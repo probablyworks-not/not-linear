@@ -8,6 +8,8 @@ import sys
 import tempfile
 from pathlib import Path
 
+# The packaged worker runs in isolated mode; only its trusted sibling module is added.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 from auth import ROOT, RESOURCE, access_token, load, login, request_json, save
 
 
@@ -24,6 +26,11 @@ def clean_environment():
 
 
 def claude_binary():
+    packaged = os.environ.get('NOTLINEAR_CLAUDE_CLI')
+    if packaged:
+        if not Path(packaged).is_file():
+            raise ValueError('The bundled Claude companion is missing. Reinstall Notlinear.')
+        return packaged
     binary = shutil.which('claude')
     if binary:
         return binary
