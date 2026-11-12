@@ -1,4 +1,5 @@
-import Dexie, { type Table } from 'dexie';
+import Dexie from '../cloud/database';
+import { type Table } from 'dexie';
 
 // The Canvas database. Like notes (ADR-007), skills (ADR-043), artifacts (ADR-058) and designs
 // (ADR-065) it is its OWN db, never the chat `notlinear` db: that schema is frozen and shared with

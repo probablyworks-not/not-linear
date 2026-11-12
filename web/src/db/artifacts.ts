@@ -1,4 +1,5 @@
-import Dexie, { type Table } from 'dexie';
+import Dexie from '../cloud/database';
+import { type Table } from 'dexie';
 
 // The artifacts database. Like notes (ADR-007) and skills it is its OWN db, never the chat `notlinear`
 // db: that schema is frozen and shared with the legacy app. One kv row holds every project's artifacts.

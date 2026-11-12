@@ -1,3 +1,4 @@
+import { accountStorage as localStorage } from '../cloud/local-storage';
 // Theme application, mirroring app.js:4306 applyTheme. The theme lives in two
 // places that must agree: `prefs.theme` (the source of truth, in IndexedDB) and
 // `localStorage.nl_theme`, which the pre-paint script in index.html reads to

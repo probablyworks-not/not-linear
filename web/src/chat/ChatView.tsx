@@ -1,3 +1,5 @@
+import { Onboarding } from '../cloud/Onboarding';
+import { cloudMode } from '../cloud/client';
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { useAppStore } from '../state/app-store';
 import { useUiStore } from '../state/ui-store';
@@ -209,6 +211,7 @@ export function ChatView({ threadId }: { threadId: string }) {
       >
         <div ref={box} onClick={onClick} onKeyDown={onKeyDown} className="mx-auto w-full max-w-[780px] flex-1 px-8 pb-48 pt-6" data-chat-stream data-testid="chat-stream">
           <ThreadHeader threadId={threadId} fallbackTitle={fallbackTitle} />
+          {cloudMode()&&<Onboarding placement="inline"/>}
           {empty ? (
             <div className="mt-24 text-center" data-testid="chat-empty">
               <p className="text-sm text-text-2">Ask a question to start.</p>
@@ -259,12 +262,12 @@ export function ChatView({ threadId }: { threadId: string }) {
       {notePaneId && (
         <Suspense fallback={null}><NotePane key={notePaneId} noteId={notePaneId} overlay={makeRoom} /></Suspense>
       )}
-      <BranchStack threadId={threadId} fallbackTitle={crumbTitleOf(thread, fallbackTitle)} />
+      {flags.branches && <BranchStack threadId={threadId} fallbackTitle={crumbTitleOf(thread, fallbackTitle)} />}
       <SelectionPopover threadId={threadId} threadTitle={crumbTitleOf(thread, fallbackTitle)} onAsk={text => { void askAbout(threadId, text); }} />
-      <HighlightsPanel threadId={threadId} />
+      {flags.highlights && <HighlightsPanel threadId={threadId} />}
       <ContextPanel threadId={threadId} />
-      <ThreadMap currentThreadId={threadId} />
-      <BranchCanvas threadId={threadId} />
+      {flags.branches && <ThreadMap currentThreadId={threadId} />}
+      {flags.branches && <BranchCanvas threadId={threadId} />}
     </>
   );
 }

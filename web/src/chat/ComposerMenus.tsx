@@ -1,3 +1,5 @@
+import { flags } from '../flags';
+import { planModel } from './models';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { Check, ChevronDown, Crown, Diamond, Sparkles, Zap, Brain, Bot, Plus } from 'lucide-react';
@@ -90,7 +92,7 @@ export function ModelMenu({ anchor, branchId, onClose }: { anchor: HTMLElement; 
 
   return (
     <FloatingMenu anchor={anchor} label="Select model" onClose={onClose} escId="modelMenu" escPriority={ESC_PRIORITY.modelMenu}>
-      {[...subscriptionModels,...MODELS].map(m => (
+      {[...subscriptionModels,...MODELS].filter(m => { const p=planModel(m.id,false); return p.supported && (p.modelId.startsWith('sub:') ? (p.modelId.includes('chatgpt')?flags.subscriptionChatgpt:flags.subscriptionClaude) : ({claude:flags.apiAnthropic,deepseek:flags.apiDeepseek,openai:flags.apiOpenai,gemini:flags.apiGemini}[p.provider])); }).map(m => (
         <button key={m.id} type="button" role="menuitem" data-model={m.id} className={clsx(MENU_ITEM, m.id === current && 'bg-accent-soft')} onClick={() => choose(m.id)}>
           <ModelIcon id={m.id} />
           <span className="flex-1">{m.label}<span className="block text-xs text-text-3">{m.blurb}</span></span>

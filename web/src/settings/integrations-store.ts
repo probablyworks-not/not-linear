@@ -1,3 +1,4 @@
+import { accountStorage as localStorage } from '../cloud/local-storage';
 import { create } from 'zustand';
 
 // PLACEHOLDER (Settings -> Integrations). Nothing here talks to GitHub, Reddit, an MCP server or a

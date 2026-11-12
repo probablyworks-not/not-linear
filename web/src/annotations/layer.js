@@ -1,3 +1,4 @@
+import { flags } from '../flags';
 /* global document, window, Element, requestAnimationFrame, ResizeObserver, MutationObserver, getComputedStyle, innerWidth, innerHeight */
 import { readAnnotations, writeAnnotations, deleteAnnotations } from '../db/annotations-repo';
 import { toast } from '../ui/toast';
@@ -17,11 +18,13 @@ export function initAnnotations({ getThreadId, isChat, getCanvasBranchId = () =>
   toolbar.setAttribute('role', 'toolbar');
   toolbar.setAttribute('aria-label', 'Amber annotations');
   toolbar.innerHTML = '<button type="button" data-action="draw" aria-pressed="false" title="Draw amber annotations (hold H)">Amber marker · H</button><button type="button" data-action="undo">Undo</button><button type="button" data-action="clear">Clear</button><span class="annotation-surface"></span>';
+  toolbar.hidden=!flags.highlights;
+  window.addEventListener('notlinear:flags',()=>{toolbar.hidden=!flags.highlights;});
   document.body.append(toolbar);
   const key = (tid, bid) => JSON.stringify([tid, bid]);
   const editable = el => el instanceof Element && !!el.closest('input,textarea,select,[contenteditable]:not([contenteditable="false"])');
   const blockingDialog = () => [...document.querySelectorAll('[role="dialog"],[role="alertdialog"]')].some(el => !el.matches('[data-testid="canvas-output-detail"]'));
-  const enabled = () => isChat() && !blockingDialog() && (held || toggled);
+  const enabled = () => flags.highlights && isChat() && !blockingDialog() && (held || toggled);
   const scope = root => root.dataset.message ? `message:${root.dataset.message}` : root.matches('.branch-body') ? 'branch' : 'chat-stream';
   function surfaceRoots(){
     if (!thread.startsWith('canvas:')) return [...document.querySelectorAll('[data-chat-stream] > .chat-stream,.branch-stack .branch-body')];

@@ -1,3 +1,4 @@
+import { cloudMode } from '../cloud/client';
 import { lazy, Suspense, useMemo, useRef, type ReactNode } from 'react';
 import { clsx } from 'clsx';
 import { useAppStore } from '../state/app-store';
@@ -25,7 +26,7 @@ import { ExportButton } from '../notes/ExportButton';
 import { SaveToArtifactsButton } from '../notes/SaveToArtifactsButton';
 import { newSketch } from '../sketch/open-sketch';
 import { NOTE_TAB_PREFIX, canvasIdOfTab, isCanvasTabId, isNoteTabId } from '../state/tabs';
-import { flags } from '../flags';
+import { flags, useFeatureFlags, featureForView } from '../flags';
 import { useEdgeReveal } from '../lib/edge-reveal';
 import { useCanvasDoc } from '../canvas/canvas-doc-store';
 import { useCanvasStore } from '../canvas/canvas-store';
@@ -56,9 +57,12 @@ function CanvasBreadcrumbs({ canvasId }: { canvasId: string }) {
 }
 
 export function AppShell() {
+  useFeatureFlags();
   const sidebarOpen = useUiStore(s => s.sidebarOpen);
   const activeTabId = useUiStore(s => s.activeTabId);
-  const view = useActiveViewId();
+  const requestedView = useActiveViewId();
+  const feature = featureForView(requestedView ?? '');
+  const view = feature && !flags[feature] ? 'blank' : requestedView;
   const threadState = useAppStore(s => s.threadState);
   const dynamic = useAppStore(s => s.dynamicThreads);
   const deleted = useAppStore(s => s.deletedThreadIds);
@@ -89,7 +93,7 @@ export function AppShell() {
       <div className={clsx('flex min-h-screen flex-col transition-[margin] duration-200 ease-out', sidebarOpen && 'md:ml-sidebar')}>
         {/* Tabs and breadcrumb bar float over the page and slide in when the pointer goes to the top edge. */}
         <div
-          ref={barRef} data-shown={bar.visible} {...bar.focusProps}
+          ref={barRef} style={{top:cloudMode()?'var(--cloud-toolbar-height,26px)':undefined}} data-shown={bar.visible} {...bar.focusProps}
           className={clsx(
             workspaceView && bar.autohide
               ? 'sticky top-0 z-30 grid bg-bg transition-[grid-template-rows] duration-150 ease-out'
@@ -127,10 +131,10 @@ export function AppShell() {
           <main className="flex flex-1 items-center justify-center px-7 py-16">
             {view === 'blank' ? (
               <div className="text-center">
-                <button type="button" onClick={() => { void newSketch(); }} className="mb-4 rounded-lg border border-rule-2 bg-bg-2 px-3.5 py-2 text-sm text-text hover:bg-bg-3">Sketch</button>
-                <p className="mb-4 text-sm text-text-2">Start a chat, or pick one from the left pane.</p>
+                <button hidden={!flags.sketch} type="button" onClick={() => { void newSketch(); }} className="mb-4 rounded-lg border border-rule-2 bg-bg-2 px-3.5 py-2 text-sm text-text hover:bg-bg-3">Sketch</button>
+                <p className="mb-4 text-sm text-text-2">{flags.chat||flags.notesV2||flags.canvas||flags.sketch||flags.projects?'Open an available workspace from the left pane.':'Workspace features are currently disabled. Your saved work is preserved.'}</p>
                 <button
-                  type="button" onClick={() => { void newChat(); }}
+                  hidden={!flags.chat} type="button" onClick={() => { void newChat(); }}
                   className="rounded-lg border border-rule-2 bg-bg-2 px-3.5 py-2 text-sm text-text hover:bg-bg-3"
                 >
                   New chat

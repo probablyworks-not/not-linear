@@ -1,3 +1,4 @@
+import { providerFetch } from '../cloud/provider-fetch';
 // The request log: an in-memory ring buffer of recent backend requests and
 // traces, ported from core/api-client.js (lines 29-336) with its behaviour intact.
 //
@@ -178,7 +179,7 @@ export async function loggedFetch(url: string, options: RequestInit = {}, meta: 
     body: summarizeBody(options.body),
   });
   try {
-    const res = await fetch(url, { ...options, signal: timeout.signal }) as Response & { _notlinearRequestId?: number };
+    const res = await providerFetch(url, { ...options, signal: timeout.signal }) as Response & { _notlinearRequestId?: number };
     logBackendEvent({
       id, kind: 'http', phase: 'end', startedAt: startedAtIso, endedAt: new Date().toISOString(),
       durationMs: Math.round(performance.now() - startedAt), ...common,

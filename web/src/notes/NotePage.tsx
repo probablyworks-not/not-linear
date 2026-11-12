@@ -1,3 +1,4 @@
+import { requireFeature } from '../flags';
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { BlockNoteEditor } from '@blocknote/core';
 import { BlockNoteView } from '@blocknote/ariakit';
@@ -28,6 +29,7 @@ const NOTE_ROOM = 'calc(var(--nt-drawer-w) + var(--drawer-gap) * 2)';
 const writer = createDebouncedWriter();
 
 function fileToDataUrl(file: File): Promise<string> {
+  requireFeature('attachments');
   return new Promise((resolve, reject) => {
     const r = new FileReader();
     r.onload = () => resolve(String(r.result));

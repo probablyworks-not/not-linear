@@ -1,3 +1,4 @@
+import { flags } from '../flags';
 import {
   loggedFetch, readResponseBody, readLoggedErrorPayload, safeJsonForLog, beginBackendTrace, endBackendTrace,
   SEARCH_TIMEOUT_MS, PAGE_READ_TIMEOUT_MS, SCRAPE_TIMEOUT_MS,
@@ -287,6 +288,12 @@ export interface ToolInput { query?: string; url?: string; offset?: number; repo
 export type ToolRunner = (name: ToolName | string, input: ToolInput, signal: AbortSignal, ctx?: ToolRunContext) => Promise<string>;
 
 export const executeTool: ToolRunner = async (name, input, signal, ctx = {}) => {
+  const enabled=name==='create_note'?flags.chatNotes:name.includes('project_file')?flags.linkedFolders:flags.research;
+  if(!enabled)throw new ToolFatalError('This tool is currently disabled.');
+  if(name.startsWith('github_')&&!flags.toolGithub)throw new ToolFatalError('GitHub tools are disabled.');
+  if(name==='serper_search'&&!flags.toolSerper)throw new ToolFatalError('Serper is disabled.');
+  if(name==='firecrawl_scrape'&&!flags.toolFirecrawl)throw new ToolFatalError('Firecrawl is disabled.');
+  if(name==='web_search'&&!flags.toolSearxng)throw new ToolFatalError('SearXNG is disabled.');
   const trace = beginBackendTrace('tool', { tool: name, input: safeJsonForLog(input) });
   try {
     let result: string;

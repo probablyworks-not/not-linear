@@ -1,3 +1,5 @@
+import { cloudMode,cloudRequest } from '../cloud/client';
+import { requireFeature } from '../flags';
 // Voice input: live speech-to-text via AssemblyAI's Universal-Streaming (v3) API.
 // Ported from frontend/core/voice.js — dictation only, no text-to-speech, no voice commands.
 // startVoiceCapture() captures the mic, streams 16kHz PCM audio to AssemblyAI over a
@@ -37,6 +39,8 @@ function micErrorMessage(e: unknown): string {
 }
 
 async function fetchToken(apiKey: string): Promise<string> {
+  requireFeature('voice');
+  if(cloudMode())return (await cloudRequest<{token:string}>('/voice/token',{method:'POST'})).token;
   const res = await fetch(TOKEN_ENDPOINT, {
     method: 'POST',
     headers: { 'content-type': 'application/json', ...LOCAL_HEADER },

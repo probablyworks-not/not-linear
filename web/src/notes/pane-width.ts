@@ -1,3 +1,4 @@
+import { accountStorage as localStorage } from '../cloud/local-storage';
 // How wide the note pane beside a chat may be. Pure so the rules are tested without a browser.
 
 export const PANE_MIN = 340;

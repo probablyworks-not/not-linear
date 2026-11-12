@@ -1,3 +1,4 @@
+import { cloudMode } from '../cloud/client';
 import { useAppStore } from './app-store';
 import { useUiStore } from './ui-store';
 import { mountView } from '../registry/views';
@@ -16,12 +17,14 @@ import { unassignCanvasesOfProject } from '../canvas/canvas-repo';
 // `register*Opener` bridges became: plain functions, callable from anywhere.
 
 export async function selectThread(id: string): Promise<void> {
+  if(!flags.chat)return;
   useUiStore.getState().activateTab(id);
   mountView('chat');
   await useAppStore.getState().openThread(id);
 }
 
 export async function newChat(): Promise<void> {
+  if(!flags.chat)return;
   const id = await useAppStore.getState().createThread();
   if (!id) return;
   useUiStore.getState().activateTab(id);
@@ -65,6 +68,7 @@ export async function syncFromDisk(): Promise<void> {
 
 /** app.js:5393 openProjectPanel: stamp updatedAt on first open, tuck the sidebar away, show the panel. */
 export async function openProjectPanel(pid: string, opts?: { selectName?: boolean }): Promise<void> {
+  if(!flags.projects)return;
   const ui = useUiStore.getState();
   ui.setProjectsViewOpen(false);
   ui.setSidebarOpen(false);
@@ -78,6 +82,7 @@ export function closeProjectPanel(): void {
 }
 
 export async function newProject(): Promise<void> {
+  if(!flags.projects)return;
   const pid = await useAppStore.getState().createProject();
   if (pid) await openProjectPanel(pid, { selectName: true });
 }
@@ -91,6 +96,7 @@ export async function moveChat(tid: string, pid: string | null): Promise<void> {
 
 /** app.js:5576 newChatInProject. */
 export async function newChatInProject(pid: string): Promise<void> {
+  if(!flags.chat)return;
   await useAppStore.getState().flushPrefs();
   const id = await useAppStore.getState().newChatInProject(pid);
   if (!id) return;
@@ -136,6 +142,7 @@ export async function deleteProjectWithConfirm(pid: string): Promise<void> {
 
 /** app.js:5694 #project-add-file. */
 export async function addFilesToProject(pid: string): Promise<void> {
+  if(!flags.attachments)return;
   const picked = await pickFiles();
   if (!picked.length) return;
   try {
@@ -153,6 +160,12 @@ export async function addFilesToProject(pid: string): Promise<void> {
 
 /** app.js:5604 #project-link-folder. The server records the pick in its consent ledger (ADR-035). */
 export async function linkProjectFolder(pid: string): Promise<void> {
+  if(!flags.linkedFolders) return;
+  if(cloudMode()) {
+    const picked=await pickFiles({folder:true});
+    if(picked.length)await useAppStore.getState().addProjectFiles(pid,await readFiles(picked));
+    toast('Folder files uploaded. Changes on your computer are not automatically synchronized.');return;
+  }
   let res: Response;
   try {
     res = await fetch('/__notlinear_pick_folder', { method: 'POST', headers: { 'content-type': 'application/json', ...LOCAL_HEADER }, body: '{}' });

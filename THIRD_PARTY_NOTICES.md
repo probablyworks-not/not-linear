@@ -274,3 +274,10 @@ Notes:
 ## AntV X6 2.18.1 — Sketch editor
 
 MIT licensed. Unmodified published browser distributions served from `web/public/vendor/x6-2.18.1/`. Copyright and full MIT license included in that directory, with source URLs and SHA-256 hashes in README.md. No npm dependency change.
+
+## Optional cloud runtime additions
+
+The cloud deployment adds boto3, botocore and s3transfer (Apache License 2.0), and
+cryptography (Apache-2.0 OR BSD-3-Clause). Their installed distributions retain their
+license files and dependency metadata. These dependencies are declared separately in
+requirements-cloud.txt; the desktop runtime dependency set is unchanged.

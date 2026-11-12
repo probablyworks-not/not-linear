@@ -1,3 +1,6 @@
+import { cloudMode,cloudRequest } from '../cloud/client';
+import { uploadCloudFile } from '../cloud/attachments';
+import { requireFeature } from '../flags';
 import {
   MAX_IMAGE_BYTES, MAX_PDF_BYTES, MAX_TEXT_FILE_BYTES, PDF_EXTRACT_TIMEOUT_MS,
   arrayBufferToBase64, inferMimeType, isImageFile, isPdfFile, isTextLikeFile,
@@ -68,8 +71,10 @@ export async function readFiles(
   files: Iterable<File>,
   extractPdf: (buffer: ArrayBuffer) => Promise<string> = extractPdfText,
 ): Promise<Attachment[]> {
+  requireFeature('attachments');
+  const inputFiles = [...files];
   const out: Attachment[] = [];
-  for (const f of files) {
+  for (const f of inputFiles) {
     const name = (f as File & { webkitRelativePath?: string }).webkitRelativePath || f.name;
     const type = inferMimeType(name, f.type);
 
@@ -112,6 +117,12 @@ export async function readFiles(
     }
     const text = await f.text().catch(() => null);
     out.push({ name, size: f.size, type, kind: 'file', content: text });
+  }
+  if(cloudMode()) {
+    const uploaded:string[]=[];
+    try{for(let index=0;index<out.length;index++){
+      const item=out[index]!;if(!item.tooBig&&!item.unsupported){const id=await uploadCloudFile(inputFiles[index]!);item.cloudAttachmentId=id;uploaded.push(id);}
+    }}catch(error){await Promise.allSettled(uploaded.map(id=>cloudRequest('/attachments/'+id,{method:'DELETE'})));throw error;}
   }
   return out;
 }

@@ -1,3 +1,6 @@
+import { cloudMode } from '../cloud/client';
+import { cloudKeys } from '../cloud/provider-fetch';
+import { accountStorage as localStorage } from '../cloud/local-storage';
 // Provider API keys, in `localStorage.nl_api_keys` — a flat { provider: key }
 // object. That shape and that storage are shared with the legacy app AND with
 // frontend/views/notes.js:3101, which parses it directly, so neither may change.
@@ -11,6 +14,7 @@ export const API_KEYS_STORAGE = 'nl_api_keys';
 export type ApiKeys = Record<string, string>;
 
 export function readApiKeys(): ApiKeys {
+  if (cloudMode()) return cloudKeys();
   try {
     const parsed: unknown = JSON.parse(localStorage.getItem(API_KEYS_STORAGE) || '{}');
     if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {};

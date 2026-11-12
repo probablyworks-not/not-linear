@@ -1,3 +1,4 @@
+import { cloudMode } from '../cloud/client';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { ArrowLeft, Cable, KeyRound, MessagesSquare, Sparkles, SlidersHorizontal, Sprout, TerminalSquare, type LucideIcon } from 'lucide-react';
 import { clsx } from 'clsx';
@@ -5,7 +6,9 @@ import { useAppStore } from '../state/app-store';
 import { useUiStore, type SettingsTab } from '../state/ui-store';
 import { ESC_PRIORITY, useEscLayer } from '../lib/keyboard';
 import { flushSkillWrites, resolvedSkills, useSkillsStore } from '../skills/skills-store';
-import { flags } from '../flags';
+import { flags, useFeatureFlags } from '../flags';
+import { getConfiguration } from '../features/configuration';
+import { FeatureFlagsTab } from './tabs/FeatureFlagsTab';
 import { getModes } from './modes';
 import { integrationCount, useIntegrationsStore } from './integrations-store';
 import { HeaderSlot, OverlaySlot } from './header-slot';
@@ -20,6 +23,7 @@ import { LogsTab, useLogCount } from './tabs/LogsTab';
 interface TabDef { id: SettingsTab; label: string; icon: LucideIcon; title: string; sub: string; show: boolean }
 
 const TABS: readonly TabDef[] = [
+  { id: 'featureFlags', label: 'Feature flags', icon: SlidersHorizontal, title: 'Feature flags', sub: 'Administrator controls for this environment.', show: true },
   { id: 'general', label: 'General', icon: SlidersHorizontal, title: 'General', sub: 'How notlinear looks and who it is talking to.', show: true },
   { id: 'models', label: 'Models & keys', icon: KeyRound, title: 'Models & keys', sub: 'Connect a provider to use its models. Keys stay on your device.', show: true },
   { id: 'skills', label: 'Skills', icon: Sprout, title: 'Skills', sub: 'Reusable methods added to the system prompt, picked per message.', show: flags.skills },
@@ -30,6 +34,7 @@ const TABS: readonly TabDef[] = [
 ];
 
 const PANELS: Record<SettingsTab, () => ReactNode> = {
+  featureFlags: () => <FeatureFlagsTab />,
   general: () => <GeneralTab />,
   models: () => <ModelsTab />,
   skills: () => <SkillsTab />,
@@ -63,7 +68,9 @@ function Page() {
   const [overlay, setOverlay] = useState<HTMLElement | null>(null);
   const root = useRef<HTMLDivElement>(null);
 
-  const tabs = TABS.filter(t => t.show);
+  useFeatureFlags();
+  const settingsFlag = {models:'models',skills:'skills',integrations:'integrations',modes:'modes',updates:'changelog',logs:'logs'} as const;
+  const tabs = TABS.filter(t => t.id === 'featureFlags' ? getConfiguration()?.admin : t.id === 'general' || (flags.settings && flags[settingsFlag[t.id]]));
   // A tab hidden by a flag (or a stale value) falls back to the first one rather than rendering nothing.
   const tab = tabs.find(t => t.id === stored) ?? tabs[0]!;
 
@@ -85,7 +92,7 @@ function Page() {
 
   return (
     <div
-      ref={root} role="dialog" aria-modal="true" aria-label="Settings" tabIndex={-1}
+      ref={root} style={{top:cloudMode()?'var(--cloud-toolbar-height,26px)':undefined}} role="dialog" aria-modal="true" aria-label="Settings" tabIndex={-1}
       className="fixed inset-0 z-[300] flex bg-bg text-text outline-none"
     >
       <nav aria-label="Settings sections" className="flex w-60 flex-none flex-col gap-1 border-r border-rule bg-surface-2 px-3 py-[22px] max-md:w-16">
@@ -121,7 +128,7 @@ function Page() {
         <header className="flex items-center gap-2.5 px-9 pb-[18px] pt-6">
           <div className="min-w-0 flex-1">
             <h1 className="m-0 text-base font-semibold tracking-tight">{tab.title}</h1>
-            <p className="m-0 mt-0.5 text-sm leading-normal text-text-3">{tab.sub}</p>
+            <p className="m-0 mt-0.5 text-sm leading-normal text-text-3">{tab.id==='models'&&cloudMode()?'Connect your own AI access. Saved credentials are encrypted in your account.':tab.sub}</p>
           </div>
           <div ref={setActions} className="flex items-center gap-2" />
           <button

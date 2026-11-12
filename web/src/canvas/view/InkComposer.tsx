@@ -1,3 +1,4 @@
+import { flags } from '../../flags';
 import { useEffect, useRef, useState } from 'react';
 import { flushSync } from 'react-dom';
 import { ArrowUp, Mic, Paperclip, X } from 'lucide-react';
@@ -323,7 +324,7 @@ export function InkComposer({ canvasId, target, sources, onRemoveSource, onSend,
           <Paperclip size={14} />
         </button>
         <button
-          type="button" aria-label={voice.recording ? 'Stop voice input' : 'Voice input'} title="Voice input"
+          type="button" hidden={!flags.voice} aria-label={voice.recording ? 'Stop voice input' : 'Voice input'} title="Voice input"
           onClick={toggleVoice}
           className={clsx(
             'mic-chip grid h-[28px] w-[28px] flex-none place-items-center rounded-full text-ask-hint hover:bg-ask-chip hover:text-ask-fg',

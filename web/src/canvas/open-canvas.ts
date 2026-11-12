@@ -1,3 +1,4 @@
+import { flags } from '../flags';
 import { useUiStore } from '../state/ui-store';
 import { mountView } from '../registry/views';
 import { canvasTabId } from '../state/tabs';
@@ -9,6 +10,7 @@ import { closeProjectPanel } from '../state/actions';
  * lost the first. A canvas is a workspace, so each gets an identity from the start.
  */
 export function openCanvas(canvasId: string): void {
+  if (!flags.canvas) return;
   // A canvas is an ordinary tab, so the project screen has to let go of it. The project panel is a
   // full-screen Radix dialog: left open it sits over the tab and marks everything behind it
   // aria-hidden, which hides the canvas from assistive technology and from the keyboard. The plan

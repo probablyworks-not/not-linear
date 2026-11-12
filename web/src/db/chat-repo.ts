@@ -1,3 +1,4 @@
+import { accountStorage as localStorage } from '../cloud/local-storage';
 import { openChatDb, readState, STATE_KEY } from './chat';
 import { emptyState } from './thread-ops';
 import type { PersistedState } from './types';

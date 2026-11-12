@@ -1,3 +1,4 @@
+import { flags } from '../flags';
 import type { ToolName } from './types';
 
 /**
@@ -214,7 +215,7 @@ function githubSpecs(): ToolSpec[] {
 
 /** The tools actually offered for a given set of keys and settings. */
 export function availableTools(ctx: ToolContext): ToolSpec[] {
-  return TOOL_SPECS.filter((t) => t.available(ctx));
+  return TOOL_SPECS.filter((t) => t.available(ctx) && (t.name === 'create_note' ? flags.chatNotes : t.name.includes('project_file') ? flags.linkedFolders : flags.research) && (!t.name.startsWith('github_') || flags.toolGithub) && (t.name !== 'serper_search' || flags.toolSerper) && (t.name !== 'firecrawl_scrape' || flags.toolFirecrawl) && (t.name !== 'web_search' || flags.toolSearxng));
 }
 
 // --- the three derivations that replace the three hand-maintained copies ---

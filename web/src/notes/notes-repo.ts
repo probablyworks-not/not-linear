@@ -1,3 +1,6 @@
+import { uploadCloudFile } from '../cloud/attachments';
+import { cloudMode,cloudRequest } from '../cloud/client';
+import { accountStorage as localStorage } from '../cloud/local-storage';
 import { NOTES_KEY, NOTES_OPEN_KEY, NOTES_SELECTED_KEY, openNotesDb } from '../db/notes';
 import { postJson } from '../lib/api';
 import { canReparent, collectIds, newNote, withDuplicate, withNoteProject } from './notes-ops';
@@ -53,6 +56,13 @@ export async function dumpNotesBackup(): Promise<unknown> {
  * desktop webview drops blob downloads silently.)
  */
 export async function backUpNotes(): Promise<BackupRecord> {
+  if(cloudMode()) {
+    const backup=await dumpNotesBackup();
+    const attachmentId=await uploadCloudFile(new File([JSON.stringify(backup)],'notes-backup.json',{type:'application/json'}));
+    await cloudRequest('/resources/notes',{method:'PUT',body:JSON.stringify({key:'backup:'+Date.now(),revision:0,value:{attachmentId,createdAt:new Date().toISOString()}})});
+    const record={at:new Date().toISOString(),path:'Cloud backup',bytes:JSON.stringify(backup).length};
+    localStorage.setItem(BACKUP_FLAG,JSON.stringify(record));return record;
+  }
   const res = await postJson<{ ok?: boolean; path?: string; bytes?: number; error?: string }>(
     '/__notlinear_backup_notes', { backup: await dumpNotesBackup() },
   );

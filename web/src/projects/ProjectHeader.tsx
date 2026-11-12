@@ -34,7 +34,7 @@ export const ProjectHeader = forwardRef<HTMLInputElement, {
         />
       </div>
       <button
-        type="button" onClick={() => { void newChatInProject(pid); }}
+        hidden={!flags.chat} type="button" onClick={() => { void newChatInProject(pid); }}
         className="flex h-10 items-center gap-2 rounded-[10px] border border-text bg-text px-4 text-base text-bg"
       >
         <Pencil size={14} aria-hidden />New chat
@@ -43,14 +43,14 @@ export const ProjectHeader = forwardRef<HTMLInputElement, {
       <PopMenu
         label="Add to project" trigger={<Plus size={16} aria-hidden />}
         items={[
-          { label: 'New chat', icon: <MessageSquarePlus size={14} aria-hidden />, onSelect: () => { void newChatInProject(pid); } },
-          { label: 'Add existing chat', icon: <Plus size={14} aria-hidden />, onSelect: onAddExistingChat },
+          ...(flags.chat ? [{ label: 'New chat', icon: <MessageSquarePlus size={14} aria-hidden />, onSelect: () => { void newChatInProject(pid); } },
+          { label: 'Add existing chat', icon: <Plus size={14} aria-hidden />, onSelect: onAddExistingChat }] : []),
           ...(flags.notesV2 ? [
             { label: 'New note', icon: <NotebookText size={14} aria-hidden />, onSelect: () => { void newNoteInProject(pid); } },
             { label: 'Add existing note', icon: <StickyNote size={14} aria-hidden />, onSelect: onAddExistingNote },
           ] : []),
-          { label: 'Add files', icon: <FilePlus size={14} aria-hidden />, onSelect: () => { void addFilesToProject(pid); } },
-          { label: 'Link folder…', icon: <FolderOpen size={14} aria-hidden />, onSelect: () => { void linkProjectFolder(pid); } },
+          ...(flags.attachments ? [{ label: 'Add files', icon: <FilePlus size={14} aria-hidden />, onSelect: () => { void addFilesToProject(pid); } }] : []),
+          ...(flags.linkedFolders ? [{ label: 'Link folder…', icon: <FolderOpen size={14} aria-hidden />, onSelect: () => { void linkProjectFolder(pid); } }] : []),
         ]}
       />
       <PopMenu

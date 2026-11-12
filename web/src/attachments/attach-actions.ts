@@ -1,3 +1,4 @@
+import { toast } from '../ui/toast';
 import { pickFiles } from './pick-files';
 import { readFiles, type Attachment } from './read-files';
 import { useAttachments } from './attachments-store';
@@ -9,13 +10,13 @@ import type { PersistedThread } from '../db/types';
 export async function addFilesTo(key: string, folder: boolean): Promise<void> {
   const picked = await pickFiles({ folder });
   if (!picked.length) return;
-  useAttachments.getState().add(key, await readFiles(picked));
+  try{useAttachments.getState().add(key, await readFiles(picked));}catch(error){toast(error instanceof Error?error.message:'Files could not be uploaded. Please retry.');}
 }
 
 /** Pasting images into the composer attaches them instead of pasting nothing (app.js:3466). */
 export async function addPastedFiles(key: string, files: File[]): Promise<void> {
   if (!files.length) return;
-  useAttachments.getState().add(key, await readFiles(files));
+  try{useAttachments.getState().add(key, await readFiles(files));}catch(error){toast(error instanceof Error?error.message:'Files could not be uploaded. Please retry.');}
 }
 
 /** The image files on a clipboard, if any. */

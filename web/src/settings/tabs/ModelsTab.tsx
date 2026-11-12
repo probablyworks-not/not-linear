@@ -1,3 +1,5 @@
+import { flags, type FeatureId } from '../../flags';
+import { cloudMode } from '../../cloud/client';
 import { useState } from 'react';
 import { Lock, Bot, Globe, KeyRound, Search, Flame, Mic } from 'lucide-react';
 import { SubscriptionConnections } from './SubscriptionConnections';
@@ -55,12 +57,12 @@ export function ModelsTab() {
 
   return (
     <PageBody>
-      <SubscriptionConnections />
+      {(flags.subscriptionClaude || flags.subscriptionChatgpt) && <SubscriptionConnections />}
 
       {GROUPS.map(g => (
         <Section key={g.title} label={g.title}>
           <div className="grid grid-cols-[repeat(auto-fit,minmax(270px,1fr))] items-start gap-3">
-            {g.cards.map(c => (
+            {g.cards.filter(c => flags[({anthropic:'apiAnthropic',openai:'apiOpenai',deepseek:'apiDeepseek',gemini:'apiGemini',custom:'apiCustom',serper:'toolSerper',firecrawl:'toolFirecrawl',searxng:'toolSearxng',github:'toolGithub',assemblyai:'voice'} as Record<string,FeatureId>)[c.id]!]).map(c => (
               <ProviderCard
                 key={c.id} card={c} open={open === c.id}
                 connected={c.kind === 'url' ? !!searxngUrl : c.id in apiKeys}
@@ -83,7 +85,7 @@ export function ModelsTab() {
         </ul>
       </Section>
 
-      <Section
+      <div hidden={!flags.contextRanking}><Section
         label="Context Ranking"
         help="Controls how files are selected when chatting in a project with a linked folder. DeepSeek requires a DeepSeek API key."
       >
@@ -93,7 +95,7 @@ export function ModelsTab() {
         >
           {RANKING_OPTIONS.map(o => <option key={o.id} value={o.id}>{o.label}</option>)}
         </select>
-      </Section>
+      </Section></div>
     </PageBody>
   );
 }
@@ -132,9 +134,9 @@ function KeyBody({ card, connected }: { card: Card; connected: boolean }) {
   const askConfirm = useUiStore(s => s.askConfirm);
   const [draft, setDraft] = useState('');
 
-  const submit = (): void => {
+  const submit = async (): Promise<void> => {
     if (!draft.trim()) return;
-    connect(card.id, draft);
+    try { await connect(card.id, draft); } catch { toast('Connection could not be saved. Please retry.'); return; }
     setDraft('');
     toast('API key connected');
   };
@@ -144,7 +146,7 @@ function KeyBody({ card, connected }: { card: Card; connected: boolean }) {
       after: ' from this device. Anything that needs it stops working until you add it again.', actionLabel: 'Remove key',
     });
     if (!ok) return;
-    disconnect(card.id);
+    await disconnect(card.id);
     toast('API key removed');
   };
 
@@ -161,12 +163,12 @@ function KeyBody({ card, connected }: { card: Card; connected: boolean }) {
       <div className="flex gap-2">
         <input
           className={clsx(INPUT, 'h-9')} type="password" aria-label={`${card.name} API key`} placeholder="Paste API key…" autoComplete="off"
-          value={draft} onChange={e => setDraft(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') submit(); }}
+          value={draft} onChange={e => setDraft(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') void submit(); }}
         />
-        <button type="button" className={clsx(BTN_PRIMARY, 'h-9')} onClick={submit}>Connect</button>
+        <button type="button" className={clsx(BTN_PRIMARY, 'h-9')} onClick={() => void submit()}>Connect</button>
       </div>
       <p className="m-0 mt-2 flex items-center gap-1.5 text-xs text-text-3">
-        <Lock size={12} aria-hidden />Stored locally. Never leaves your device except to {card.name}.
+        <Lock size={12} aria-hidden />{cloudMode() ? 'Encrypted in your account; used only for your requests.' : `Stored locally. Never leaves your device except to ${card.name}.`}
       </p>
     </>
   );

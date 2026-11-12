@@ -1,3 +1,4 @@
+import { accountStorage as localStorage } from '../cloud/local-storage';
 // "Clarify intent first" switch. Kept in localStorage rather than the persisted prefs: that list is
 // pinned to exactly the keys the classic app writes (db/chat.ts), and this setting means nothing there.
 // On unless switched off.

@@ -1,3 +1,4 @@
+import { flags } from '../flags';
 import type { ChatMessage, ChatProvider, ProviderEvent, ProviderId, ToolRunnerLike, ToolSpecLike } from '../providers/types';
 import { subscriptionProvider } from '../providers/subscription';
 import type { ModelPlan } from './models';
@@ -36,23 +37,27 @@ export const FALLBACK_STATUS = 'Claude rate limited — switching to DeepSeek…
 const DEEPSEEK_FALLBACK: SupportedPlan = { supported: true, provider: 'deepseek', modelId: 'deepseek-v4-flash', thinking: false, usageProvider: 'deepseek' };
 
 export async function* runTurn(input: RunTurnInput, deps: RunTurnDeps): AsyncGenerator<TurnEvent> {
+  if (!flags.chat && !flags.canvas && !flags.notesV2 && !flags.sketch) {
+    yield {ev:{t:'error',kind:'config',message:'AI workspaces are disabled.'},plan:input.plan};return;
+  }
   let plan = input.plan;
   let switched = false;
   while (true) {
     const provider = plan.modelId.startsWith('sub:') ? subscriptionProvider : deps.providers[plan.provider];
-    if (!provider) {
+    const enabled = plan.modelId.startsWith('sub:') ? (plan.modelId.includes('chatgpt') ? flags.subscriptionChatgpt : flags.subscriptionClaude) : ({claude:flags.apiAnthropic,deepseek:flags.apiDeepseek,openai:flags.apiOpenai,gemini:flags.apiGemini}[plan.provider]);
+    if (!provider || !enabled) {
       yield { ev: { t: 'error', kind: 'config', message: `No ${plan.provider} provider is available.` }, plan };
       return;
     }
     let streamedText = false;
     let retryOnDeepSeek = false;
     for await (const ev of provider.stream({
-      messages: input.messagesFor(plan.provider), systemPrompt: input.systemPrompt, tools: input.tools ?? [], toolRunner: input.toolRunner,
+      messages: input.messagesFor(plan.provider).map(message=>!flags.attachments&&Array.isArray(message.content)?{...message,content:message.content.filter(block=>!['image','document'].includes(block.type))}:message), systemPrompt: input.systemPrompt, tools: input.tools ?? [], toolRunner: input.toolRunner,
       model: plan.modelId, thinking: plan.thinking, signal: input.signal,
     })) {
       if (ev.t === 'delta' && ev.text) streamedText = true;
       // Only before any text has streamed: a half-written answer is kept, not replaced.
-      if (ev.t === 'error' && ev.kind === 'rate_limit' && plan.provider === 'claude' && !plan.modelId.startsWith('sub:') && !switched && !streamedText && deps.canFallBackToDeepSeek) {
+      if (ev.t === 'error' && ev.kind === 'rate_limit' && plan.provider === 'claude' && !plan.modelId.startsWith('sub:') && !switched && !streamedText && deps.canFallBackToDeepSeek && flags.apiDeepseek) {
         retryOnDeepSeek = true;
         break;
       }

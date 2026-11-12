@@ -1,3 +1,4 @@
+import { flags } from '../flags';
 import { deleteAnnotations } from '../db/annotations-repo';
 import { useAppStore } from '../state/app-store';
 import { useUiStore } from '../state/ui-store';
@@ -129,6 +130,7 @@ function closeUnrelated(keepAncestorId: string): void {
  * list or a highlight, or already open (then it is just re-focused, in place).
  */
 export function openBranch(a: OpenArgs): string {
+  if(!flags.branches)return '';
   const store = useBranchStore.getState();
   const app = useAppStore.getState();
   const id = a.bid || a.anchorBid || ('br' + Date.now());

@@ -1,3 +1,4 @@
+import { flags, featureForView } from '../flags';
 import { useSketchStore } from '../sketch/store';
 import { isSketchTabId } from '../state/tabs';
 import { clsx } from 'clsx';
@@ -77,7 +78,7 @@ export function TabStrip() {
   return (
     <div className="flex w-full items-end gap-0.5 border-b border-rule bg-bg px-7 pt-1">
       <div role="tablist" aria-label="Open tabs" className="flex min-w-0 flex-1 items-end gap-0.5 overflow-x-auto [scrollbar-width:none]">
-        {tabs.map(tab => {
+        {tabs.filter(tab => { const f = featureForView(viewForTab(tab.id)); return !f || flags[f]; }).map(tab => {
           const active = tab.id === activeId;
           const label = isSingletonTab(tab.id)
             ? SINGLETON_TABS[tab.id].label

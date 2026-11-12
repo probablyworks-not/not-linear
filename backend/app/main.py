@@ -31,11 +31,24 @@ def create_app(port: int = config.DEFAULT_PORT) -> FastAPI:
         openapi_url=None,
     )
 
-    app.add_middleware(LocalOriginMiddleware, port=port)
-    app.include_router(legacy_router)
-    app.include_router(notes_router)
-    app.include_router(voice_router)
-    app.include_router(subscriptions_router)
+    from cloud.service import cloud_enabled
+    from cloud.router import router as cloud_router
+    app.include_router(cloud_router)
+    if cloud_enabled():
+        from cloud.middleware import CloudBoundaryMiddleware
+        app.add_middleware(CloudBoundaryMiddleware)
+        from fastapi.exceptions import RequestValidationError
+        from fastapi.responses import JSONResponse
+        @app.exception_handler(RequestValidationError)
+        async def invalid_cloud_request(request, exception):
+            return JSONResponse({'detail':'Invalid request. Check the supplied fields.'},status_code=422)
+    else:
+        app.add_middleware(LocalOriginMiddleware, port=port)
+    if not cloud_enabled():
+        app.include_router(legacy_router)
+        app.include_router(notes_router)
+        app.include_router(voice_router)
+        app.include_router(subscriptions_router)
 
     @app.get("/__notlinear_health")
     async def health() -> dict:
@@ -57,7 +70,7 @@ def create_app(port: int = config.DEFAULT_PORT) -> FastAPI:
         return RedirectResponse("/web/")
 
     # Mounted last so the explicit routes above win on any overlap.
-    if config.TOOLS_DIR.exists():
+    if config.TOOLS_DIR.exists() and not cloud_enabled():
         # The backup/restore pages. Kept reachable because they must work even
         # when the app itself is mid-migration or broken.
         app.mount("/tools", StaticFiles(directory=config.TOOLS_DIR), name="tools")

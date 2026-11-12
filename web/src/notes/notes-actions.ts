@@ -1,3 +1,4 @@
+import { flags } from '../flags';
 import { toast } from 'sonner';
 import { useAppStore } from '../state/app-store';
 import { useUiStore } from '../state/ui-store';
@@ -40,6 +41,7 @@ async function guarded<T>(what: string, run: () => Promise<T>): Promise<T | unde
 }
 
 export async function newPage(parent: string | null = null): Promise<void> {
+  if(!flags.notesV2)return;
   const made = await guarded('create a page', () => createNote(parent));
   if (made) openNote(made.id);
 }
@@ -65,6 +67,7 @@ export async function moveNoteToProject(id: string, pid: string | null): Promise
 }
 
 export async function newNoteInProject(pid: string): Promise<void> {
+  if(!flags.notesV2)return;
   const made = await guarded('create a page', async () => {
     const n = await createNote(null);
     await setNoteProject(n.id, pid);

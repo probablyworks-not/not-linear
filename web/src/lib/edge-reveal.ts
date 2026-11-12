@@ -1,3 +1,4 @@
+import { accountStorage as localStorage } from '../cloud/local-storage';
 import { useCallback, useEffect, useRef, useState, type RefObject } from 'react';
 
 interface EdgeReveal {

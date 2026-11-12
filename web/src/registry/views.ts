@@ -1,3 +1,4 @@
+import { flags, featureForView } from '../flags';
 import { useSyncExternalStore } from 'react';
 
 // Port of frontend/core/registry.js — same semantics, so P7's plugin seam can
@@ -27,6 +28,8 @@ export function registerView(view: ViewDescriptor): void {
 
 /** Unmounts the active view, activates `id`, mounts it, then notifies. */
 export function mountView(id: string): void {
+  const feature = featureForView(id);
+  if (feature && !flags[feature]) id = 'blank';
   if (activeViewId) views.get(activeViewId)?.unmount?.();
   activeViewId = id;
   views.get(id)?.mount?.();

@@ -34,6 +34,7 @@ export function SketchView({documentId,embedded=false,canvasId}:{documentId?:str
 function SketchDocumentView({doc,embedded=false,canvasId}:{doc:SketchDocument;embedded?:boolean;canvasId?:string}){
  const creating=!doc.graph.nodes.length||(doc.graph.nodes.length===1&&doc.graph.nodes[0]?.type==='start'&&!doc.graph.edges.length);
  const host=useRef<HTMLDivElement>(null),editor=useRef<SketchEditor|null>(null),abort=useRef<AbortController|null>(null);
+ useEffect(()=>{const stop=(event:Event)=>{const disabled=(event as CustomEvent<{disabled:string[]}>).detail?.disabled??[];if(disabled.some(id=>id.startsWith('api')||id.startsWith('subscription')||id==='sketch'))abort.current?.abort();};window.addEventListener('notlinear:flags',stop);return()=>window.removeEventListener('notlinear:flags',stop);},[]);
  const [ready,setReady]=useState(false),[failure,setFailure]=useState(''),[selected,setSelected]=useState<string[]>([]);
  const [mode,setMode]=useState<'ask'|'edit'>(creating ? 'edit' : 'ask'),[input,setInput]=useState(''),[busy,setBusy]=useState(false),[liveText,setLiveText]=useState(''),[chat,setChat]=useState(true);
  const [workStatus,setWorkStatus]=useState('Thinking…');

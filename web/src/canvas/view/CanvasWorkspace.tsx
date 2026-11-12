@@ -51,7 +51,7 @@ import { registerCanvasHandlers } from './canvas-bridge';
 import { hashText, newId } from '../ids';
 import { addPastedFiles, imagesFromClipboard } from '../../attachments/attach-actions';
 import { useAttachments } from '../../attachments/attachments-store';
-import { flags } from '../../flags';
+import { flags,useFeatureFlags } from '../../flags';
 import { useChatStore } from '../../chat/chat-store';
 import type { ChatMessage } from '../../providers/types';
 import { selectForTurn } from '../../skills/skills-store';
@@ -171,15 +171,16 @@ function Workspace({ canvasId }: { canvasId: string }) {
   const projects = useAppStore(s => s.projects);
   const project = doc?.summary.projectId ? projects[doc.summary.projectId] : undefined;
   const rf = useReactFlow();
+  const sketchEnabled=useFeatureFlags().sketch;
   const sketchPlacements = useSketchStore(s => s.placements);
   const [selectedSketchId,setSelectedSketchId] = useState<string|null>(null);
   const [focusSketch,setFocusSketch] = useState<string|null>(null);
   useEffect(() => { void useSketchStore.getState().load().catch(e => toast(String(e))); }, []);
-  const sketchNodes = useMemo<SketchNodeType[]>(() => Object.values(sketchPlacements).filter(p => p.canvasId === canvasId).map(p => ({
+  const sketchNodes = useMemo<SketchNodeType[]>(() => Object.values(sketchPlacements).filter(p => sketchEnabled && p.canvasId === canvasId).map(p => ({
     id:'sketch-card:' + p.id,type:'sketch',selected:selectedSketchId==='sketch-card:'+p.id,position:{x:p.x,y:p.y},width:p.width,height:p.collapsed?40:p.height,
     style:{width:p.width,height:p.collapsed?40:p.height},dragHandle:'.sketch-card-drag',
     data:{placementId:p.id,documentId:p.documentId},
-  })),[sketchPlacements,canvasId,selectedSketchId]);
+  })),[sketchPlacements,canvasId,selectedSketchId,sketchEnabled]);
   const createSketchHere = useCallback(async () => {
     const bounds=document.querySelector('[aria-label="Canvas workspace"]')?.getBoundingClientRect();
     const position=rf.screenToFlowPosition({x:(bounds?.left??0)+80,y:(bounds?.top??0)+80});
@@ -1070,7 +1071,7 @@ function WorkspaceHeader({ doc, saving, reading, onToggleReading, undoDepth, onU
         {doc.summary.counts.threads} thread{doc.summary.counts.threads === 1 ? '' : 's'}
       </span>
       <span className="flex-1" />
-      <button type="button" onClick={onSketch} data-testid="canvas-sketch" className="rounded-md border border-rule-2 px-2 py-1 text-xs text-text-2 hover:text-text">Sketch</button>
+      <button hidden={!flags.sketch} type="button" onClick={onSketch} data-testid="canvas-sketch" className="rounded-md border border-rule-2 px-2 py-1 text-xs text-text-2 hover:text-text">Sketch</button>
       <button
         type="button" onClick={onUndo} disabled={undoDepth === 0} data-testid="canvas-undo"
         aria-label="Undo the last move or resize"

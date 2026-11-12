@@ -1,3 +1,4 @@
+import { cloudMode } from '../cloud/client';
 import { openSketch } from '../sketch/open-sketch';
 import { useMemo, useState } from 'react';
 import { clsx } from 'clsx';
@@ -7,7 +8,7 @@ import { useUiStore } from '../state/ui-store';
 import { deleteChat, moveChat, newChat, selectThread, setThreadGlyph } from '../state/actions';
 import { ESC_PRIORITY, useEscLayer } from '../lib/keyboard';
 import { visibleThreads, MAIN_THREAD_ID } from '../db/thread-ops';
-import { flags } from '../flags';
+import { flags,useFeatureFlags } from '../flags';
 import { MoveToProjectButton } from '../projects/MoveToProjectButton';
 import { ProjectsSidebarSection } from '../projects/ProjectsSidebarSection';
 import { RecentBranches } from '../branch/RecentBranches';
@@ -22,6 +23,7 @@ import { THREAD_ICON_CYCLE } from '../lib/mind-garden';
 const SIDE_ITEM = 'relative flex w-full items-center gap-[9px] rounded-md text-left text-sm leading-tight text-text-2 hover:bg-bg-2 hover:text-text';
 
 export function Sidebar() {
+  const projectsEnabled=useFeatureFlags().projects;
   const open = useUiStore(s => s.sidebarOpen);
   const setOpen = useUiStore(s => s.setSidebarOpen);
   const setSettingsOpen = useUiStore(s => s.setSettingsOpen);
@@ -40,10 +42,10 @@ export function Sidebar() {
       visibleThreads({
         threads: threadState, dynamic, deletedThreads: deleted,
         current: MAIN_THREAD_ID, chatCount: 1, projects: {}, projectCount: 1, prefs: {},
-      }).filter(r => !(flags.projects && r.projectId && projects[r.projectId])),
+      }).filter(r => !(projectsEnabled && r.projectId && projects[r.projectId])),
       r => threadTouchedAt(threadState[r.id]),
     ),
-    [threadState, dynamic, deleted, projects],
+    [threadState, dynamic, deleted, projects, projectsEnabled],
   );
   const shown = showAll ? rows : rows.slice(0, SIDEBAR_VISIBLE);
 
@@ -54,7 +56,7 @@ export function Sidebar() {
     <>
       {open && <div className="fixed inset-0 z-[70] bg-scrim md:hidden" onClick={() => setOpen(false)} />}
       <aside
-        aria-label="Left pane"
+        style={{top:cloudMode()?'var(--cloud-toolbar-height,26px)':undefined}} aria-label="Left pane"
         aria-hidden={!open}
         className={clsx(
           'fixed inset-y-0 left-0 z-[80] flex w-sidebar flex-col border-r border-rule bg-surface-2 px-2.5 py-3.5 shadow-lg',
@@ -90,7 +92,7 @@ export function Sidebar() {
             </button>
           )}
           <button
-            type="button" onClick={() => { void newChat(); }}
+            hidden={!flags.chat} type="button" onClick={() => { void newChat(); }}
             className="flex w-full items-center gap-[9px] rounded-[10px] border border-rule-2 bg-text px-3 py-2 text-left text-sm font-medium text-bg shadow-md"
           >
             <Pencil size={13} aria-hidden />
@@ -100,7 +102,7 @@ export function Sidebar() {
 
           {flags.projects && <ProjectsSidebarSection />}
 
-          <SidebarSection section="threads" label="Threads">
+          {flags.chat && <SidebarSection section="threads" label="Threads">
           <div role="list">
             {shown.map((row, rowIndex) => {
               const active = row.id === activeTabId;
@@ -146,14 +148,14 @@ export function Sidebar() {
           {rows.length > SIDEBAR_VISIBLE && (
             <ShowMoreButton expanded={showAll} hidden={rows.length - SIDEBAR_VISIBLE} onToggle={() => setShowAll(v => !v)} />
           )}
-          </SidebarSection>
+          </SidebarSection>}
 
           {flags.notesV2 && <NotesSidebarSection />}
 
           <button type="button" className={`${SIDE_ITEM} px-2 py-2`} onClick={() => openSketch()}>Sketches</button>
           {flags.canvas && <CanvasesSidebarSection />}
 
-          {flags.chat && <RecentBranches />}
+          {flags.branches && <RecentBranches />}
         </div>
 
         {/* Identity + the way into Settings (flags.settings). */}

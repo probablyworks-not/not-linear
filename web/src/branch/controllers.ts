@@ -20,3 +20,5 @@ export function isBranchStreaming(id: string): boolean {
 export function abortBranchStream(id: string, reason = 'branch_removed'): void {
   controllers.get(id)?.abort(reason);
 }
+
+export function stopAllBranchStreams():void {for(const controller of controllers.values())controller.abort('feature_disabled');}

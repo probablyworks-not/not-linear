@@ -1,3 +1,5 @@
+import { flags } from '../../flags';
+import { cloudMode, runtime } from '../../cloud/client';
 import { useEffect, useState } from 'react';
 import { subscriptionOperation, type SubscriptionProvider, type SubscriptionModel } from '../../providers/subscription';
 import { BTN_PRIMARY } from '../ui';
@@ -11,6 +13,7 @@ export function SubscriptionConnections() {
   const [busy, setBusy] = useState(false);
   const [models, setModels] = useState<Record<string, SubscriptionModel[]>>({});
   const load = async () => {
+    if (cloudMode()) { setStatus('Hosted subscription connections are not configured. Use your own API key.'); return; }
     const current = await subscriptionOperation('status');
     const all: Record<string, SubscriptionModel[]> = {};
     for (const provider of ['claude', 'chatgpt'] as const) if (current[provider]) all[provider] = await subscriptionOperation('models', provider);
@@ -28,7 +31,7 @@ export function SubscriptionConnections() {
   };
   return <Section label="Subscriptions" help="Connect your own plan. Subscription requests never fall back to paid API usage.">
     <div className="grid grid-cols-[repeat(auto-fit,minmax(270px,1fr))] items-start gap-3">
-      {(['claude', 'chatgpt'] as const).map(provider => <div key={provider} className="rounded-[14px] border border-rule bg-surface p-3.5">
+      {(['claude', 'chatgpt'] as const).filter(p => flags[p === 'claude' ? 'subscriptionClaude' : 'subscriptionChatgpt'] && runtime.subscriptions[p]).map(provider => <div key={provider} className="rounded-[14px] border border-rule bg-surface p-3.5">
         <div className="flex items-center gap-3">
           <span aria-hidden className="grid h-[38px] w-[38px] flex-none place-items-center rounded-[10px] bg-bg-3">
             {provider === 'claude'

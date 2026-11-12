@@ -1,3 +1,4 @@
+import { flags } from '../flags';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { GitBranch, Highlighter, Sparkles } from 'lucide-react';
 import { readSelection, type SelectionInfo } from './selection';
@@ -52,7 +53,7 @@ export function SelectionPopover({ threadId, threadTitle, onAsk }: Props) {
   }, [sel]);
 
   const branch = useCallback((): void => {
-    if (sel) void branchFromSelection(threadId, sel);
+    if (sel && flags.branches) void branchFromSelection(threadId, sel);
     setSel(null);
   }, [sel, threadId]);
 
@@ -82,12 +83,12 @@ export function SelectionPopover({ threadId, threadTitle, onAsk }: Props) {
       onMouseDown={e => e.preventDefault()}
       className="fixed z-[200] inline-flex items-center gap-px rounded-lg border border-rule-2 bg-surface-2 p-1 shadow-lg"
     >
-      <button type="button" onClick={branch} className="inline-flex items-center gap-1.5 rounded-sm bg-accent px-2.5 py-1.5 text-sm font-medium text-bg hover:bg-accent-2">
+      <button hidden={!flags.branches} type="button" onClick={branch} className="inline-flex items-center gap-1.5 rounded-sm bg-accent px-2.5 py-1.5 text-sm font-medium text-bg hover:bg-accent-2">
         <GitBranch size={14} /> Branch <kbd className="ml-1 rounded-sm bg-kbd-bg px-1.5 font-mono text-xs text-kbd-fg">B</kbd>
       </button>
       <span className="mx-0.5 h-[18px] w-px bg-rule-2" />
       <button
-        type="button" title="Save highlight" aria-label="Save highlight" className={btn}
+        hidden={!flags.highlights} type="button" title="Save highlight" aria-label="Save highlight" className={btn}
         onClick={() => { void saveHighlight(threadId, threadTitle, sel); setSel(null); }}
       >
         <Highlighter size={14} />

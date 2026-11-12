@@ -1,3 +1,4 @@
+import { cloudMode } from '../cloud/client';
 import { LOCAL_HEADER } from '../lib/api';
 
 // Native pickers and why this is shaped the way it is (BUGS.md #021, #022).
@@ -54,7 +55,7 @@ export function pickFiles({ folder = false }: { folder?: boolean } = {}): Promis
     const w = window as unknown as DesktopWindow;
 
     // Route 1 - synchronous, before any await.
-    if (w.__notlinearDesktop || w.webkit) {
+    if (cloudMode() || w.__notlinearDesktop || w.webkit) {
       syncFilePicker(folder, deliver);
       return;
     }

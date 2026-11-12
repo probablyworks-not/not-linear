@@ -1,3 +1,4 @@
+import { flags } from '../flags';
 import { useAppStore } from '../state/app-store';
 import { useChatStore } from './chat-store';
 import { applyTurnSnapshot } from '../db/turn-ops';
@@ -84,6 +85,7 @@ export async function ensureThreadRow(threadId: string): Promise<boolean> {
 }
 
 export async function sendMessage(threadId: string, rawText: string, skills?: string[]): Promise<void> {
+  if(!flags.chat)return;
   const key = threadAttachKey(threadId);
   const files = [...(useAttachments.getState().files[key] ?? [])];
   const typed = rawText.trim();
@@ -135,3 +137,5 @@ export async function retryTurn(threadId: string): Promise<void> {
   if (!ctx) return;
   await runAndPersist(mainHost(threadId), { turnId: failed.turnId, userText: ctx.userText, history: ctx.history });
 }
+
+export function stopAllChatStreams():void { for(const controller of controllers.values())controller.abort(); }

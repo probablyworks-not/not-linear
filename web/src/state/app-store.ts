@@ -1,3 +1,5 @@
+import { cloudMode } from '../cloud/client';
+import { saveCloudKey,removeCloudKey } from '../cloud/provider-fetch';
 import { create } from 'zustand';
 import { loadChatState, updateChatState } from '../db/chat-repo';
 import { createThreadIn, deleteThreadIn, MAIN_THREAD_ID, emptyState } from '../db/thread-ops';
@@ -118,8 +120,8 @@ export interface AppActions {
   updateThreads<T>(mutate: (state: PersistedState) => T): Promise<T | null>;
   /** Re-reads localStorage.nl_api_keys, which the other app may have changed. */
   refreshApiKeys(): void;
-  connectApiKey(provider: string, key: string): void;
-  disconnectApiKey(provider: string): void;
+  connectApiKey(provider: string, key: string): Promise<void>;
+  disconnectApiKey(provider: string): Promise<void>;
 }
 
 /**
@@ -369,8 +371,8 @@ export const useAppStore = create<AppState & AppActions>((set, get) => ({
   flushPrefs() { return prefWriter.flushAll(); },
 
   refreshApiKeys() { set({ apiKeys: readApiKeys() }); },
-  connectApiKey(provider, key) { set({ apiKeys: connectKey(provider, key) }); },
-  disconnectApiKey(provider) { set({ apiKeys: disconnectKey(provider) }); },
+  async connectApiKey(provider, key) { set({ apiKeys: cloudMode() ? await saveCloudKey(provider,key) : connectKey(provider, key) }); },
+  async disconnectApiKey(provider) { set({ apiKeys: cloudMode() ? await removeCloudKey(provider) : disconnectKey(provider) }); },
 
   async deleteThread(id) {
     try {

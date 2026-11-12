@@ -1,3 +1,4 @@
+import { flags } from '../flags';
 import { useEffect, useLayoutEffect, useRef } from 'react';
 import { Coins, GitBranch, Highlighter, Map as MapIcon, MessageSquare, Network, Smile } from 'lucide-react';
 import { clsx } from 'clsx';
@@ -109,7 +110,7 @@ export function ThreadHeader({ threadId, fallbackTitle }: { threadId: string; fa
             <Network size={14} />
           </button>
           <button
-            type="button" title="Highlights" aria-label="Highlights" aria-pressed={highlightsOpen}
+            type="button" title="Highlights" hidden={!flags.highlights} aria-label="Highlights" aria-pressed={highlightsOpen}
             onClick={() => setHighlightsOpen(!highlightsOpen)}
             className={clsx(ICON_BTN, highlightsOpen && 'bg-bg-3 text-text')}
           >
@@ -119,7 +120,7 @@ export function ThreadHeader({ threadId, fallbackTitle }: { threadId: string; fa
             <GitBranch size={14} />
           </button>
           <button
-            type="button" title="Thread map" aria-label="Thread map" aria-pressed={threadMapOpen}
+            type="button" title="Thread map" hidden={!flags.branches} aria-label="Thread map" aria-pressed={threadMapOpen}
             onClick={() => setThreadMapOpen(!threadMapOpen)}
             className={clsx(ICON_BTN, threadMapOpen && 'bg-bg-3 text-text')}
           >

@@ -76,12 +76,12 @@ export function ProjectOverview({ pid }: { pid: string }) {
   const notes = flags.notesV2 ? projectNotes(allNotes, pid) : [];
   const ungroupedNotes = allNotes.filter(n => (n.parent ?? null) === null && !(typeof n.projectId === 'string' && projects[n.projectId]));
   const files = project.files as Attachment[];
-  const counts = { chats: rows.length, notes: notes.length, artifacts: artifacts.length, files: files.length };
+  const counts = { chats: flags.chat ? rows.length : 0, notes: notes.length, artifacts: flags.artifacts ? artifacts.length : 0, files: flags.attachments ? files.length : 0 };
   const brandNew = rows.length + notes.length + artifacts.length + files.length === 0 && !project.rules.trim() && !project.path;
 
-  if (view === 'notes') return <NotesView pid={pid} projectName={project.name} notes={notes} ungrouped={ungroupedNotes} />;
-  if (view === 'files') return <FilesView pid={pid} projectName={project.name} files={files} path={project.path} />;
-  if (view === 'artifacts') return <ArtifactsView pid={pid} projectName={project.name} artifacts={artifacts} />;
+  if (view === 'notes' && flags.notesV2) return <NotesView pid={pid} projectName={project.name} notes={notes} ungrouped={ungroupedNotes} />;
+  if (view === 'files' && flags.attachments) return <FilesView pid={pid} projectName={project.name} files={files} path={project.path} />;
+  if (view === 'artifacts' && flags.artifacts) return <ArtifactsView pid={pid} projectName={project.name} artifacts={artifacts} />;
   if (view === 'canvas' && flags.canvas) return <CanvasesView pid={pid} projectName={project.name} canvases={canvases} />;
 
   return (
@@ -93,15 +93,15 @@ export function ProjectOverview({ pid }: { pid: string }) {
         onEditRules={() => setEditingRules(true)} onRename={() => nameRef.current?.select()}
       />
       <div className="grid grid-cols-6 gap-3 max-md:grid-cols-1 [&>*]:max-md:col-span-1">
-        <ChatsCard pid={pid} rows={rows} ungrouped={ungrouped} picker={chatPicker} onTogglePicker={() => setChatPicker(p => !p)} />
+        {flags.chat && <ChatsCard pid={pid} rows={rows} ungrouped={ungrouped} picker={chatPicker} onTogglePicker={() => setChatPicker(p => !p)} />}
         {flags.notesV2 && <NotesCard pid={pid} notes={notes} ungrouped={ungroupedNotes} picker={notePicker} onTogglePicker={() => setNotePicker(p => !p)} />}
-        <ArtifactsCard artifacts={artifacts} error={extrasError} />
+        {flags.artifacts && <ArtifactsCard artifacts={artifacts} error={extrasError} />}
         {flags.canvas && <CanvasesCard pid={pid} canvases={canvases} error={canvasError} />}
         <RulesCard
           rules={project.rules} editing={editingRules} onEdit={setEditingRules}
           onDraft={v => { void setRules(pid, v); }} onFlush={() => { void useAppStore.getState().flushPrefs(); }}
         />
-        <FilesCard pid={pid} names={files.map(f => f.name)} path={project.path} />
+        {flags.attachments && <FilesCard pid={pid} names={files.map(f => f.name)} path={project.path} />}
         <MemoryCard items={memory} error={extrasError} onRemove={getProjectSources().memory.remove ? id => { void removeMemory(pid, id); } : undefined} />
       </div>
       {brandNew && (

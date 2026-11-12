@@ -38,3 +38,6 @@ export function startCanvasRun(canvasId: string, threadId: string) {
     },
   };
 }
+
+/** Flag kill-switch; ordinary navigation still keeps runs alive. */
+export function stopAllCanvasRuns():void {for(const run of Object.values(useCanvasRuns.getState().runs))run.stop();}

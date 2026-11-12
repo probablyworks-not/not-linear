@@ -1,29 +1,38 @@
-// One boolean per leaf feature (P4) and per chat sub-phase (P5), so a broken leaf is a flag flip rather than
-// a revert. Each feature lands as its own commit behind its flag (handoff, P4
-// rollback). Flip to false to hide the feature; its code and tests stay.
-export const flags = {
-  settings: true,
-  modes: true,
-  search: true,
-  changelog: true,
-  projects: true,
-  logs: true,
-  chat: true,
-  // P6b: the BlockNote Notes editor. Writes stay locked until a server-confirmed backup exists.
-  notesV2: true,
-  // P7: skills seam. SKILL.md library as BM25-selected system-prompt augmentations.
-  skills: true,
-  // Questions before answers: the model may ask a few clarifying questions, and the answers anchor the reply.
-  clarify: true,
-  // Chat→Notes: the model may file a long document as a note; a card in the reply opens it in a side pane.
-  chatNotes: true,
-  // Project screen: the Memory card shows its "Soon" placeholder until the memory backend exists.
-  projectMemory: false,
-  // Canvas: a spatial thinking workspace under Projects. On from C4, when the loop closes:
-  // ask, branch from a selection, combine sources, save an output. Media is a later release and
-  // an unsupported output type says so rather than pretending.
-  canvas: true,
-  // Design intake: a design bundle (dc.html + handoff README + screenshots) becomes user flows and
-  // numbered requirements, reviewed by hand before the spec is frozen. Off until the UI lands (P2).
-  designs: false,
-} as const;
+import { useSyncExternalStore } from 'react';
+import defaults from '../../backend/cloud/features.json';
+export type FeatureId = keyof typeof defaults;
+export type FeatureFlags = Record<FeatureId, boolean>;
+export const featureDefaults: FeatureFlags = { ...defaults };
+const dependencies: Partial<Record<FeatureId, FeatureId[]>> = {
+  chatNotes: ['notesV2', 'chat'],
+  contextRanking: ['attachments'], linkedFolders: ['attachments'],
+};
+export function resolveFlags(input: Partial<FeatureFlags>): FeatureFlags {
+  const result = { ...featureDefaults, ...input };
+  for (const [key, parents] of Object.entries(dependencies)) {
+    result[key as FeatureId] = result[key as FeatureId] && parents.every(p => result[p]);
+  }
+  return result;
+}
+// Stable identity preserves existing non-React callers; subscribers rerender after each change.
+export const flags: FeatureFlags = resolveFlags({});
+let version = 0;
+const listeners = new Set<() => void>();
+export function applyFlags(input: Partial<FeatureFlags>): void {
+  const next=resolveFlags(input);
+  const changed=(Object.keys(next) as FeatureId[]).filter(key=>next[key]!==flags[key]);
+  if(!changed.length)return;
+  Object.assign(flags,next); version++; listeners.forEach(fn => fn());
+  window.dispatchEvent(new CustomEvent('notlinear:flags',{detail:{disabled:changed.filter(key=>!next[key])}}));
+}
+export function subscribeFlags(fn: () => void): () => void { listeners.add(fn); return () => listeners.delete(fn); }
+export function useFeatureFlags(): FeatureFlags {
+  useSyncExternalStore(subscribeFlags, () => version);
+  return flags;
+}
+export function requireFeature(id: FeatureId): void {
+  if (!flags[id]) throw new Error('This feature is currently unavailable. Your saved work is preserved.');
+}
+export function featureForView(view: string): FeatureId | null {
+  return ({ chat:'chat', notes:'notesV2', canvas:'canvas', sketch:'sketch' } as Record<string, FeatureId>)[view] ?? null;
+}

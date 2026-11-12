@@ -1,3 +1,4 @@
+import { cloudMode,cloudRequest } from '../cloud/client';
 import { LOCAL_HEADER } from './api';
 import { LOG_EVENT, RUNTIME_LOG_SYNC_DEBOUNCE_MS, RUNTIME_LOG_SYNC_ENDPOINT, requestLog } from './request-log';
 
@@ -9,8 +10,9 @@ import { LOG_EVENT, RUNTIME_LOG_SYNC_DEBOUNCE_MS, RUNTIME_LOG_SYNC_ENDPOINT, req
 // hammered. Unlike legacy before BUGS.md #055, it sends X-Notlinear-Local: the
 // server answers 403 to every /__notlinear_* POST without it.
 
-export type SyncStatus = 'logs.md sync pending' | 'logs.md synced' | 'logs.md sync unavailable';
+export type SyncStatus = 'logs.md sync pending' | 'logs.md synced' | 'logs.md sync unavailable' | 'Cloud diagnostics synced';
 
+const cloudSession=cloudMode()?crypto.randomUUID():'';
 let timer: ReturnType<typeof setTimeout> | 0 = 0;
 let inFlight = false;
 let queued = false;
@@ -35,7 +37,7 @@ export function subscribeSyncStatus(fn: () => void): () => void {
 }
 
 export function scheduleRuntimeLogFileSync(): void {
-  if (disabled || !canSyncRuntimeLogFile()) {
+  if (disabled || (!cloudMode() && !canSyncRuntimeLogFile())) {
     setStatus('logs.md sync unavailable');
     return;
   }
@@ -49,6 +51,10 @@ export async function syncRuntimeLogFile(): Promise<void> {
   if (inFlight) { queued = true; return; }
   inFlight = true;
   try {
+    if(cloudMode()) {
+      await cloudRequest('/runtime-logs',{method:'POST',body:JSON.stringify({session:cloudSession,events:requestLog.slice(-500)})});
+      setStatus('Cloud diagnostics synced');return;
+    }
     const res = await fetch(RUNTIME_LOG_SYNC_ENDPOINT, {
       method: 'POST',
       headers: { 'content-type': 'application/json', ...LOCAL_HEADER },

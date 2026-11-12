@@ -1,3 +1,4 @@
+import { flags } from '../flags';
 import { useEffect, useRef, useState } from 'react';
 import { clsx } from 'clsx';
 import { ArrowUp, Mic, Square } from 'lucide-react';
@@ -115,10 +116,10 @@ export function Composer({ disabled, alwaysShow, disabledReason, streaming, atta
           <div className="flex flex-1 gap-0.5">
             <AttachChip attachKey={attachKey} />
             <ModelChip branchId={null} className="model-chip" />
-            <ModeChip className="mode-chip" />
+            {flags.modes && <ModeChip className="mode-chip" />}
           </div>
           <button
-            type="button" aria-label={voice.recording ? 'Stop voice input' : 'Voice input'} title="Voice input"
+            hidden={!flags.voice} type="button" aria-label={voice.recording ? 'Stop voice input' : 'Voice input'} title="Voice input"
             disabled={disabled} onClick={toggleVoice}
             className={clsx(
               'mic-chip grid h-[30px] w-[30px] shrink-0 place-items-center rounded-full text-text-2 hover:bg-bg-3 hover:text-text',

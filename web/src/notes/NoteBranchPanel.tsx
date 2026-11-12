@@ -118,6 +118,8 @@ export function NoteBranchPanel({ note, branch, getAnchorTop, initialMessage, on
   }, [place]);
 
   useEffect(() => () => ctrl.current?.abort(), []);
+  useEffect(()=>{const stop=(event:Event)=>{const disabled=(event as CustomEvent<{disabled:string[]}>).detail?.disabled??[];if(disabled.some(id=>id.startsWith('api')||id.startsWith('subscription')||id==='notesV2'))ctrl.current?.abort();};window.addEventListener('notlinear:flags',stop);return()=>window.removeEventListener('notlinear:flags',stop);},[]);
+
   useEffect(() => { const b = bodyRef.current; if (b) b.scrollTop = b.scrollHeight; }, [branch.messages.length, live?.text]);
   useEffect(() => { if (!live && bodyRef.current) { void highlightCodeIn(bodyRef.current); void nameLinksIn(bodyRef.current); } }, [branch.messages.length, live]);
 

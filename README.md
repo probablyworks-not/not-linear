@@ -113,3 +113,12 @@ For package checks, set `NOTLINEAR_TEST_APP` to the actual `.app` and run
 `python3 -m unittest discover -s tests -p test_release_package.py`, then from `web/` run
 `pnpm exec playwright test -c playwright.package.config.ts`. These use isolated data and test ports;
 they do not overwrite the desktop checkout or user databases. Current packages remain unnotarized.
+
+## Web beta development
+
+The account-based cloud runtime is separate from the Mac/local runtime. Its plan is
+[web_excution.md](web_excution.md); provisioning, secrets, R2, deployment and live-validation
+requirements are in [deploy/WEB_BETA.md](deploy/WEB_BETA.md). See
+[deploy/FEATURE_FLAGS.md](deploy/FEATURE_FLAGS.md) for admin-controlled flags and
+[deploy/VALIDATION.md](deploy/VALIDATION.md) for verification results and remaining gates.
+No live cloud deployment or migration of installed desktop data is implied by this source change.

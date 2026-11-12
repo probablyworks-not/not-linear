@@ -1,4 +1,5 @@
-import Dexie, { type Table } from 'dexie';
+import Dexie from '../cloud/database';
+import { type Table } from 'dexie';
 import { create } from 'zustand';
 import { applyOperations, clone, emptyGraph, uid, validateGraph, type Operation, type SketchGraph } from './model';
 import type { Attachment } from '../attachments/read-files';

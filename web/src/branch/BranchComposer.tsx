@@ -1,3 +1,4 @@
+import { flags } from '../flags';
 import { useEffect, useRef, useState } from 'react';
 import { clsx } from 'clsx';
 import { ArrowUp, Mic, Square } from 'lucide-react';
@@ -106,7 +107,7 @@ export function BranchComposer({ branchId, skillsKey, streaming, placeholder, on
           </div>
           <button
             type="button" className={clsx('chip', 'mic-chip', voice.recording && 'recording')}
-            aria-label={voice.recording ? 'Stop voice input' : 'Voice input'} title="Voice input" onClick={toggleVoice}
+            hidden={!flags.voice} aria-label={voice.recording ? 'Stop voice input' : 'Voice input'} title="Voice input" onClick={toggleVoice}
           >
             <Mic size={13} />
           </button>

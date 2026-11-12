@@ -1,3 +1,4 @@
+import { flags } from '../flags';
 import { useEffect, useRef, useState } from 'react';
 import { Check, FolderInput } from 'lucide-react';
 import { useAppStore } from '../state/app-store';
@@ -30,6 +31,7 @@ export function MoveToProjectButton({ label, current, onMove, className = ICON_B
   const item = 'flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm text-text-2 hover:bg-bg-2 hover:text-text';
   const pick = (pid: string | null) => { setOpen(false); if ((current ?? null) !== pid) onMove(pid); };
 
+  if(!flags.projects)return null;
   return (
     <span ref={ref} className="relative flex-none">
       <button type="button" title="Move to project" aria-label={label} aria-expanded={open} className={className} onClick={e => { e.stopPropagation(); setOpen(o => !o); }}>

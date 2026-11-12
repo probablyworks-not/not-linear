@@ -1,3 +1,4 @@
+import { accountStorage as localStorage } from '../cloud/local-storage';
 import { create } from 'zustand';
 import { parseTabs, serializeTabs, TAB_STORAGE_KEY, type Tab } from './tabs';
 import { MAIN_THREAD_ID } from '../db/thread-ops';
@@ -18,7 +19,7 @@ export interface ConfirmRequest {
 
 interface PendingConfirm extends ConfirmRequest { resolve(ok: boolean): void }
 
-export type SettingsTab = 'general' | 'models' | 'skills' | 'integrations' | 'modes' | 'updates' | 'logs';
+export type SettingsTab = 'featureFlags' | 'general' | 'models' | 'skills' | 'integrations' | 'modes' | 'updates' | 'logs';
 
 export type ProjectView = 'overview' | 'notes' | 'files' | 'artifacts' | 'canvas';
 

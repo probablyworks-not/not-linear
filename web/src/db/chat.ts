@@ -1,4 +1,5 @@
-import Dexie, { type Table } from 'dexie';
+import Dexie from '../cloud/database';
+import { type Table } from 'dexie';
 import type { KvRow, PersistedState, PersistedProject } from './types';
 
 // TypeScript access to the EXISTING `notlinear` database. Nothing here may

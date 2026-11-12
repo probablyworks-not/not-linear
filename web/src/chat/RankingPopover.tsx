@@ -1,3 +1,4 @@
+import { flags } from '../flags';
 import { useState } from 'react';
 import { Brain, X } from 'lucide-react';
 import { clsx } from 'clsx';
@@ -28,7 +29,7 @@ export function RankingButton({ threadId, buttonClass }: { threadId: string; but
 
   return (
     <>
-      <button type="button" title="Context ranking" aria-label="Context ranking" aria-expanded={open} onClick={() => setOpen(o => !o)} className={buttonClass}>
+      <button hidden={!flags.contextRanking} type="button" title="Context ranking" aria-label="Context ranking" aria-expanded={open} onClick={() => setOpen(o => !o)} className={buttonClass}>
         <Brain size={14} />
       </button>
       {open && (

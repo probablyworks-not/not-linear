@@ -1,4 +1,5 @@
-import Dexie, { type Table } from 'dexie';
+import Dexie from '../cloud/database';
+import { type Table } from 'dexie';
 
 // The skills database. Per ADR-007's precedent (notes) this is its OWN db, never the chat
 // `notlinear` db: the chat schema is frozen and shared with the legacy app. Keyed rows, like kv.

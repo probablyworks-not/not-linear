@@ -1,3 +1,4 @@
+import { flags } from '../flags';
 import { FilePlus, FolderPlus, GitBranch, Plus } from 'lucide-react';
 import { useState } from 'react';
 import { FloatingMenu, MENU_ITEM } from './ComposerMenus';
@@ -14,7 +15,7 @@ export function AttachChip({ attachKey }: { attachKey: string }) {
   return (
     <>
       <button
-        type="button" className="chip branch-attach-btn" title="Add files or folder" aria-label="Add files or folder" aria-haspopup="menu" aria-expanded={!!anchor}
+        hidden={!flags.attachments} type="button" className="chip branch-attach-btn" title="Add files or folder" aria-label="Add files or folder" aria-haspopup="menu" aria-expanded={!!anchor}
         // Read the element now; inside the updater React has already reset currentTarget.
         onClick={e => { const el = e.currentTarget; setAnchor(prev => (prev ? null : el)); }}
       >

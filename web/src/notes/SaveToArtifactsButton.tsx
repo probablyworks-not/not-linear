@@ -1,3 +1,4 @@
+import { flags } from '../flags';
 import { Shapes } from 'lucide-react';
 import { saveToArtifacts } from '../projects/extras/save-to-artifacts';
 import { useAppStore } from '../state/app-store';
@@ -11,6 +12,7 @@ export function SaveToArtifactsButton({ noteId }: { noteId: string }) {
   const note = notes.find(n => n.id === noteId);
   const pid = typeof note?.projectId === 'string' && projects[note.projectId] ? note.projectId : null;
   const title = pid ? 'Save to project artifacts' : 'Move this note into a project to save it to artifacts';
+  if(!flags.artifacts||!flags.projects)return null;
   return (
     <button
       type="button" title={title} aria-label="Save to artifacts" data-testid="save-note-artifact" disabled={!pid}
