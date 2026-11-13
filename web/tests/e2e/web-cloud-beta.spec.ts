@@ -41,7 +41,10 @@ test('cloud signup opens an account-scoped workspace and stores credential refer
  await signup(page);
  mkdirSync('../dist/web-beta-review',{recursive:true});await page.screenshot({path:'../dist/web-beta-review/workspace-onboarding.png'});
  await expect(page.getByRole('complementary',{name:'Getting started'})).toBeVisible();
- await page.getByRole('button',{name:'Connect AI',exact:true}).click();
+ await expect(page.getByRole('button',{name:'Authenticate via ChatGPT subscription',exact:true})).toBeDisabled();
+ await expect(page.getByRole('button',{name:'Authenticate via Claude subscription',exact:true})).toBeDisabled();
+ await page.getByRole('button',{name:'Account & settings',exact:true}).click();
+ await page.getByRole('tab',{name:/^Models & keys/}).click();
  await page.getByRole('button',{name:'Anthropic settings',exact:true}).click();
  const card=page.locator('[data-provider="anthropic"]');await card.getByLabel('Anthropic API key').fill('test-secret-not-for-storage');await card.getByRole('button',{name:'Connect',exact:true}).click();
  await expect(card.getByText('Connected',{exact:true})).toBeVisible();

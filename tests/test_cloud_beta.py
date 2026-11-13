@@ -118,4 +118,27 @@ class CloudRoutes(unittest.IsolatedAsyncioTestCase):
             response=await client.get('/api/runtime',headers={'Origin':'https://evil.test'})
             self.assertEqual(response.status_code,403)
 
+
+
+class SupabaseKeyHeaders(unittest.IsolatedAsyncioTestCase):
+    async def test_new_secret_key_is_not_sent_as_a_bearer_jwt(self):
+        from cloud.service import CloudService
+        response=httpx.Response(200,json=[])
+        client=AsyncMock();client.request.return_value=response
+        context=AsyncMock();context.__aenter__.return_value=client
+        with patch.dict(os.environ,{'SUPABASE_URL':'https://example.supabase.co','SUPABASE_SERVICE_ROLE_KEY':'sb_secret_TEST_ONLY'}),patch('cloud.service.httpx.AsyncClient',return_value=context):
+            await CloudService().request('GET','workspace_resources')
+            headers=client.request.call_args.kwargs['headers']
+            self.assertEqual(headers['apikey'],'sb_secret_TEST_ONLY');self.assertNotIn('Authorization',headers)
+            await CloudService().request('GET','user',token='user-jwt',auth=True)
+            self.assertEqual(client.request.call_args.kwargs['headers']['Authorization'],'Bearer user-jwt')
+    async def test_legacy_service_role_key_remains_compatible(self):
+        from cloud.service import CloudService
+        client=AsyncMock();client.request.return_value=httpx.Response(200,json=[])
+        context=AsyncMock();context.__aenter__.return_value=client
+        with patch.dict(os.environ,{'SUPABASE_URL':'https://example.supabase.co','SUPABASE_SERVICE_ROLE_KEY':'eyJ_TEST_ONLY'}),patch('cloud.service.httpx.AsyncClient',return_value=context):
+            await CloudService().request('GET','workspace_resources')
+            self.assertEqual(client.request.call_args.kwargs['headers']['Authorization'],'Bearer eyJ_TEST_ONLY')
+
+
 if __name__=='__main__':unittest.main()

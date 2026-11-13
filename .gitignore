@@ -82,3 +82,8 @@ web/vitest.oracle.config.ts
 
 # Portable desktop release artifacts
 /dist/
+
+# Local cloud credentials (never commit actual environment files).
+.env
+.env.*
+!.env.example

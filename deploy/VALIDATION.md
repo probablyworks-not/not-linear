@@ -33,3 +33,20 @@ Staging must pass these checks before invitation rollout; production publication
 ## Visual review
 
 Captured and inspected `dist/web-beta-review/workspace-onboarding.png` and `admin-feature-flags.png`. The connection step is a dedicated zero screen; subsequent guidance is inline so it does not obstruct the composer. Account controls remain reachable above Settings, including when ordinary Settings navigation is disabled.
+
+## Configuration recheck — 2026-11-13
+
+Fresh local checks passed: TypeScript, ESLint, production build, 908 frontend tests, 20 cloud API tests, 170 backend regression tests, 11 targeted browser checks (cloud onboarding/admin, shortcuts and feature flags), and the disposable PostgreSQL migration/security suite. Cloud/browser specs use mocked external services; they do not establish live account or attachment readiness.
+
+Read-only live checks using the private root `.env` found:
+- Supabase Auth settings respond HTTP 200 and email signup is enabled, but `mailer_autoconfirm` is false. Disable Confirm email for the requested initial signup flow.
+- The configured project returns HTTP 404 / PGRST205 for `feature_configuration`: the required application schema is not available through PostgREST. Apply `supabase/migrations/202611120001_web_beta.sql` in that staging project's SQL editor, then recheck.
+- The configured R2 bucket check returns HTTP 403. Verify account ID, bucket name and S3 Access Key ID/Secret Access Key, with Object Read & Write permission scoped to this bucket. CORS and live object operations remain unverified because this check failed.
+- `NOTLINEAR_ADMIN_IDS` is empty. After creating the maintainer account, configure its Supabase Auth user UUID to enable admin feature controls.
+- Google deployment identifiers are empty; these are unnecessary for local testing.
+- The encryption key has valid Fernet format and `.env` remains owner-only (0600). No secret values were printed.
+
+No hosted configuration, users, objects or application data were changed by these read-only checks. No real AI calls were made. Live two-account persistence, browser R2 uploads/downloads, recovery mail and real provider streaming remain launch gates. The previously screenshot-exposed encryption key must be replaced before storing real credentials if unused, or migrated safely if already in use.
+
+### Follow-up live checks
+Supabase application schema now responds HTTP 200 and R2 object-list access passes. R2 signed-URL browser preflights for PUT and GET return HTTP 204 and accept the local origin `http://127.0.0.1:8767`. No files were uploaded by these checks. Email auto-confirm was still false at the last Auth settings check. Browser subscription choices remain disabled pending actual hosted integrations; the revised onboarding and admin browser specs both pass, with build and lint passing.

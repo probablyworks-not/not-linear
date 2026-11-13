@@ -32,8 +32,10 @@ class CloudService:
         if not url.startswith('https://') and not url.startswith('http://127.0.0.1:'):
             raise HTTPException(503, 'Invalid Supabase endpoint')
         key = required('SUPABASE_SERVICE_ROLE_KEY')
-        headers = {'apikey': key, 'Authorization': 'Bearer ' + (token or key),
-                   'Prefer': 'return=representation,resolution=merge-duplicates'}
+        headers = {'apikey': key, 'Prefer': 'return=representation,resolution=merge-duplicates'}
+        # New sb_secret keys are API keys, not JWTs. User JWTs stay on Bearer.
+        if token or not key.startswith('sb_secret_'):
+            headers['Authorization'] = 'Bearer ' + (token or key)
         async with httpx.AsyncClient(timeout=25) as client:
             response = await client.request(method, url + ('/auth/v1/' if auth else '/rest/v1/') + path,
                                             json=body, headers=headers, params=params)
